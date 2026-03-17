@@ -18,6 +18,7 @@ local lastLeftWaitingAt = {}
 local matchStartingAt = nil
 local countdownEndTime = nil
 local countdownTickConnection = nil
+local onArenaRoundStarted = nil -- callback(players) when round starts; set via Init(callback)
 
 -- Private helpers
 local function ensureRemotes()
@@ -210,6 +211,9 @@ local function sendToArena()
 	matchStartingAt = nil
 	countdownEndTime = nil
 	broadcastStateToWaiting()
+	if onArenaRoundStarted then
+		onArenaRoundStarted(players)
+	end
 end
 
 local function isInLeaveCooldown(userId)
@@ -342,7 +346,8 @@ end
 
 -- Public API
 return {
-	Init = function()
+	Init = function(onRoundStartedCallback)
+		onArenaRoundStarted = onRoundStartedCallback
 		remotes = ensureRemotes()
 		ensureSpawnsFolder()
 		bindRemoteHandlers()

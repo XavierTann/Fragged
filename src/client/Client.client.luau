@@ -11,6 +11,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 
+local TopDownCameraService = require(Shared.Services.TopDownCameraService)
+TopDownCameraService.Init()
+
 local LobbyGUI = require(Shared.UI.LobbyGUI)
 LobbyGUI.Init()
 LobbyGUI.Show()

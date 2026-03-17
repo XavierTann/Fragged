@@ -22,15 +22,27 @@ local LobbyGUI = require(Shared.UI.LobbyGUI)
 LobbyGUI.Init()
 LobbyGUI.Show()
 
-
 local RotationJoystickGUI = require(Shared.UI.RotationJoystickGUI)
 RotationJoystickGUI.Init()
 
--- Enable shooting only in arena
+local WeaponSelectGUI = require(Shared.UI.WeaponSelectGUI)
+WeaponSelectGUI.Init()
+
+-- Enable shooting and weapon select only in arena
 LobbyServiceClient.Subscribe(function(state)
 	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
 	CombatServiceClient.SetShootingEnabled(inArena)
+	if inArena then
+		WeaponSelectGUI.Show()
+	else
+		WeaponSelectGUI.Hide()
+	end
 end)
-CombatServiceClient.SetShootingEnabled(LobbyServiceClient.GetState() and LobbyServiceClient.GetState().phase == LobbyConfig.PHASE.ARENA)
+local initialState = LobbyServiceClient.GetState()
+local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
+CombatServiceClient.SetShootingEnabled(inArena)
+if inArena then
+	WeaponSelectGUI.Show()
+end
 
 print("Client startup complete.")

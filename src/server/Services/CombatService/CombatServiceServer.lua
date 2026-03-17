@@ -157,7 +157,21 @@ local function bindHandlers()
 			return
 		end
 		local startPos = root.Position + aimDirection.Unit * 2
-		spawnBullet(player, startPos, aimDirection, gunId or "Pistol")
+		local pelletCount = gun.pelletCount or 1
+		local spreadDeg = gun.spreadDegrees or 0
+		for i = 1, pelletCount do
+			local dir = aimDirection.Unit
+			if spreadDeg > 0 and pelletCount > 1 then
+				local angle = math.rad(spreadDeg * (math.random() * 2 - 1))
+				local perp = Vector3.new(-dir.Z, 0, dir.X)
+				dir = (dir * math.cos(angle) + perp * math.sin(angle)).Unit
+				-- add vertical spread
+				local up = Vector3.new(0, 1, 0)
+				local angle2 = math.rad(spreadDeg * 0.5 * (math.random() * 2 - 1))
+				dir = (dir * math.cos(angle2) + up * math.sin(angle2)).Unit
+			end
+			spawnBullet(player, startPos, dir, gunId or "Pistol")
+		end
 	end)
 end
 

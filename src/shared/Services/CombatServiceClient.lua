@@ -15,6 +15,7 @@ local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 
 local FireGunRE = nil
 local shootingEnabled = false
+local currentWeapon = "Pistol"
 local inputConnection = nil
 local renderSteppedConnection = nil
 
@@ -53,7 +54,7 @@ local function fireInDirection(dir)
 	if not shootingEnabled or not FireGunRE or not dir then
 		return
 	end
-	FireGunRE:FireServer(dir, "Pistol")
+	FireGunRE:FireServer(dir, currentWeapon)
 end
 
 -- Fire when aiming joystick is off-axis (mobile)
@@ -109,4 +110,12 @@ return {
 	end,
 
 	FireNow = fireInDirection,
+
+	SetCurrentWeapon = function(gunId)
+		currentWeapon = gunId or "Pistol"
+	end,
+
+	GetCurrentWeapon = function()
+		return currentWeapon
+	end,
 }

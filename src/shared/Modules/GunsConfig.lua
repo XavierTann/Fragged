@@ -1,5 +1,7 @@
 --[[
 	Gun definitions for the shooting system.
+	 magazineSize: bullets per magazine (1 shot = 1 ammo, shotgun = 1 trigger pull)
+	 reloadTime: seconds to reload when magazine empty
 ]]
 
 return {
@@ -10,6 +12,8 @@ return {
 		fireRate = 0.4, -- slow, deliberate shots
 		bulletSize = Vector3.new(0.25, 0.25, 0.8),
 		bulletColor = Color3.fromRGB(220, 180, 80),
+		magazineSize = 8,
+		reloadTime = 1.2,
 	},
 	Rifle = {
 		name = "Rifle",
@@ -18,6 +22,8 @@ return {
 		fireRate = 0.12, -- fast shooting
 		bulletSize = Vector3.new(0.2, 0.2, 0.6),
 		bulletColor = Color3.fromRGB(180, 200, 220),
+		magazineSize = 24,
+		reloadTime = 2.0,
 	},
 	Shotgun = {
 		name = "Shotgun",
@@ -28,5 +34,7 @@ return {
 		bulletColor = Color3.fromRGB(200, 150, 100),
 		pelletCount = 8,
 		spreadDegrees = 12,
+		magazineSize = 4,
+		reloadTime = 2.5,
 	},
 }

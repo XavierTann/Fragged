@@ -3,6 +3,7 @@
 	Firing input and FireGun remote. Only active when in arena (enabled by startup).
 	Mobile: fire when aiming joystick is pulled off-axis (direction = player facing).
 	Desktop: fire on mouse click (mouse aim).
+	Respects ammo and reload state from server to prevent spamming.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,12 +13,18 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
+local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 
 local FireGunRE = nil
+local AmmoStateRE = nil
 local shootingEnabled = false
 local currentWeapon = "Pistol"
 local inputConnection = nil
 local renderSteppedConnection = nil
+
+-- [gunId] = { ammo = number, isReloading = boolean, reloadStartedAt = number? }
+local ammoState = {}
+local ammoStateSubscribers = {}
 
 local function getAimDirectionFromMouse()
 	local player = Players.LocalPlayer
@@ -50,8 +57,31 @@ local function getAimDirectionFromMouse()
 	return aim.Unit
 end
 
+local function getAmmoStateForWeapon(gunId)
+	local s = ammoState[gunId]
+	if s then
+		return s.ammo, s.isReloading, s.reloadStartedAt
+	end
+	local gun = GunsConfig[gunId or "Pistol"] or GunsConfig.Pistol
+	return gun.magazineSize or 6, false, nil
+end
+
+local function canFire()
+	local ammo, isReloading = getAmmoStateForWeapon(currentWeapon)
+	return ammo > 0 and not isReloading
+end
+
+local function notifyAmmoSubscribers()
+	for _, cb in ipairs(ammoStateSubscribers) do
+		task.defer(cb)
+	end
+end
+
 local function fireInDirection(dir)
 	if not shootingEnabled or not FireGunRE or not dir then
+		return
+	end
+	if not canFire() then
 		return
 	end
 	FireGunRE:FireServer(dir, currentWeapon)
@@ -87,6 +117,35 @@ return {
 	Init = function()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
+		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
+		AmmoStateRE.OnClientEvent:Connect(function(gunId, ammoCount, isReloading)
+			ammoState[gunId] = ammoState[gunId] or {}
+			ammoState[gunId].ammo = ammoCount
+			ammoState[gunId].isReloading = isReloading
+			if isReloading then
+				ammoState[gunId].reloadStartedAt = os.clock()
+			else
+				ammoState[gunId].reloadStartedAt = nil
+			end
+			notifyAmmoSubscribers()
+		end)
+	end,
+
+	SubscribeAmmoState = function(callback)
+		table.insert(ammoStateSubscribers, callback)
+	end,
+
+	GetAmmoState = function(gunId)
+		gunId = gunId or currentWeapon
+		local ammo, isReloading, reloadStartedAt = getAmmoStateForWeapon(gunId)
+		local gun = GunsConfig[gunId] or GunsConfig.Pistol
+		return {
+			ammo = ammo,
+			maxAmmo = gun.magazineSize or 6,
+			isReloading = isReloading,
+			reloadStartedAt = reloadStartedAt,
+			reloadTime = gun.reloadTime or 1.5,
+		}
 	end,
 
 	SetShootingEnabled = function(enabled)

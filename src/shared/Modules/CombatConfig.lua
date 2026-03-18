@@ -7,5 +7,6 @@ return {
 	REMOTE_FOLDER_NAME = "CombatRemotes",
 	REMOTES = {
 		FIRE_GUN = "FireGun",
+		AMMO_STATE = "AmmoState", -- Server -> Client: ammo count, isReloading, gunId
 	},
 }

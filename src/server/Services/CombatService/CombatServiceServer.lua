@@ -12,11 +12,14 @@ local RunService = game:GetService("RunService")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 
-local remotes = nil
+local fireGunRE = nil
+local ammoStateRE = nil
 local currentRoundPlayers = {}
 local onRoundEndCallback = nil
 local diedConnections = {}
 local lastFiredAt = {}
+local ammoInMagazine = {} -- [userId][gunId] = count
+local reloadEndAt = {} -- [userId][gunId] = os.clock() when reload finishes
 local BULLETS_FOLDER_NAME = "CombatBullets"
 
 local function ensureRemotes()
@@ -26,13 +29,54 @@ local function ensureRemotes()
 		folder.Name = CombatConfig.REMOTE_FOLDER_NAME
 		folder.Parent = ReplicatedStorage
 	end
-	local r = folder:FindFirstChild(CombatConfig.REMOTES.FIRE_GUN)
-	if not r then
-		r = Instance.new("RemoteEvent")
-		r.Name = CombatConfig.REMOTES.FIRE_GUN
-		r.Parent = folder
+	local fireR = folder:FindFirstChild(CombatConfig.REMOTES.FIRE_GUN)
+	if not fireR then
+		fireR = Instance.new("RemoteEvent")
+		fireR.Name = CombatConfig.REMOTES.FIRE_GUN
+		fireR.Parent = folder
 	end
-	return r
+	local ammoR = folder:FindFirstChild(CombatConfig.REMOTES.AMMO_STATE)
+	if not ammoR then
+		ammoR = Instance.new("RemoteEvent")
+		ammoR.Name = CombatConfig.REMOTES.AMMO_STATE
+		ammoR.Parent = folder
+	end
+	return fireR, ammoR
+end
+
+local function sendAmmoState(player, gunId, ammoCount, isReloading)
+	if ammoStateRE then
+		ammoStateRE:FireClient(player, gunId, ammoCount, isReloading)
+	end
+end
+
+local function initPlayerAmmo(userId)
+	ammoInMagazine[userId] = {}
+	reloadEndAt[userId] = {}
+	for gunId, gun in pairs(GunsConfig) do
+		local mag = gun.magazineSize or 6
+		ammoInMagazine[userId][gunId] = mag
+		reloadEndAt[userId][gunId] = nil
+	end
+end
+
+local function processReloads()
+	local now = os.clock()
+	for userId, gunReloads in pairs(reloadEndAt) do
+		for gunId, endTime in pairs(gunReloads) do
+			if endTime and now >= endTime then
+				local gun = GunsConfig[gunId]
+				if gun then
+					ammoInMagazine[userId][gunId] = gun.magazineSize or 6
+					reloadEndAt[userId][gunId] = nil
+					local player = Players:GetPlayerByUserId(userId)
+					if player then
+						sendAmmoState(player, gunId, ammoInMagazine[userId][gunId], false)
+					end
+				end
+			end
+		end
+	end
 end
 
 local function getBulletsFolder()
@@ -134,20 +178,54 @@ local function spawnBullet(shooter, startPos, direction, gunId)
 end
 
 local function bindHandlers()
-	remotes.OnServerEvent:Connect(function(player, aimDirection, gunId)
+	fireGunRE.OnServerEvent:Connect(function(player, aimDirection, gunId)
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" then
 			return
 		end
 		if aimDirection.Magnitude < 0.01 then
 			return
 		end
-		local gun = GunsConfig[gunId or "Pistol"] or GunsConfig.Pistol
+		gunId = gunId or "Pistol"
+		local gun = GunsConfig[gunId] or GunsConfig.Pistol
 		local now = os.clock()
-		local last = lastFiredAt[player.UserId] or 0
+		local uid = player.UserId
+
+		-- Fire rate check
+		local last = lastFiredAt[uid] or 0
 		if now - last < gun.fireRate then
 			return
 		end
-		lastFiredAt[player.UserId] = now
+
+		-- Ammo check: ensure player has ammo state for this weapon
+		ammoInMagazine[uid] = ammoInMagazine[uid] or {}
+		reloadEndAt[uid] = reloadEndAt[uid] or {}
+		local ammo = ammoInMagazine[uid][gunId]
+		if ammo == nil then
+			ammoInMagazine[uid][gunId] = gun.magazineSize or 6
+			ammo = ammoInMagazine[uid][gunId]
+		end
+
+		-- Reloading check
+		if reloadEndAt[uid][gunId] and now < reloadEndAt[uid][gunId] then
+			sendAmmoState(player, gunId, ammo, true)
+			return
+		end
+
+		-- Ammo check
+		if ammo <= 0 then
+			-- Auto-start reload (if not already)
+			if not reloadEndAt[uid][gunId] then
+				local reloadTime = gun.reloadTime or 1.5
+				reloadEndAt[uid][gunId] = now + reloadTime
+			end
+			sendAmmoState(player, gunId, 0, true)
+			return
+		end
+
+		lastFiredAt[uid] = now
+		ammoInMagazine[uid][gunId] = ammo - 1
+		local newAmmo = ammoInMagazine[uid][gunId]
+
 		local character = player.Character
 		if not character then
 			return
@@ -159,7 +237,7 @@ local function bindHandlers()
 		local startPos = root.Position + aimDirection.Unit * 2
 		local pelletCount = gun.pelletCount or 1
 		local spreadDeg = gun.spreadDegrees or 0
-		for i = 1, pelletCount do
+		for _ = 1, pelletCount do
 			local dir = aimDirection.Unit
 			if spreadDeg > 0 and pelletCount > 1 then
 				local angle = math.rad(spreadDeg * (math.random() * 2 - 1))
@@ -170,15 +248,25 @@ local function bindHandlers()
 				local angle2 = math.rad(spreadDeg * 0.5 * (math.random() * 2 - 1))
 				dir = (dir * math.cos(angle2) + up * math.sin(angle2)).Unit
 			end
-			spawnBullet(player, startPos, dir, gunId or "Pistol")
+			spawnBullet(player, startPos, dir, gunId)
+		end
+
+		-- If magazine empty after shot, auto-start reload
+		if newAmmo <= 0 then
+			local reloadTime = gun.reloadTime or 1.5
+			reloadEndAt[uid][gunId] = now + reloadTime
+			sendAmmoState(player, gunId, 0, true)
+		else
+			sendAmmoState(player, gunId, newAmmo, false)
 		end
 	end)
 end
 
 return {
 	Init = function()
-		remotes = ensureRemotes()
+		fireGunRE, ammoStateRE = ensureRemotes()
 		bindHandlers()
+		RunService.Heartbeat:Connect(processReloads)
 	end,
 
 	StartRound = function(players, onRoundEnd)
@@ -186,6 +274,7 @@ return {
 		currentRoundPlayers = {}
 		for _, p in ipairs(players) do
 			currentRoundPlayers[#currentRoundPlayers + 1] = p
+			initPlayerAmmo(p.UserId)
 			local character = p.Character
 			if character then
 				local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -197,6 +286,10 @@ return {
 					end)
 					diedConnections[p.UserId] = conn
 				end
+			end
+			-- Send initial ammo state for all weapons
+			for gunId, ammo in pairs(ammoInMagazine[p.UserId] or {}) do
+				sendAmmoState(p, gunId, ammo, false)
 			end
 		end
 		task.defer(checkRoundEnd)

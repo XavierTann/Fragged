@@ -28,21 +28,34 @@ RotationJoystickGUI.Init()
 local WeaponSelectGUI = require(Shared.UI.WeaponSelectGUI)
 WeaponSelectGUI.Init()
 
--- Enable shooting and weapon select only in arena
-LobbyServiceClient.Subscribe(function(state)
-	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
-	CombatServiceClient.SetShootingEnabled(inArena)
-	if inArena then
-		WeaponSelectGUI.Show()
-	else
-		WeaponSelectGUI.Hide()
-	end
-end)
-local initialState = LobbyServiceClient.GetState()
-local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
-CombatServiceClient.SetShootingEnabled(inArena)
-if inArena then
-	WeaponSelectGUI.Show()
-end
+local ReloadBarGUI = require(Shared.UI.ReloadBarGUI)
+ReloadBarGUI.Init()
+
+-- -- Enable shooting and weapon select only in arena
+-- LobbyServiceClient.Subscribe(function(state)
+-- 	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
+-- 	CombatServiceClient.SetShootingEnabled(inArena)
+-- 	if inArena then
+-- 		WeaponSelectGUI.Show()
+-- 		ReloadBarGUI.Show()
+-- 	else
+-- 		WeaponSelectGUI.Hide()
+-- 		ReloadBarGUI.Hide()
+-- 	end
+-- end)
+
+
+-- For Testing
+CombatServiceClient.SetShootingEnabled(true)
+WeaponSelectGUI.Show()
+ReloadBarGUI.Show()
+
+-- local initialState = LobbyServiceClient.GetState()
+-- local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
+-- CombatServiceClient.SetShootingEnabled(inArena)
+-- if inArena then
+-- 	WeaponSelectGUI.Show()
+-- 	ReloadBarGUI.Show()
+-- end
 
 print("Client startup complete.")

@@ -28,33 +28,33 @@ end
 local function createShopView(parent)
 	local frame = Instance.new("Frame")
 	frame.Name = "ShopView"
-	frame.Size = UDim2.fromScale(0.35, 0.22)
-	frame.Position = UDim2.fromScale(0.5, 0.02)
+	frame.Size = UDim2.fromScale(0.28, 0.12)
+	frame.Position = UDim2.fromScale(0.5, 0)
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	frame.BorderSizePixel = 0
 	frame.Parent = parent
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 12)
+	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = frame
 
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, 0, 0, 32)
-	title.Position = UDim2.fromOffset(0, 8)
+	title.Size = UDim2.new(1, 0, 0, 18)
+	title.Position = UDim2.fromOffset(0, 4)
 	title.BackgroundTransparency = 1
 	title.Text = "Shop Lobby"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.TextSize = 20
+	title.TextSize = 14
 	title.Font = Enum.Font.GothamBold
 	title.Parent = frame
 
 	local hint = Instance.new("TextLabel")
-	hint.Size = UDim2.new(1, -24, 0, 24)
-	hint.Position = UDim2.fromOffset(12, 44)
+	hint.Size = UDim2.new(1, -16, 0, 14)
+	hint.Position = UDim2.fromOffset(8, 24)
 	hint.BackgroundTransparency = 1
 	hint.Text = "Enter the portal to join the waiting lobby and find a match."
 	hint.TextColor3 = Color3.fromRGB(200, 200, 200)
-	hint.TextSize = 14
+	hint.TextSize = 10
 	hint.Font = Enum.Font.Gotham
 	hint.TextWrapped = true
 	hint.TextXAlignment = Enum.TextXAlignment.Left
@@ -62,16 +62,16 @@ local function createShopView(parent)
 
 	local findMatchBtn = Instance.new("TextButton")
 	findMatchBtn.Name = "FindMatch"
-	findMatchBtn.Size = UDim2.new(1, -24, 0, 40)
-	findMatchBtn.Position = UDim2.fromOffset(12, 78)
+	findMatchBtn.Size = UDim2.new(1, -16, 0, 24)
+	findMatchBtn.Position = UDim2.fromOffset(8, 44)
 	findMatchBtn.BackgroundColor3 = Color3.fromRGB(56, 142, 60)
 	findMatchBtn.Text = "Find match (enter waiting lobby)"
 	findMatchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	findMatchBtn.TextSize = 16
+	findMatchBtn.TextSize = 11
 	findMatchBtn.Font = Enum.Font.GothamMedium
 	findMatchBtn.Parent = frame
 	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 8)
+	btnCorner.CornerRadius = UDim.new(0, 6)
 	btnCorner.Parent = findMatchBtn
 
 	findMatchBtn.MouseButton1Click:Connect(function()
@@ -89,63 +89,63 @@ end
 local function createWaitingView(parent)
 	local frame = Instance.new("Frame")
 	frame.Name = "WaitingView"
-	frame.Size = UDim2.fromScale(0.4, 0.28)
-	frame.Position = UDim2.fromScale(0.5, 0.02)
+	frame.Size = UDim2.fromScale(0.3, 0.14)
+	frame.Position = UDim2.fromScale(0.5, 0)
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	frame.BorderSizePixel = 0
 	frame.Visible = false
 	frame.Parent = parent
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 12)
+	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = frame
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, 0, 0, 32)
-	title.Position = UDim2.fromOffset(0, 8)
+	title.Size = UDim2.new(1, 0, 0, 18)
+	title.Position = UDim2.fromOffset(0, 4)
 	title.BackgroundTransparency = 1
 	title.Text = "Waiting Lobby"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.TextSize = 20
+	title.TextSize = 14
 	title.Font = Enum.Font.GothamBold
 	title.Parent = frame
 
 	local countLabel = Instance.new("TextLabel")
 	countLabel.Name = "Count"
-	countLabel.Size = UDim2.new(1, 0, 0, 28)
-	countLabel.Position = UDim2.fromOffset(0, 40)
+	countLabel.Size = UDim2.new(1, 0, 0, 16)
+	countLabel.Position = UDim2.fromOffset(0, 24)
 	countLabel.BackgroundTransparency = 1
 	countLabel.Text = "Players: 0 / 2"
 	countLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
-	countLabel.TextSize = 18
+	countLabel.TextSize = 12
 	countLabel.Font = Enum.Font.GothamMedium
 	countLabel.Parent = frame
 
 	local countdownLabel = Instance.new("TextLabel")
 	countdownLabel.Name = "Countdown"
-	countdownLabel.Size = UDim2.new(1, 0, 0, 28)
-	countdownLabel.Position = UDim2.fromOffset(0, 70)
+	countdownLabel.Size = UDim2.new(1, 0, 0, 16)
+	countdownLabel.Position = UDim2.fromOffset(0, 42)
 	countdownLabel.BackgroundTransparency = 1
 	countdownLabel.Text = ""
 	countdownLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
-	countdownLabel.TextSize = 18
+	countdownLabel.TextSize = 12
 	countdownLabel.Font = Enum.Font.GothamBold
 	countdownLabel.Visible = false
 	countdownLabel.Parent = frame
 
 	local leaveBtn = Instance.new("TextButton")
 	leaveBtn.Name = "Leave"
-	leaveBtn.Size = UDim2.new(1, -24, 0, 40)
-	leaveBtn.Position = UDim2.fromOffset(12, 108)
+	leaveBtn.Size = UDim2.new(1, -16, 0, 24)
+	leaveBtn.Position = UDim2.fromOffset(8, 62)
 	leaveBtn.BackgroundColor3 = Color3.fromRGB(120, 50, 50)
 	leaveBtn.Text = "Leave waiting lobby"
 	leaveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	leaveBtn.TextSize = 16
+	leaveBtn.TextSize = 11
 	leaveBtn.Font = Enum.Font.GothamMedium
 	leaveBtn.Parent = frame
 	local leaveCorner = Instance.new("UICorner")
-	leaveCorner.CornerRadius = UDim.new(0, 8)
+	leaveCorner.CornerRadius = UDim.new(0, 6)
 	leaveCorner.Parent = leaveBtn
 
 	leaveBtn.MouseButton1Click:Connect(function()

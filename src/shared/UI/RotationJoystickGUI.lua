@@ -152,7 +152,8 @@ local function initJoystick(parent)
 	backgroundFrame = Instance.new("Frame")
 	backgroundFrame.Name = "RotationJoystickBackground"
 	backgroundFrame.Size = UDim2.fromOffset(120, 120)
-	backgroundFrame.Position = UDim2.new(1, -100, 1, -100)
+	-- Position at bottom-right where Roblox's jump button was (now removed)
+	backgroundFrame.Position = UDim2.new(1, -80, 1, -80)
 	backgroundFrame.AnchorPoint = Vector2.new(1, 1)
 	backgroundFrame.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
 	backgroundFrame.BackgroundTransparency = 0.3

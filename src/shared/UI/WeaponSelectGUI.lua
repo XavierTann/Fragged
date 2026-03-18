@@ -1,6 +1,7 @@
 --[[
 	WeaponSelectGUI
 	Bottom-center bar with weapon buttons. Click to switch weapons.
+	Uses raw asset IDs from WeaponIconsConfig.
 ]]
 
 local Players = game:GetService("Players")
@@ -9,15 +10,24 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local WeaponIconsConfig = require(ReplicatedStorage.Shared.Modules.WeaponIconsConfig)
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
 
 local gui = nil
-local buttonMap = {} -- gunId -> TextButton
+local buttonMap = {} -- gunId -> ImageButton
 
 local WEAPON_ORDER = { "Pistol", "Rifle", "Shotgun", "Grenade" }
 local BAR_HEIGHT = 56
 local BUTTON_WIDTH = 100
 local BUTTON_GAP = 8
+
+local function getIconImage(weaponId)
+	local assetId = WeaponIconsConfig[weaponId]
+	if not assetId or assetId == 0 then
+		return ""
+	end
+	return "rbxassetid://" .. tostring(assetId)
+end
 
 local function createGui()
 	if gui then
@@ -34,12 +44,17 @@ end
 
 local function updateSelection(gunId)
 	for id, btn in pairs(buttonMap) do
-		if id == gunId then
+		local selected = (id == gunId)
+		if selected then
 			btn.BackgroundColor3 = Color3.fromRGB(70, 90, 120)
-			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			btn.ImageColor3 = Color3.fromRGB(255, 255, 255)
 		else
 			btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
-			btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+			btn.ImageColor3 = Color3.fromRGB(200, 200, 200)
+		end
+		local fallback = btn:FindFirstChild("Fallback")
+		if fallback then
+			fallback.TextColor3 = selected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
 		end
 	end
 end
@@ -49,7 +64,7 @@ local function createWeaponBar(parent)
 	local bar = Instance.new("Frame")
 	bar.Name = "WeaponBar"
 	bar.Size = UDim2.fromOffset(totalWidth + 24, BAR_HEIGHT + 16)
-	bar.Position = UDim2.new(0.5, 0, 1, -BAR_HEIGHT - 24)
+	bar.Position = UDim2.fromScale(0.5, 1)
 	bar.AnchorPoint = Vector2.new(0.5, 1)
 	bar.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	bar.BorderSizePixel = 0
@@ -60,46 +75,56 @@ local function createWeaponBar(parent)
 	corner.Parent = bar
 
 	for i, itemId in ipairs(WEAPON_ORDER) do
-		local displayName = GunsConfig[itemId] and GunsConfig[itemId].name or nil
 		local accentColor = GunsConfig[itemId] and GunsConfig[itemId].bulletColor or nil
 		if itemId == "Grenade" then
-			displayName = GrenadeConfig.name
 			accentColor = GrenadeConfig.color
 		end
-		if displayName then
-			local btn = Instance.new("TextButton")
-			btn.Name = itemId
-			btn.Size = UDim2.fromOffset(BUTTON_WIDTH, BAR_HEIGHT)
-			btn.Position = UDim2.fromOffset(12 + (i - 1) * (BUTTON_WIDTH + BUTTON_GAP), 8)
-			btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
-			btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-			btn.Text = displayName
-			btn.TextSize = 16
-			btn.Font = Enum.Font.GothamMedium
-			btn.BorderSizePixel = 0
-			btn.Parent = bar
 
-			local btnCorner = Instance.new("UICorner")
-			btnCorner.CornerRadius = UDim.new(0, 8)
-			btnCorner.Parent = btn
+		local iconImage = getIconImage(itemId)
 
-			local accent = Instance.new("Frame")
-			accent.Size = UDim2.new(0, 4, 1, 0)
-			accent.Position = UDim2.fromOffset(0, 0)
-			accent.BackgroundColor3 = accentColor or Color3.fromRGB(150, 150, 150)
-			accent.BorderSizePixel = 0
-			accent.Parent = btn
-			local accentCorner = Instance.new("UICorner")
-			accentCorner.CornerRadius = UDim.new(0, 8)
-			accentCorner.Parent = accent
+		local btn = Instance.new("ImageButton")
+		btn.Name = itemId
+		btn.Size = UDim2.fromOffset(BUTTON_WIDTH, BAR_HEIGHT)
+		btn.Position = UDim2.fromOffset(12 + (i - 1) * (BUTTON_WIDTH + BUTTON_GAP), 8)
+		btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
+		btn.Image = iconImage
+		btn.ImageColor3 = Color3.fromRGB(200, 200, 200)
+		btn.ScaleType = Enum.ScaleType.Fit
+		btn.BorderSizePixel = 0
+		btn.Parent = bar
 
-			btn.MouseButton1Click:Connect(function()
-				CombatServiceClient.SetCurrentWeapon(itemId)
-				updateSelection(itemId)
-			end)
+		local fallbackLabel = Instance.new("TextLabel")
+		fallbackLabel.Name = "Fallback"
+		fallbackLabel.Size = UDim2.new(1, -8, 1, 0)
+		fallbackLabel.Position = UDim2.fromOffset(4, 0)
+		fallbackLabel.BackgroundTransparency = 1
+		fallbackLabel.Text = itemId
+		fallbackLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		fallbackLabel.TextSize = 14
+		fallbackLabel.Font = Enum.Font.GothamMedium
+		fallbackLabel.Visible = (iconImage == "")
+		fallbackLabel.Parent = btn
 
-			buttonMap[itemId] = btn
-		end
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 8)
+		btnCorner.Parent = btn
+
+		local accent = Instance.new("Frame")
+		accent.Size = UDim2.new(0, 4, 1, 0)
+		accent.Position = UDim2.fromOffset(0, 0)
+		accent.BackgroundColor3 = accentColor or Color3.fromRGB(150, 150, 150)
+		accent.BorderSizePixel = 0
+		accent.Parent = btn
+		local accentCorner = Instance.new("UICorner")
+		accentCorner.CornerRadius = UDim.new(0, 8)
+		accentCorner.Parent = accent
+
+		btn.MouseButton1Click:Connect(function()
+			CombatServiceClient.SetCurrentWeapon(itemId)
+			updateSelection(itemId)
+		end)
+
+		buttonMap[itemId] = btn
 	end
 
 	updateSelection(CombatServiceClient.GetCurrentWeapon())

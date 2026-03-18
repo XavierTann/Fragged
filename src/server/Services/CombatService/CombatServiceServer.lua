@@ -391,6 +391,19 @@ local function doExplosionDamage(center, radius, damage, throwerUserId)
 	end
 end
 
+local GRENADE_TEMPLATE_NAME = "Grenade"
+
+local function getGrenadeRootPart(instance)
+	if instance:IsA("Tool") then
+		return instance:FindFirstChild("Handle") or instance:FindFirstChildWhichIsA("BasePart")
+	elseif instance:IsA("Model") then
+		return instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart")
+	elseif instance:IsA("BasePart") then
+		return instance
+	end
+	return nil
+end
+
 local function spawnGrenade(_thrower, startPos, direction)
 	local cfg = GrenadeConfig
 	local dir = direction.Unit
@@ -398,25 +411,55 @@ local function spawnGrenade(_thrower, startPos, direction)
 	local throwDir = (Vector3.new(dir.X, 0, dir.Z) * (1 - cfg.throwArcUp) + Vector3.new(0, cfg.throwArcUp, 0)).Unit
 	local velocity = throwDir * cfg.throwSpeed
 
-	local grenade = Instance.new("Part")
-	grenade.Name = "Grenade"
-	grenade.Size = cfg.size
-	grenade.Color = cfg.color
-	grenade.Material = cfg.material
-	grenade.Shape = Enum.PartType.Ball
-	grenade.Anchored = false
-	grenade.CanCollide = true
-	grenade.CFrame = CFrame.new(startPos)
-	grenade.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
-	grenade.AssemblyLinearVelocity = velocity
-	grenade.CollisionGroup = COLLISION_GROUP_GRENADES
-	grenade.Parent = getGrenadesFolder()
+	local grenade
+	local rootPart
+
+	local imports = ReplicatedStorage:FindFirstChild("Imports")
+	local models3D = imports and imports:FindFirstChild("3DModels")
+	local template = models3D and models3D:FindFirstChild(GRENADE_TEMPLATE_NAME)
+	if template then
+		grenade = template:Clone()
+		rootPart = getGrenadeRootPart(grenade)
+		if rootPart then
+			if grenade:IsA("Model") and not grenade.PrimaryPart then
+				grenade.PrimaryPart = rootPart
+			end
+			grenade.Parent = getGrenadesFolder()
+			rootPart.CFrame = CFrame.new(startPos)
+			rootPart.AssemblyLinearVelocity = velocity
+			rootPart.Anchored = false
+			rootPart.CanCollide = true
+			rootPart.CollisionGroup = COLLISION_GROUP_GRENADES
+			rootPart.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
+		else
+			grenade:Destroy()
+			grenade = nil
+		end
+	end
+
+	if not grenade or not rootPart then
+		-- Fallback: placeholder part when template not found
+		rootPart = Instance.new("Part")
+		rootPart.Name = "Grenade"
+		rootPart.Size = cfg.size
+		rootPart.Color = cfg.color
+		rootPart.Material = cfg.material
+		rootPart.Shape = Enum.PartType.Ball
+		rootPart.Anchored = false
+		rootPart.CanCollide = true
+		rootPart.CFrame = CFrame.new(startPos)
+		rootPart.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
+		rootPart.AssemblyLinearVelocity = velocity
+		rootPart.CollisionGroup = COLLISION_GROUP_GRENADES
+		rootPart.Parent = getGrenadesFolder()
+		grenade = rootPart
+	end
 
 	task.delay(cfg.fuseTime, function()
 		if not grenade or not grenade.Parent then
 			return
 		end
-		local center = grenade.Position
+		local center = rootPart.Position
 		grenade:Destroy()
 
 		-- Explosion visual: expanding sphere

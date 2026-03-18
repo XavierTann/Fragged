@@ -5,8 +5,8 @@
 return {
 	name = "Grenade",
 	fuseTime = 2.5, -- seconds before explosion
-	throwSpeed = 30, -- initial velocity magnitude
-	throwArcUp = 0.5, -- upward component for arc (0 = flat, 1 = mostly up)
+	throwSpeed = 70, -- initial velocity magnitude
+	throwArcUp = 0.7, -- upward component for arc (0 = flat, 1 = mostly up)
 	damage = 60, -- damage at center
 	radius = 12, -- explosion radius in studs
 	cooldown = 4, -- seconds between throws per player

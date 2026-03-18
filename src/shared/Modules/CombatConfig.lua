@@ -1,8 +1,10 @@
 --[[
 	Combat configuration: health, remotes, etc.
+	Tag parts with BULLET_BLOCKER_TAG to create walls that block bullets but not grenades.
 ]]
 
 return {
+	BULLET_BLOCKER_TAG = "BulletBlocker",
 	DEFAULT_HEALTH = 100,
 	REMOTE_FOLDER_NAME = "CombatRemotes",
 	REMOTES = {

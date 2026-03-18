@@ -8,6 +8,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local PhysicsService = game:GetService("PhysicsService")
+local CollectionService = game:GetService("CollectionService")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
@@ -25,6 +27,37 @@ local ammoInMagazine = {} -- [userId][gunId] = count
 local reloadEndAt = {} -- [userId][gunId] = os.clock() when reload finishes
 local BULLETS_FOLDER_NAME = "CombatBullets"
 local GRENADES_FOLDER_NAME = "CombatGrenades"
+local COLLISION_GROUP_WALLS = "CombatWalls"
+local COLLISION_GROUP_GRENADES = "Grenades"
+
+local function setupWallCollisionGroups()
+	pcall(function()
+		PhysicsService:RegisterCollisionGroup(COLLISION_GROUP_WALLS)
+	end)
+	pcall(function()
+		PhysicsService:RegisterCollisionGroup(COLLISION_GROUP_GRENADES)
+	end)
+	PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP_WALLS, COLLISION_GROUP_GRENADES, false)
+end
+
+local function assignToWallGroup(instance)
+	if instance:IsA("BasePart") then
+		instance.CollisionGroup = COLLISION_GROUP_WALLS
+	elseif instance:IsA("Model") then
+		for _, descendant in ipairs(instance:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				descendant.CollisionGroup = COLLISION_GROUP_WALLS
+			end
+		end
+	end
+end
+
+local function setupBulletBlockerWalls()
+	for _, instance in ipairs(CollectionService:GetTagged(CombatConfig.BULLET_BLOCKER_TAG)) do
+		assignToWallGroup(instance)
+	end
+	CollectionService:GetInstanceAddedSignal(CombatConfig.BULLET_BLOCKER_TAG):Connect(assignToWallGroup)
+end
 
 local function ensureRemotes()
 	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
@@ -185,6 +218,10 @@ local function spawnBullet(shooter, startPos, direction, gunId)
 					return
 				end
 			end
+			-- Hit wall or other solid: block bullet (do not pass through)
+			conn:Disconnect()
+			bullet:Destroy()
+			return
 		end
 		lastPos = newPos
 		bullet.CFrame = CFrame.lookAt(newPos, newPos + dir)
@@ -237,6 +274,7 @@ local function spawnGrenade(_thrower, startPos, direction)
 	grenade.CFrame = CFrame.new(startPos)
 	grenade.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
 	grenade.AssemblyLinearVelocity = velocity
+	grenade.CollisionGroup = COLLISION_GROUP_GRENADES
 	grenade.Parent = getGrenadesFolder()
 
 	task.delay(cfg.fuseTime, function()
@@ -393,6 +431,8 @@ end
 
 return {
 	Init = function()
+		setupWallCollisionGroups()
+		setupBulletBlockerWalls()
 		fireGunRE, ammoStateRE, throwGrenadeRE = ensureRemotes()
 		bindHandlers()
 		RunService.Heartbeat:Connect(processReloads)

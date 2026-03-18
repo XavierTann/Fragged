@@ -48,34 +48,37 @@ local function ensureRemotes()
 	}
 end
 
-local function ensureSpawnsFolder()
+local SPAWN_OFFSETS = {
+	[LobbyConfig.SPAWN_NAMES.SHOP] = Vector3.new(-14, 5, 0),
+	[LobbyConfig.SPAWN_NAMES.LOBBY] = Vector3.new(20, 5, 0),
+	[LobbyConfig.SPAWN_NAMES.RED_TEAM] = Vector3.new(35, 5, -8),
+	[LobbyConfig.SPAWN_NAMES.BLUE_TEAM] = Vector3.new(45, 5, 8),
+}
+
+local function getSpawnsFolder()
 	local folder = Workspace:FindFirstChild(LobbyConfig.SPAWNS_FOLDER_NAME)
 	if not folder then
 		folder = Instance.new("Folder")
 		folder.Name = LobbyConfig.SPAWNS_FOLDER_NAME
 		folder.Parent = Workspace
-		for name, offset in pairs({
-			[LobbyConfig.SPAWN_NAMES.SHOP] = Vector3.new(-14, 5, 0),
-			[LobbyConfig.SPAWN_NAMES.WAITING] = Vector3.new(20, 5, 0),
-			[LobbyConfig.SPAWN_NAMES.ARENA] = Vector3.new(40, 5, 0),
-			[LobbyConfig.SPAWN_NAMES.ARENA_BLUE] = Vector3.new(35, 5, -5),
-			[LobbyConfig.SPAWN_NAMES.ARENA_RED] = Vector3.new(45, 5, 5),
-		}) do
-			local part = Instance.new("Part")
-			part.Name = name
-			part.Size = Vector3.new(1, 1, 1)
-			part.Position = offset
-			part.Anchored = true
-			part.Transparency = 1
-			part.CanCollide = false
-			part.Parent = folder
+		for name, offset in pairs(SPAWN_OFFSETS) do
+			local spawn = Instance.new("SpawnLocation")
+			spawn.Name = name
+			spawn.Size = Vector3.new(6, 1, 6)
+			spawn.Position = offset
+			spawn.Anchored = true
+			spawn.Transparency = 1
+			spawn.CanCollide = true
+			spawn.Neutral = true
+			spawn.Enabled = (name == LobbyConfig.SPAWN_NAMES.SHOP)
+			spawn.Parent = folder
 		end
 	end
 	return folder
 end
 
 local function getSpawnCFrame(spawnName)
-	local folder = Workspace:FindFirstChild(LobbyConfig.SPAWNS_FOLDER_NAME)
+	local folder = getSpawnsFolder()
 	if not folder then
 		return CFrame.new(0, 10, 0)
 	end
@@ -83,16 +86,19 @@ local function getSpawnCFrame(spawnName)
 	if not spawn then
 		return CFrame.new(0, 10, 0)
 	end
+	local cf, part
 	if spawn:IsA("BasePart") then
-		return spawn.CFrame
+		part = spawn
+		cf = spawn.CFrame
+	elseif spawn:IsA("Model") and spawn.PrimaryPart then
+		part = spawn.PrimaryPart
+		cf = spawn.PrimaryPart.CFrame
+	else
+		return CFrame.new(0, 10, 0)
 	end
-	if spawn:IsA("SpawnLocation") then
-		return spawn.CFrame
-	end
-	if spawn:IsA("Model") and spawn.PrimaryPart then
-		return spawn.PrimaryPart.CFrame
-	end
-	return CFrame.new(0, 10, 0)
+	-- Offset upward so player stands ON TOP of the spawn, not inside it
+	local offset = part and part:IsA("BasePart") and (part.Size.Y / 2 + 2.5) or 3
+	return cf + Vector3.new(0, offset, 0)
 end
 
 local function teleportPlayerTo(player, spawnName)
@@ -197,6 +203,7 @@ local function sendToArena()
 		players[i] = waitingQueue[1]
 		table.remove(waitingQueue, 1)
 	end
+	-- Assign teams alternately for balance; CombatService will teleport to team spawns
 	for _, p in ipairs(players) do
 		playerPhase[p.UserId] = LobbyConfig.PHASE.ARENA
 		remotes.LobbyState:FireClient(p, {
@@ -208,7 +215,6 @@ local function sendToArena()
 			countdownEndTime = nil,
 		})
 		remotes.TeleportToArena:FireClient(p)
-		teleportPlayerTo(p, LobbyConfig.SPAWN_NAMES.ARENA)
 	end
 	matchStartingAt = nil
 	countdownEndTime = nil
@@ -245,7 +251,7 @@ local function addPlayerToWaitingLobby(player)
 	waitingQueue[#waitingQueue + 1] = player
 	playerPhase[userId] = LobbyConfig.PHASE.WAITING_LOBBY
 	remotes.TeleportToWaiting:FireClient(player)
-	teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.WAITING)
+	teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 	remotes.LobbyState:FireClient(player, buildStateForPlayer(player))
 	broadcastStateToWaiting()
 	if not matchStartingAt and #waitingQueue >= LobbyConfig.MIN_PLAYERS then
@@ -260,13 +266,20 @@ local function addPlayerToWaitingLobby(player)
 end
 
 local function setupPortal()
-	local portalName = "WaitingLobbyPortal"
+	local folder = getSpawnsFolder()
+	local shopSpawn = folder and folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.SHOP)
+	local portalPos = Vector3.new(0, 4, 0)
+	if shopSpawn then
+		local cf = getSpawnCFrame(LobbyConfig.SPAWN_NAMES.SHOP)
+		portalPos = cf.Position + cf.LookVector * 4
+	end
+	local portalName = "ShopToLobbyPortal"
 	local portal = Workspace:FindFirstChild(portalName)
 	if not portal then
 		portal = Instance.new("Part")
 		portal.Name = portalName
 		portal.Size = Vector3.new(6, 8, 1)
-		portal.Position = Vector3.new(0, 4, 0)
+		portal.Position = portalPos
 		portal.Anchored = true
 		portal.BrickColor = BrickColor.new("Bright blue")
 		portal.Material = Enum.Material.Neon
@@ -301,7 +314,7 @@ local function bindRemoteHandlers()
 		waitingQueue[#waitingQueue + 1] = player
 		playerPhase[userId] = LobbyConfig.PHASE.WAITING_LOBBY
 		remotes.TeleportToWaiting:FireClient(player)
-		teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.WAITING)
+		teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 		local state = buildStateForPlayer(player)
 		remotes.LobbyState:FireClient(player, state)
 		broadcastStateToWaiting()
@@ -346,14 +359,55 @@ local function bindRemoteHandlers()
 	end)
 end
 
+local function setupPlayerSpawn()
+	Players.PlayerAdded:Connect(function(player)
+		player.CharacterAdded:Connect(function()
+			local phase = playerPhase[player.UserId] or LobbyConfig.PHASE.SHOP_LOBBY
+			if phase == LobbyConfig.PHASE.SHOP_LOBBY then
+				task.defer(function()
+					teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+				end)
+			end
+		end)
+		if player.Character then
+			local phase = playerPhase[player.UserId] or LobbyConfig.PHASE.SHOP_LOBBY
+			if phase == LobbyConfig.PHASE.SHOP_LOBBY then
+				task.defer(function()
+					teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+				end)
+			end
+		end
+	end)
+	for _, player in ipairs(Players:GetPlayers()) do
+		task.defer(function()
+			if player.Character and (not playerPhase[player.UserId] or playerPhase[player.UserId] == LobbyConfig.PHASE.SHOP_LOBBY) then
+				teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+			end
+		end)
+	end
+end
+
+local function configureSpawnLocations()
+	local folder = getSpawnsFolder()
+	if not folder then
+		return
+	end
+	local shopSpawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.SHOP)
+	if shopSpawn and shopSpawn:IsA("SpawnLocation") then
+		shopSpawn.Neutral = true
+		shopSpawn.Enabled = true
+	end
+end
+
 -- Public API
 return {
 	Init = function(onRoundStartedCallback)
 		onArenaRoundStarted = onRoundStartedCallback
 		remotes = ensureRemotes()
-		ensureSpawnsFolder()
+		configureSpawnLocations()
 		bindRemoteHandlers()
 		setupPortal()
+		setupPlayerSpawn()
 	end,
 
 	AddPlayerToWaitingLobby = addPlayerToWaitingLobby,

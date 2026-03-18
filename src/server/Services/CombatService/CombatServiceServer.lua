@@ -184,26 +184,29 @@ local function getSpawnCFrame(spawnName)
 	end
 	local spawn = folder:FindFirstChild(spawnName)
 	if not spawn then
-		spawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.ARENA)
+		spawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.BLUE_TEAM)
 	end
 	if not spawn then
 		return CFrame.new(0, 10, 0)
 	end
+	local cf, part
 	if spawn:IsA("BasePart") then
-		return spawn.CFrame
+		part = spawn
+		cf = spawn.CFrame
+	elseif spawn:IsA("Model") and spawn.PrimaryPart then
+		part = spawn.PrimaryPart
+		cf = spawn.PrimaryPart.CFrame
+	else
+		return CFrame.new(0, 10, 0)
 	end
-	if spawn:IsA("SpawnLocation") then
-		return spawn.CFrame
-	end
-	if spawn:IsA("Model") and spawn.PrimaryPart then
-		return spawn.PrimaryPart.CFrame
-	end
-	return CFrame.new(0, 10, 0)
+	-- Offset upward so player stands ON TOP of the spawn, not inside it
+	local offset = part and part:IsA("BasePart") and (part.Size.Y / 2 + 2.5) or 3
+	return cf + Vector3.new(0, offset, 0)
 end
 
 local function respawnPlayer(player)
 	local team = playerTeams[player.UserId]
-	local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.ARENA_BLUE) or LobbyConfig.SPAWN_NAMES.ARENA_RED
+	local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.BLUE_TEAM) or LobbyConfig.SPAWN_NAMES.RED_TEAM
 	player:LoadCharacter()
 	task.defer(function()
 		local char = player.Character
@@ -611,7 +614,7 @@ return {
 			playerDeaths[p.UserId] = 0
 			initPlayerAmmo(p.UserId)
 			local team = playerTeams[p.UserId]
-			local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.ARENA_BLUE) or LobbyConfig.SPAWN_NAMES.ARENA_RED
+			local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.BLUE_TEAM) or LobbyConfig.SPAWN_NAMES.RED_TEAM
 			local cf = getSpawnCFrame(spawnName)
 			local character = p.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then

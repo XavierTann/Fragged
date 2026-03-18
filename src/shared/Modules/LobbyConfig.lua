@@ -32,13 +32,12 @@ return {
 		ARENA = "Arena",
 	},
 
-	-- Workspace folder name for spawn points (create LobbySpawns.WaitingLobby, LobbySpawns.Arena, LobbySpawns.Shop in workspace)
-	SPAWNS_FOLDER_NAME = "LobbySpawns",
+	-- Workspace folder: SpawnLocations (contains ShopSpawnLocation, LobbySpawnLocation, RedTeamSpawnLocation, BlueTeamSpawnLocation)
+	SPAWNS_FOLDER_NAME = "SpawnLocations",
 	SPAWN_NAMES = {
-		SHOP = "Shop",
-		WAITING = "WaitingLobby",
-		ARENA = "Arena",
-		ARENA_BLUE = "ArenaBlue",
-		ARENA_RED = "ArenaRed",
+		SHOP = "ShopSpawnLocation",
+		LOBBY = "LobbySpawnLocation",
+		RED_TEAM = "RedTeamSpawnLocation",
+		BLUE_TEAM = "BlueTeamSpawnLocation",
 	},
 }

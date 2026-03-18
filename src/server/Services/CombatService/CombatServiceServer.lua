@@ -15,7 +15,7 @@ local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
-local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
+local TDMSpawnStrategy = require(script.Parent.TDMSpawnStrategy)
 
 local fireGunRE = nil
 local ammoStateRE = nil
@@ -177,41 +177,21 @@ local function getGrenadesFolder()
 end
 
 local onPlayerDied
-local function getSpawnCFrame(spawnName)
-	local folder = Workspace:FindFirstChild(LobbyConfig.SPAWNS_FOLDER_NAME)
-	if not folder then
-		return CFrame.new(0, 10, 0)
-	end
-	local spawn = folder:FindFirstChild(spawnName)
-	if not spawn then
-		spawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.BLUE_TEAM)
-	end
-	if not spawn then
-		return CFrame.new(0, 10, 0)
-	end
-	local cf, part
-	if spawn:IsA("BasePart") then
-		part = spawn
-		cf = spawn.CFrame
-	elseif spawn:IsA("Model") and spawn.PrimaryPart then
-		part = spawn.PrimaryPart
-		cf = spawn.PrimaryPart.CFrame
-	else
-		return CFrame.new(0, 10, 0)
-	end
-	-- Offset upward so player stands ON TOP of the spawn, not inside it
-	local offset = part and part:IsA("BasePart") and (part.Size.Y / 2 + 2.5) or 3
-	return cf + Vector3.new(0, offset, 0)
+
+local function getTDMContext()
+	return {
+		playerTeams = playerTeams,
+		currentRoundPlayers = currentRoundPlayers,
+	}
 end
 
 local function respawnPlayer(player)
-	local team = playerTeams[player.UserId]
-	local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.BLUE_TEAM) or LobbyConfig.SPAWN_NAMES.RED_TEAM
 	player:LoadCharacter()
 	task.defer(function()
 		local char = player.Character
 		if char and char:FindFirstChild("HumanoidRootPart") then
-			char.HumanoidRootPart.CFrame = getSpawnCFrame(spawnName)
+			local cf = TDMSpawnStrategy.getSpawnCFrame(player, getTDMContext())
+			char.HumanoidRootPart.CFrame = cf
 			local humanoid = char:FindFirstChildOfClass("Humanoid")
 			if humanoid then
 				humanoid.MaxHealth = CombatConfig.DEFAULT_HEALTH
@@ -613,9 +593,7 @@ return {
 			playerKills[p.UserId] = 0
 			playerDeaths[p.UserId] = 0
 			initPlayerAmmo(p.UserId)
-			local team = playerTeams[p.UserId]
-			local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.BLUE_TEAM) or LobbyConfig.SPAWN_NAMES.RED_TEAM
-			local cf = getSpawnCFrame(spawnName)
+			local cf = TDMSpawnStrategy.getSpawnCFrame(p, getTDMContext())
 			local character = p.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then
 				character.HumanoidRootPart.CFrame = cf

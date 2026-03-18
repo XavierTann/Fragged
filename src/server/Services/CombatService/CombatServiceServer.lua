@@ -14,13 +14,22 @@ local CollectionService = game:GetService("CollectionService")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
+local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
 
 local fireGunRE = nil
 local ammoStateRE = nil
 local throwGrenadeRE = nil
+local matchEndedRE = nil
+local teamScoreUpdateRE = nil
 local currentRoundPlayers = {}
 local onRoundEndCallback = nil
 local diedConnections = {}
+local matchEnded = false
+local playerTeams = {}
+local teamKills = {}
+local playerKills = {}
+local playerDeaths = {}
 local lastFiredAt = {}
 local lastGrenadeThrownAt = {}
 local ammoInMagazine = {} -- [userId][gunId] = count
@@ -84,12 +93,37 @@ local function ensureRemotes()
 		grenadeR.Name = CombatConfig.REMOTES.THROW_GRENADE
 		grenadeR.Parent = folder
 	end
-	return fireR, ammoR, grenadeR
+	local matchEndedR = folder:FindFirstChild(CombatConfig.REMOTES.MATCH_ENDED)
+	if not matchEndedR then
+		matchEndedR = Instance.new("RemoteEvent")
+		matchEndedR.Name = CombatConfig.REMOTES.MATCH_ENDED
+		matchEndedR.Parent = folder
+	end
+	local teamScoreR = folder:FindFirstChild(CombatConfig.REMOTES.TEAM_SCORE_UPDATE)
+	if not teamScoreR then
+		teamScoreR = Instance.new("RemoteEvent")
+		teamScoreR.Name = CombatConfig.REMOTES.TEAM_SCORE_UPDATE
+		teamScoreR.Parent = folder
+	end
+	return fireR, ammoR, grenadeR, matchEndedR, teamScoreR
 end
 
 local function sendAmmoState(player, gunId, ammoCount, isReloading)
 	if ammoStateRE then
 		ammoStateRE:FireClient(player, gunId, ammoCount, isReloading)
+	end
+end
+
+local function broadcastTeamScore()
+	if not teamScoreUpdateRE then
+		return
+	end
+	local blueKills = teamKills.Blue or 0
+	local redKills = teamKills.Red or 0
+	for _, p in ipairs(currentRoundPlayers) do
+		if p and p.Parent then
+			teamScoreUpdateRE:FireClient(p, blueKills, redKills)
+		end
 	end
 end
 
@@ -142,37 +176,146 @@ local function getGrenadesFolder()
 	return folder
 end
 
-local function countAliveInRound()
-	local count = 0
-	for _, p in ipairs(currentRoundPlayers) do
-		if p and p.Parent and p.Character then
-			local h = p.Character:FindFirstChildOfClass("Humanoid")
-			if h and h.Health > 0 then
-				count = count + 1
-			end
-		end
+local onPlayerDied
+local function getSpawnCFrame(spawnName)
+	local folder = Workspace:FindFirstChild(LobbyConfig.SPAWNS_FOLDER_NAME)
+	if not folder then
+		return CFrame.new(0, 10, 0)
 	end
-	return count
+	local spawn = folder:FindFirstChild(spawnName)
+	if not spawn then
+		spawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.ARENA)
+	end
+	if not spawn then
+		return CFrame.new(0, 10, 0)
+	end
+	if spawn:IsA("BasePart") then
+		return spawn.CFrame
+	end
+	if spawn:IsA("SpawnLocation") then
+		return spawn.CFrame
+	end
+	if spawn:IsA("Model") and spawn.PrimaryPart then
+		return spawn.PrimaryPart.CFrame
+	end
+	return CFrame.new(0, 10, 0)
 end
 
-local function checkRoundEnd()
-	if #currentRoundPlayers == 0 then
-		return
-	end
-	local alive = countAliveInRound()
-	if alive <= 1 and onRoundEndCallback then
-		print("[Combat] Round has finished.")
-		local cb = onRoundEndCallback
-		onRoundEndCallback = nil
-		for _, conn in pairs(diedConnections) do
-			if conn and conn.Disconnect then
-				conn:Disconnect()
+local function respawnPlayer(player)
+	local team = playerTeams[player.UserId]
+	local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.ARENA_BLUE) or LobbyConfig.SPAWN_NAMES.ARENA_RED
+	player:LoadCharacter()
+	task.defer(function()
+		local char = player.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			char.HumanoidRootPart.CFrame = getSpawnCFrame(spawnName)
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid.MaxHealth = CombatConfig.DEFAULT_HEALTH
+				humanoid.Health = CombatConfig.DEFAULT_HEALTH
+				local conn = humanoid.Died:Connect(function()
+					onPlayerDied(player)
+				end)
+				diedConnections[player.UserId] = conn
 			end
 		end
-		diedConnections = {}
-		currentRoundPlayers = {}
-		cb()
+	end)
+end
+
+local function buildLeaderboardData()
+	local bluePlayers = {}
+	local redPlayers = {}
+	for _, p in ipairs(currentRoundPlayers) do
+		if p and p.Parent then
+			local team = playerTeams[p.UserId] or "Blue"
+			local entry = {
+				name = p.Name,
+				kills = playerKills[p.UserId] or 0,
+				deaths = playerDeaths[p.UserId] or 0,
+			}
+			if team == "Blue" then
+				table.insert(bluePlayers, entry)
+			else
+				table.insert(redPlayers, entry)
+			end
+		end
 	end
+	table.sort(bluePlayers, function(a, b)
+		return a.kills > b.kills
+	end)
+	table.sort(redPlayers, function(a, b)
+		return a.kills > b.kills
+	end)
+	return bluePlayers, redPlayers
+end
+
+local function endMatch(winningTeam)
+	if matchEnded then
+		return
+	end
+	matchEnded = true
+	print("[Combat] TDM match ended. Winning team: " .. tostring(winningTeam))
+	for _, conn in pairs(diedConnections) do
+		if conn and conn.Disconnect then
+			conn:Disconnect()
+		end
+	end
+	diedConnections = {}
+	local bluePlayers, redPlayers = buildLeaderboardData()
+	for _, p in ipairs(currentRoundPlayers) do
+		if p and p.Parent and matchEndedRE then
+			local payload = {
+				winningTeam = winningTeam,
+				myTeam = playerTeams[p.UserId] or "Blue",
+				bluePlayers = bluePlayers,
+				redPlayers = redPlayers,
+			}
+			matchEndedRE:FireClient(p, payload)
+		end
+	end
+	task.delay(TDMConfig.LEADERBOARD_DURATION, function()
+		currentRoundPlayers = {}
+		if onRoundEndCallback then
+			local cb = onRoundEndCallback
+			onRoundEndCallback = nil
+			cb()
+		end
+	end)
+end
+
+onPlayerDied = function(deadPlayer)
+	if matchEnded then
+		return
+	end
+	local uid = deadPlayer.UserId
+	playerDeaths[uid] = (playerDeaths[uid] or 0) + 1
+	local humanoid = deadPlayer.Character and deadPlayer.Character:FindFirstChildOfClass("Humanoid")
+	local killerUserId = humanoid and humanoid:GetAttribute("LastDamagerUserId")
+	if killerUserId and killerUserId ~= uid then
+		local killerTeam = playerTeams[killerUserId]
+		local deadTeam = playerTeams[uid]
+		if killerTeam and deadTeam and killerTeam ~= deadTeam then
+			playerKills[killerUserId] = (playerKills[killerUserId] or 0) + 1
+			teamKills[killerTeam] = (teamKills[killerTeam] or 0) + 1
+			broadcastTeamScore()
+			if teamKills[killerTeam] >= TDMConfig.KILL_LIMIT then
+				endMatch(killerTeam)
+				return
+			end
+		end
+	end
+	diedConnections[uid] = nil
+	task.delay(TDMConfig.RESPAWN_DELAY, function()
+		if matchEnded then
+			return
+		end
+		for _, p in ipairs(currentRoundPlayers) do
+			if p.UserId == uid and p.Parent then
+				respawnPlayer(p)
+				break
+			end
+		end
+	end)
 end
 
 local function spawnBullet(shooter, startPos, direction, gunId)
@@ -212,10 +355,15 @@ local function spawnBullet(shooter, startPos, direction, gunId)
 				local humanoid = model:FindFirstChildOfClass("Humanoid")
 				local hitPlayer = humanoid and Players:GetPlayerFromCharacter(model)
 				if hitPlayer and hitPlayer.UserId ~= shooterUserId then
-					conn:Disconnect()
-					humanoid:TakeDamage(gun.damage)
-					bullet:Destroy()
-					return
+					local shooterTeam = playerTeams[shooterUserId]
+					local hitTeam = playerTeams[hitPlayer.UserId]
+					if shooterTeam and hitTeam and shooterTeam ~= hitTeam then
+						conn:Disconnect()
+						humanoid:SetAttribute("LastDamagerUserId", shooterUserId)
+						humanoid:TakeDamage(gun.damage)
+						bullet:Destroy()
+						return
+					end
 				end
 			end
 			-- Hit wall or other solid: block bullet (do not pass through)
@@ -234,21 +382,25 @@ local function spawnBullet(shooter, startPos, direction, gunId)
 	end)
 end
 
-local function doExplosionDamage(center, radius, damage)
+local function doExplosionDamage(center, radius, damage, throwerUserId)
 	local radiusSq = radius * radius
+	local throwerTeam = throwerUserId and playerTeams[throwerUserId]
 	for _, p in ipairs(currentRoundPlayers) do
 		if p and p.Parent and p.Character then
-			local humanoid = p.Character:FindFirstChildOfClass("Humanoid")
-			local root = p.Character:FindFirstChild("HumanoidRootPart")
-			if humanoid and humanoid.Health > 0 and root then
-				local offset = root.Position - center
-				local distSq = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z
-				if distSq <= radiusSq then
-					local dist = math.sqrt(distSq)
-					local falloff = dist > 0 and math.max(0, 1 - dist / radius) or 1
-					local dmg = math.ceil(damage * falloff)
-					if dmg > 0 then
-						humanoid:TakeDamage(dmg)
+			if not (throwerTeam and throwerTeam == (playerTeams[p.UserId] or "")) then
+				local humanoid = p.Character:FindFirstChildOfClass("Humanoid")
+				local root = p.Character:FindFirstChild("HumanoidRootPart")
+				if humanoid and humanoid.Health > 0 and root then
+					local offset = root.Position - center
+					local distSq = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z
+					if distSq <= radiusSq then
+						local dist = math.sqrt(distSq)
+						local falloff = dist > 0 and math.max(0, 1 - dist / radius) or 1
+						local dmg = math.ceil(damage * falloff)
+						if dmg > 0 then
+							humanoid:SetAttribute("LastDamagerUserId", throwerUserId or 0)
+							humanoid:TakeDamage(dmg)
+						end
 					end
 				end
 			end
@@ -314,12 +466,15 @@ local function spawnGrenade(_thrower, startPos, direction)
 			explosionPart.Transparency = 0.3 + 0.6 * t
 		end)
 
-		doExplosionDamage(center, cfg.radius, cfg.damage)
+		doExplosionDamage(center, cfg.radius, cfg.damage, _thrower and _thrower.UserId or nil)
 	end)
 end
 
 local function bindHandlers()
 	fireGunRE.OnServerEvent:Connect(function(player, aimDirection, gunId)
+		if matchEnded then
+			return
+		end
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" then
 			return
 		end
@@ -403,6 +558,9 @@ local function bindHandlers()
 	end)
 
 	throwGrenadeRE.OnServerEvent:Connect(function(player, aimDirection)
+		if matchEnded then
+			return
+		end
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" then
 			return
 		end
@@ -433,34 +591,47 @@ return {
 	Init = function()
 		setupWallCollisionGroups()
 		setupBulletBlockerWalls()
-		fireGunRE, ammoStateRE, throwGrenadeRE = ensureRemotes()
+		fireGunRE, ammoStateRE, throwGrenadeRE, matchEndedRE, teamScoreUpdateRE = ensureRemotes()
 		bindHandlers()
 		RunService.Heartbeat:Connect(processReloads)
 	end,
 
 	StartRound = function(players, onRoundEnd)
 		onRoundEndCallback = onRoundEnd
+		matchEnded = false
 		currentRoundPlayers = {}
-		for _, p in ipairs(players) do
+		playerTeams = {}
+		teamKills = { Blue = 0, Red = 0 }
+		playerKills = {}
+		playerDeaths = {}
+		for i, p in ipairs(players) do
 			currentRoundPlayers[#currentRoundPlayers + 1] = p
+			playerTeams[p.UserId] = (i % 2 == 1) and "Blue" or "Red"
+			playerKills[p.UserId] = 0
+			playerDeaths[p.UserId] = 0
 			initPlayerAmmo(p.UserId)
+			local team = playerTeams[p.UserId]
+			local spawnName = (team == "Blue" and LobbyConfig.SPAWN_NAMES.ARENA_BLUE) or LobbyConfig.SPAWN_NAMES.ARENA_RED
+			local cf = getSpawnCFrame(spawnName)
 			local character = p.Character
+			if character and character:FindFirstChild("HumanoidRootPart") then
+				character.HumanoidRootPart.CFrame = cf
+			end
 			if character then
 				local humanoid = character:FindFirstChildOfClass("Humanoid")
 				if humanoid then
 					humanoid.MaxHealth = CombatConfig.DEFAULT_HEALTH
 					humanoid.Health = CombatConfig.DEFAULT_HEALTH
 					local conn = humanoid.Died:Connect(function()
-						checkRoundEnd()
+						onPlayerDied(p)
 					end)
 					diedConnections[p.UserId] = conn
 				end
 			end
-			-- Send initial ammo state for all weapons
 			for gunId, ammo in pairs(ammoInMagazine[p.UserId] or {}) do
 				sendAmmoState(p, gunId, ammo, false)
 			end
 		end
-		task.defer(checkRoundEnd)
+		broadcastTeamScore()
 	end,
 }

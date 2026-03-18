@@ -31,31 +31,49 @@ WeaponSelectGUI.Init()
 local ReloadBarGUI = require(Shared.UI.ReloadBarGUI)
 ReloadBarGUI.Init()
 
--- -- Enable shooting and weapon select only in arena
--- LobbyServiceClient.Subscribe(function(state)
--- 	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
--- 	CombatServiceClient.SetShootingEnabled(inArena)
--- 	if inArena then
--- 		WeaponSelectGUI.Show()
--- 		ReloadBarGUI.Show()
--- 	else
--- 		WeaponSelectGUI.Hide()
--- 		ReloadBarGUI.Hide()
--- 	end
--- end)
+local LeaderboardGUI = require(Shared.UI.LeaderboardGUI)
+LeaderboardGUI.Init()
 
+local TDMScoreGUI = require(Shared.UI.TDMScoreGUI)
+TDMScoreGUI.Init()
 
--- For Testing
-CombatServiceClient.SetShootingEnabled(true)
-WeaponSelectGUI.Show()
-ReloadBarGUI.Show()
+CombatServiceClient.SubscribeMatchEnded(function(payload)
+	WeaponSelectGUI.Hide()
+	ReloadBarGUI.Hide()
+	TDMScoreGUI.Hide()
+	if payload then
+		LeaderboardGUI.Show(payload)
+	end
+end)
 
--- local initialState = LobbyServiceClient.GetState()
--- local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
--- CombatServiceClient.SetShootingEnabled(inArena)
--- if inArena then
--- 	WeaponSelectGUI.Show()
--- 	ReloadBarGUI.Show()
--- end
+-- Enable shooting and weapon select only in arena
+LobbyServiceClient.Subscribe(function(state)
+	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
+	CombatServiceClient.SetShootingEnabled(inArena)
+	if inArena then
+		WeaponSelectGUI.Show()
+		ReloadBarGUI.Show()
+		TDMScoreGUI.Show()
+		LeaderboardGUI.Hide()
+	else
+		WeaponSelectGUI.Hide()
+		ReloadBarGUI.Hide()
+		TDMScoreGUI.Hide()
+		LeaderboardGUI.Hide()
+	end
+end)
+
+local initialState = LobbyServiceClient.GetState()
+local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
+CombatServiceClient.SetShootingEnabled(inArena)
+if inArena then
+	WeaponSelectGUI.Show()
+	ReloadBarGUI.Show()
+	TDMScoreGUI.Show()
+else
+	WeaponSelectGUI.Hide()
+	ReloadBarGUI.Hide()
+	TDMScoreGUI.Hide()
+end
 
 print("Client startup complete.")

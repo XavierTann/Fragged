@@ -26,6 +26,7 @@ local renderSteppedConnection = nil
 -- [gunId] = { ammo = number, isReloading = boolean, reloadStartedAt = number? }
 local ammoState = {}
 local ammoStateSubscribers = {}
+local matchEndedSubscribers = {}
 
 local function getAimDirectionFromMouse()
 	local player = Players.LocalPlayer
@@ -89,6 +90,16 @@ local function fireInDirection(dir)
 end
 
 -- Fire when aiming joystick is off-axis (mobile). No fire when Grenade selected.
+local function throwGrenade(dir)
+	if not shootingEnabled or not ThrowGrenadeRE or not dir then
+		return
+	end
+	if currentWeapon ~= "Grenade" then
+		return
+	end
+	ThrowGrenadeRE:FireServer(dir)
+end
+
 local function onRenderStepped()
 	if not shootingEnabled or not FireGunRE then
 		return
@@ -101,16 +112,6 @@ local function onRenderStepped()
 	if dir then
 		fireInDirection(dir)
 	end
-end
-
-local function throwGrenade(dir)
-	if not shootingEnabled or not ThrowGrenadeRE or not dir then
-		return
-	end
-	if currentWeapon ~= "Grenade" then
-		return
-	end
-	ThrowGrenadeRE:FireServer(dir)
 end
 
 -- Fire on click (desktop fallback), grenade on G key when Grenade selected
@@ -136,12 +137,37 @@ local function onInputBegan(input, gameProcessed)
 	end
 end
 
+local function setShootingEnabled(enabled)
+	shootingEnabled = enabled
+	if inputConnection then
+		inputConnection:Disconnect()
+		inputConnection = nil
+	end
+	if renderSteppedConnection then
+		renderSteppedConnection:Disconnect()
+		renderSteppedConnection = nil
+	end
+	if enabled then
+		renderSteppedConnection = RunService.RenderStepped:Connect(onRenderStepped)
+		if not UserInputService.TouchEnabled then
+			inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
+		end
+	end
+end
+
 return {
 	Init = function()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
 		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
+		local matchEndedRE = folder:WaitForChild(CombatConfig.REMOTES.MATCH_ENDED)
+		matchEndedRE.OnClientEvent:Connect(function(payload)
+			setShootingEnabled(false)
+			for _, cb in ipairs(matchEndedSubscribers) do
+				task.defer(cb, payload)
+			end
+		end)
 		-- Mobile: grenade thrown when right joystick released (last direction before lift)
 		if UserInputService.TouchEnabled then
 			local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
@@ -166,6 +192,10 @@ return {
 		table.insert(ammoStateSubscribers, callback)
 	end,
 
+	SubscribeMatchEnded = function(callback)
+		table.insert(matchEndedSubscribers, callback)
+	end,
+
 	GetAmmoState = function(gunId)
 		gunId = gunId or currentWeapon
 		local ammo, isReloading, reloadStartedAt = getAmmoStateForWeapon(gunId)
@@ -179,25 +209,7 @@ return {
 		}
 	end,
 
-	SetShootingEnabled = function(enabled)
-		shootingEnabled = enabled
-		if inputConnection then
-			inputConnection:Disconnect()
-			inputConnection = nil
-		end
-		if renderSteppedConnection then
-			renderSteppedConnection:Disconnect()
-			renderSteppedConnection = nil
-		end
-		if enabled then
-			-- Mobile: fire continuously when joystick is pulled off-axis
-			renderSteppedConnection = RunService.RenderStepped:Connect(onRenderStepped)
-			-- Desktop: fire on mouse click (joystick not available)
-			if not UserInputService.TouchEnabled then
-				inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
-			end
-		end
-	end,
+	SetShootingEnabled = setShootingEnabled,
 
 	FireNow = fireInDirection,
 	ThrowGrenade = throwGrenade,

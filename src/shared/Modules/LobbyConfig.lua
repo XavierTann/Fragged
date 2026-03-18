@@ -38,5 +38,7 @@ return {
 		SHOP = "Shop",
 		WAITING = "WaitingLobby",
 		ARENA = "Arena",
+		ARENA_BLUE = "ArenaBlue",
+		ARENA_RED = "ArenaRed",
 	},
 }

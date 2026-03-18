@@ -58,6 +58,8 @@ local function ensureSpawnsFolder()
 			[LobbyConfig.SPAWN_NAMES.SHOP] = Vector3.new(-14, 5, 0),
 			[LobbyConfig.SPAWN_NAMES.WAITING] = Vector3.new(20, 5, 0),
 			[LobbyConfig.SPAWN_NAMES.ARENA] = Vector3.new(40, 5, 0),
+			[LobbyConfig.SPAWN_NAMES.ARENA_BLUE] = Vector3.new(35, 5, -5),
+			[LobbyConfig.SPAWN_NAMES.ARENA_RED] = Vector3.new(45, 5, 5),
 		}) do
 			local part = Instance.new("Part")
 			part.Name = name

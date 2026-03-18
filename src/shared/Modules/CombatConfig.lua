@@ -11,5 +11,7 @@ return {
 		FIRE_GUN = "FireGun",
 		AMMO_STATE = "AmmoState", -- Server -> Client: ammo count, isReloading, gunId
 		THROW_GRENADE = "ThrowGrenade",
+		MATCH_ENDED = "MatchEnded", -- Server -> Client: { winningTeam, bluePlayers, redPlayers }
+		TEAM_SCORE_UPDATE = "TeamScoreUpdate", -- Server -> Client: blueKills, redKills (real-time)
 	},
 }

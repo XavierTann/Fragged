@@ -17,6 +17,7 @@ local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 
 local FireGunRE = nil
 local AmmoStateRE = nil
+local ThrowGrenadeRE = nil
 local shootingEnabled = false
 local currentWeapon = "Pistol"
 local inputConnection = nil
@@ -87,9 +88,12 @@ local function fireInDirection(dir)
 	FireGunRE:FireServer(dir, currentWeapon)
 end
 
--- Fire when aiming joystick is off-axis (mobile)
+-- Fire when aiming joystick is off-axis (mobile). No fire when Grenade selected.
 local function onRenderStepped()
 	if not shootingEnabled or not FireGunRE then
+		return
+	end
+	if currentWeapon == "Grenade" then
 		return
 	end
 	local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
@@ -99,17 +103,36 @@ local function onRenderStepped()
 	end
 end
 
--- Fire on click (desktop fallback)
+local function throwGrenade(dir)
+	if not shootingEnabled or not ThrowGrenadeRE or not dir then
+		return
+	end
+	if currentWeapon ~= "Grenade" then
+		return
+	end
+	ThrowGrenadeRE:FireServer(dir)
+end
+
+-- Fire on click (desktop fallback), grenade on G key when Grenade selected
 local function onInputBegan(input, gameProcessed)
 	if gameProcessed then
 		return
 	end
-	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if currentWeapon ~= "Grenade" then
+			local dir = getAimDirectionFromMouse()
+			if dir then
+				fireInDirection(dir)
+			end
+		end
 		return
 	end
-	local dir = getAimDirectionFromMouse()
-	if dir then
-		fireInDirection(dir)
+	-- Grenade: G key (desktop only; mobile uses joystick release)
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
+		local dir = getAimDirectionFromMouse()
+		if dir then
+			throwGrenade(dir)
+		end
 	end
 end
 
@@ -118,6 +141,14 @@ return {
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
+		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
+		-- Mobile: grenade thrown when right joystick released (last direction before lift)
+		if UserInputService.TouchEnabled then
+			local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
+			RotationJoystickGUI.SubscribeOnRelease(function(worldDir)
+				throwGrenade(worldDir)
+			end)
+		end
 		AmmoStateRE.OnClientEvent:Connect(function(gunId, ammoCount, isReloading)
 			ammoState[gunId] = ammoState[gunId] or {}
 			ammoState[gunId].ammo = ammoCount
@@ -169,6 +200,7 @@ return {
 	end,
 
 	FireNow = fireInDirection,
+	ThrowGrenade = throwGrenade,
 
 	SetCurrentWeapon = function(gunId)
 		currentWeapon = gunId or "Pistol"

@@ -11,16 +11,20 @@ local RunService = game:GetService("RunService")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
+local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 
 local fireGunRE = nil
 local ammoStateRE = nil
+local throwGrenadeRE = nil
 local currentRoundPlayers = {}
 local onRoundEndCallback = nil
 local diedConnections = {}
 local lastFiredAt = {}
+local lastGrenadeThrownAt = {}
 local ammoInMagazine = {} -- [userId][gunId] = count
 local reloadEndAt = {} -- [userId][gunId] = os.clock() when reload finishes
 local BULLETS_FOLDER_NAME = "CombatBullets"
+local GRENADES_FOLDER_NAME = "CombatGrenades"
 
 local function ensureRemotes()
 	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
@@ -41,7 +45,13 @@ local function ensureRemotes()
 		ammoR.Name = CombatConfig.REMOTES.AMMO_STATE
 		ammoR.Parent = folder
 	end
-	return fireR, ammoR
+	local grenadeR = folder:FindFirstChild(CombatConfig.REMOTES.THROW_GRENADE)
+	if not grenadeR then
+		grenadeR = Instance.new("RemoteEvent")
+		grenadeR.Name = CombatConfig.REMOTES.THROW_GRENADE
+		grenadeR.Parent = folder
+	end
+	return fireR, ammoR, grenadeR
 end
 
 local function sendAmmoState(player, gunId, ammoCount, isReloading)
@@ -84,6 +94,16 @@ local function getBulletsFolder()
 	if not folder then
 		folder = Instance.new("Folder")
 		folder.Name = BULLETS_FOLDER_NAME
+		folder.Parent = Workspace
+	end
+	return folder
+end
+
+local function getGrenadesFolder()
+	local folder = Workspace:FindFirstChild(GRENADES_FOLDER_NAME)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = GRENADES_FOLDER_NAME
 		folder.Parent = Workspace
 	end
 	return folder
@@ -177,6 +197,89 @@ local function spawnBullet(shooter, startPos, direction, gunId)
 	end)
 end
 
+local function doExplosionDamage(center, radius, damage)
+	local radiusSq = radius * radius
+	for _, p in ipairs(currentRoundPlayers) do
+		if p and p.Parent and p.Character then
+			local humanoid = p.Character:FindFirstChildOfClass("Humanoid")
+			local root = p.Character:FindFirstChild("HumanoidRootPart")
+			if humanoid and humanoid.Health > 0 and root then
+				local offset = root.Position - center
+				local distSq = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z
+				if distSq <= radiusSq then
+					local dist = math.sqrt(distSq)
+					local falloff = dist > 0 and math.max(0, 1 - dist / radius) or 1
+					local dmg = math.ceil(damage * falloff)
+					if dmg > 0 then
+						humanoid:TakeDamage(dmg)
+					end
+				end
+			end
+		end
+	end
+end
+
+local function spawnGrenade(_thrower, startPos, direction)
+	local cfg = GrenadeConfig
+	local dir = direction.Unit
+	-- Add upward arc
+	local throwDir = (Vector3.new(dir.X, 0, dir.Z) * (1 - cfg.throwArcUp) + Vector3.new(0, cfg.throwArcUp, 0)).Unit
+	local velocity = throwDir * cfg.throwSpeed
+
+	local grenade = Instance.new("Part")
+	grenade.Name = "Grenade"
+	grenade.Size = cfg.size
+	grenade.Color = cfg.color
+	grenade.Material = cfg.material
+	grenade.Shape = Enum.PartType.Ball
+	grenade.Anchored = false
+	grenade.CanCollide = true
+	grenade.CFrame = CFrame.new(startPos)
+	grenade.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
+	grenade.AssemblyLinearVelocity = velocity
+	grenade.Parent = getGrenadesFolder()
+
+	task.delay(cfg.fuseTime, function()
+		if not grenade or not grenade.Parent then
+			return
+		end
+		local center = grenade.Position
+		grenade:Destroy()
+
+		-- Explosion visual: expanding sphere
+		local explosionPart = Instance.new("Part")
+		explosionPart.Name = "Explosion"
+		explosionPart.Shape = Enum.PartType.Ball
+		explosionPart.Size = Vector3.new(1, 1, 1)
+		explosionPart.Anchored = true
+		explosionPart.CanCollide = false
+		explosionPart.Material = Enum.Material.Neon
+		explosionPart.Color = Color3.fromRGB(255, 120, 40)
+		explosionPart.CFrame = CFrame.new(center)
+		explosionPart.Transparency = 0.3
+		explosionPart.Parent = getGrenadesFolder()
+		local startSize = 1
+		local endSize = cfg.radius * 2
+		local duration = 0.2
+		local elapsed = 0
+		local conn
+		conn = RunService.Heartbeat:Connect(function(dt)
+			elapsed = elapsed + dt
+			if elapsed >= duration then
+				conn:Disconnect()
+				explosionPart:Destroy()
+				return
+			end
+			local t = elapsed / duration
+			local s = startSize + (endSize - startSize) * t
+			explosionPart.Size = Vector3.new(s, s, s)
+			explosionPart.Transparency = 0.3 + 0.6 * t
+		end)
+
+		doExplosionDamage(center, cfg.radius, cfg.damage)
+	end)
+end
+
 local function bindHandlers()
 	fireGunRE.OnServerEvent:Connect(function(player, aimDirection, gunId)
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" then
@@ -260,11 +363,37 @@ local function bindHandlers()
 			sendAmmoState(player, gunId, newAmmo, false)
 		end
 	end)
+
+	throwGrenadeRE.OnServerEvent:Connect(function(player, aimDirection)
+		if not aimDirection or typeof(aimDirection) ~= "Vector3" then
+			return
+		end
+		if aimDirection.Magnitude < 0.01 then
+			return
+		end
+		local now = os.clock()
+		local uid = player.UserId
+		local last = lastGrenadeThrownAt[uid] or 0
+		if now - last < GrenadeConfig.cooldown then
+			return
+		end
+		lastGrenadeThrownAt[uid] = now
+		local character = player.Character
+		if not character then
+			return
+		end
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if not root then
+			return
+		end
+		local startPos = root.Position + aimDirection.Unit * 2
+		spawnGrenade(player, startPos, aimDirection)
+	end)
 end
 
 return {
 	Init = function()
-		fireGunRE, ammoStateRE = ensureRemotes()
+		fireGunRE, ammoStateRE, throwGrenadeRE = ensureRemotes()
 		bindHandlers()
 		RunService.Heartbeat:Connect(processReloads)
 	end,

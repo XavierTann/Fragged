@@ -17,6 +17,7 @@ local thumbRadiusPx = 24
 local currentDirection = Vector2.zero
 local isActive = false
 local touchStartPos = Vector2.zero
+local onReleaseCallbacks = {}
 local thumbStartPos = Vector2.zero
 local lastProcessedTouchPos = nil -- reject InputChanged from other finger ( sudden jumps )
 
@@ -109,6 +110,14 @@ local function onInputEnded(input)
 	end
 	if not isActive then
 		return
+	end
+	-- Fire release callbacks with last direction BEFORE snapping to center
+	-- (Throw direction = last joystick direction before finger lift)
+	if currentDirection.Magnitude > 0.01 then
+		local worldDir = Vector3.new(-currentDirection.Y, 0, currentDirection.X).Unit
+		for _, cb in ipairs(onReleaseCallbacks) do
+			task.defer(cb, worldDir)
+		end
 	end
 	snapToCenter()
 end
@@ -229,4 +238,8 @@ return {
 		return currentDirection
 	end,
 	GetWorldDirectionXZ = getWorldDirectionXZ,
+	-- Called when joystick returns to center (finger lifted). Receives world direction Vector3.
+	SubscribeOnRelease = function(callback)
+		table.insert(onReleaseCallbacks, callback)
+	end,
 }

@@ -8,12 +8,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
+local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
 
 local gui = nil
 local buttonMap = {} -- gunId -> TextButton
 
-local WEAPON_ORDER = { "Pistol", "Rifle", "Shotgun" }
+local WEAPON_ORDER = { "Pistol", "Rifle", "Shotgun", "Grenade" }
 local BAR_HEIGHT = 56
 local BUTTON_WIDTH = 100
 local BUTTON_GAP = 8
@@ -58,16 +59,21 @@ local function createWeaponBar(parent)
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = bar
 
-	for i, gunId in ipairs(WEAPON_ORDER) do
-		local gun = GunsConfig[gunId]
-		if gun then
+	for i, itemId in ipairs(WEAPON_ORDER) do
+		local displayName = GunsConfig[itemId] and GunsConfig[itemId].name or nil
+		local accentColor = GunsConfig[itemId] and GunsConfig[itemId].bulletColor or nil
+		if itemId == "Grenade" then
+			displayName = GrenadeConfig.name
+			accentColor = GrenadeConfig.color
+		end
+		if displayName then
 			local btn = Instance.new("TextButton")
-			btn.Name = gunId
+			btn.Name = itemId
 			btn.Size = UDim2.fromOffset(BUTTON_WIDTH, BAR_HEIGHT)
 			btn.Position = UDim2.fromOffset(12 + (i - 1) * (BUTTON_WIDTH + BUTTON_GAP), 8)
 			btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
 			btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-			btn.Text = gun.name or gunId
+			btn.Text = displayName
 			btn.TextSize = 16
 			btn.Font = Enum.Font.GothamMedium
 			btn.BorderSizePixel = 0
@@ -80,7 +86,7 @@ local function createWeaponBar(parent)
 			local accent = Instance.new("Frame")
 			accent.Size = UDim2.new(0, 4, 1, 0)
 			accent.Position = UDim2.fromOffset(0, 0)
-			accent.BackgroundColor3 = gun.bulletColor or Color3.fromRGB(150, 150, 150)
+			accent.BackgroundColor3 = accentColor or Color3.fromRGB(150, 150, 150)
 			accent.BorderSizePixel = 0
 			accent.Parent = btn
 			local accentCorner = Instance.new("UICorner")
@@ -88,11 +94,11 @@ local function createWeaponBar(parent)
 			accentCorner.Parent = accent
 
 			btn.MouseButton1Click:Connect(function()
-				CombatServiceClient.SetCurrentWeapon(gunId)
-				updateSelection(gunId)
+				CombatServiceClient.SetCurrentWeapon(itemId)
+				updateSelection(itemId)
 			end)
 
-			buttonMap[gunId] = btn
+			buttonMap[itemId] = btn
 		end
 	end
 

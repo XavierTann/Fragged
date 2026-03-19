@@ -16,10 +16,10 @@ local gui = nil
 local blueScoreLabel = nil
 local redScoreLabel = nil
 
-local TEAM_COLORS = {
-	Blue = Color3.fromRGB(80, 140, 220),
-	Red = Color3.fromRGB(220, 80, 80),
-}
+local BACKGROUND_TRANSPARENCY = 0.45
+
+local BLUE_FLAG_ASSET_ID = 397459039
+local RED_FLAG_ASSET_ID = 2017769585
 
 local KILL_LIMIT = TDMConfig.KILL_LIMIT
 
@@ -41,6 +41,7 @@ local function createGui()
 	container.Position = UDim2.new(1, -156, 0, 16)
 	container.AnchorPoint = Vector2.new(0, 0)
 	container.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+	container.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 	container.BorderSizePixel = 0
 	container.Parent = gui
 
@@ -56,16 +57,14 @@ local function createGui()
 	blueRow.BackgroundTransparency = 1
 	blueRow.Parent = container
 
-	local blueFlag = Instance.new("Frame")
+	local blueFlag = Instance.new("ImageLabel")
 	blueFlag.Name = "BlueFlag"
 	blueFlag.Size = UDim2.fromOffset(20, 20)
 	blueFlag.Position = UDim2.fromOffset(0, 4)
-	blueFlag.BackgroundColor3 = TEAM_COLORS.Blue
-	blueFlag.BorderSizePixel = 0
+	blueFlag.BackgroundTransparency = 1
+	blueFlag.Image = "rbxassetid://" .. tostring(BLUE_FLAG_ASSET_ID)
+	blueFlag.ScaleType = Enum.ScaleType.Fit
 	blueFlag.Parent = blueRow
-	local blueFlagCorner = Instance.new("UICorner")
-	blueFlagCorner.CornerRadius = UDim.new(0, 4)
-	blueFlagCorner.Parent = blueFlag
 
 	blueScoreLabel = Instance.new("TextLabel")
 	blueScoreLabel.Name = "BlueScore"
@@ -87,16 +86,14 @@ local function createGui()
 	redRow.BackgroundTransparency = 1
 	redRow.Parent = container
 
-	local redFlag = Instance.new("Frame")
+	local redFlag = Instance.new("ImageLabel")
 	redFlag.Name = "RedFlag"
 	redFlag.Size = UDim2.fromOffset(20, 20)
 	redFlag.Position = UDim2.fromOffset(0, 4)
-	redFlag.BackgroundColor3 = TEAM_COLORS.Red
-	redFlag.BorderSizePixel = 0
+	redFlag.BackgroundTransparency = 1
+	redFlag.Image = "rbxassetid://" .. tostring(RED_FLAG_ASSET_ID)
+	redFlag.ScaleType = Enum.ScaleType.Fit
 	redFlag.Parent = redRow
-	local redFlagCorner = Instance.new("UICorner")
-	redFlagCorner.CornerRadius = UDim.new(0, 4)
-	redFlagCorner.Parent = redFlag
 
 	redScoreLabel = Instance.new("TextLabel")
 	redScoreLabel.Name = "RedScore"

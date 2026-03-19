@@ -5,7 +5,7 @@
 
 return {
 	name = "Grenade",
-	fuseTime = 2.5, -- seconds before explosion
+	fuseTime = 2, -- seconds before explosion
 	throwSpeed = 70, -- initial velocity magnitude
 	throwArcUp = 0.4, -- upward component for arc (0 = flat, 1 = mostly up)
 	damage = 60, -- damage at center

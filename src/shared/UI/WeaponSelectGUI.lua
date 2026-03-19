@@ -10,14 +10,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 local WeaponIconsConfig = require(ReplicatedStorage.Shared.Modules.WeaponIconsConfig)
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
 
 local gui = nil
+local weaponBar = nil
+local weaponBarContainer = nil
 local buttonMap = {} -- gunId -> ImageButton
 local ammoLabelMap = {} -- gunId -> TextLabel
-
-local WEAPON_ORDER = { "Pistol", "Rifle", "Shotgun", "Grenade" }
 local BAR_HEIGHT = 56
 local BUTTON_WIDTH = 100
 local BUTTON_GAP = 8
@@ -67,11 +68,16 @@ local function updateSelection(gunId)
 end
 
 local function updateAmmoLabels()
-	for _, itemId in ipairs(WEAPON_ORDER) do
+	local weapons = CombatServiceClient.GetAvailableWeapons()
+	for _, itemId in ipairs(weapons) do
 		local label = ammoLabelMap[itemId]
 		if label then
 			if itemId == "Grenade" then
 				local state = CombatServiceClient.GetGrenadeState()
+				label.Text = string.format("%d/%d", state.count, state.max)
+				label.Visible = true
+			elseif itemId == "RocketLauncher" then
+				local state = CombatServiceClient.GetRocketState()
 				label.Text = string.format("%d/%d", state.count, state.max)
 				label.Visible = true
 			else
@@ -84,7 +90,13 @@ local function updateAmmoLabels()
 end
 
 local function createWeaponBar(parent)
-	local totalWidth = #WEAPON_ORDER * BUTTON_WIDTH + (#WEAPON_ORDER - 1) * BUTTON_GAP
+	local weapons = CombatServiceClient.GetAvailableWeapons()
+	buttonMap = {}
+	ammoLabelMap = {}
+	if weaponBar then
+		weaponBar:Destroy()
+	end
+	local totalWidth = #weapons * BUTTON_WIDTH + (#weapons - 1) * BUTTON_GAP
 	local bar = Instance.new("Frame")
 	bar.Name = "WeaponBar"
 	bar.Size = UDim2.fromOffset(totalWidth + 24, BAR_HEIGHT + 16)
@@ -94,15 +106,18 @@ local function createWeaponBar(parent)
 	bar.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 	bar.BorderSizePixel = 0
 	bar.Parent = parent
+	weaponBar = bar
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 12)
 	corner.Parent = bar
 
-	for i, itemId in ipairs(WEAPON_ORDER) do
+	for i, itemId in ipairs(weapons) do
 		local accentColor = GunsConfig[itemId] and GunsConfig[itemId].bulletColor or nil
 		if itemId == "Grenade" then
 			accentColor = GrenadeConfig.color
+		elseif itemId == "RocketLauncher" then
+			accentColor = RocketLauncherConfig.color
 		end
 
 		local iconImage = getIconImage(itemId)
@@ -168,10 +183,17 @@ local function createWeaponBar(parent)
 		ammoLabelMap[itemId] = ammoLabel
 	end
 
-	CombatServiceClient.SubscribeAmmoState(updateAmmoLabels)
-	CombatServiceClient.SubscribeWeaponChanged(updateAmmoLabels)
 	updateAmmoLabels()
 	updateSelection(CombatServiceClient.GetCurrentWeapon())
+	return bar
+end
+
+local function refreshWeaponBar()
+	if weaponBarContainer then
+		createWeaponBar(weaponBarContainer)
+		updateAmmoLabels()
+		updateSelection(CombatServiceClient.GetCurrentWeapon())
+	end
 end
 
 local function init()
@@ -182,7 +204,14 @@ local function init()
 	container.Position = UDim2.fromScale(0, 0)
 	container.BackgroundTransparency = 1
 	container.Parent = gui
+	weaponBarContainer = container
 	createWeaponBar(container)
+	CombatServiceClient.SubscribeAmmoState(updateAmmoLabels)
+	CombatServiceClient.SubscribeWeaponChanged(function()
+		updateAmmoLabels()
+		updateSelection(CombatServiceClient.GetCurrentWeapon())
+	end)
+	CombatServiceClient.SubscribeWeaponInventory(refreshWeaponBar)
 	gui.Enabled = true
 end
 

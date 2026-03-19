@@ -29,6 +29,9 @@ local function ensureRemotes(state)
 	state.matchEndedRE = getOrCreate(CombatConfig.REMOTES.MATCH_ENDED)
 	state.teamScoreUpdateRE = getOrCreate(CombatConfig.REMOTES.TEAM_SCORE_UPDATE)
 	state.grenadeStateRE = getOrCreate(CombatConfig.REMOTES.GRENADE_STATE)
+	state.rocketStateRE = getOrCreate(CombatConfig.REMOTES.ROCKET_STATE)
+	state.throwRocketRE = getOrCreate(CombatConfig.REMOTES.THROW_ROCKET)
+	state.weaponInventoryRE = getOrCreate(CombatConfig.REMOTES.WEAPON_INVENTORY)
 	state.playerDiedRE = getOrCreate(CombatConfig.REMOTES.PLAYER_DIED)
 end
 
@@ -41,6 +44,12 @@ end
 local function sendGrenadeState(state, player, grenadeCount)
 	if state.grenadeStateRE then
 		state.grenadeStateRE:FireClient(player, grenadeCount)
+	end
+end
+
+local function sendRocketState(state, player, rocketCount)
+	if state.rocketStateRE then
+		state.rocketStateRE:FireClient(player, rocketCount)
 	end
 end
 
@@ -67,6 +76,7 @@ return {
 	ensureRemotes = ensureRemotes,
 	sendAmmoState = sendAmmoState,
 	sendGrenadeState = sendGrenadeState,
+	sendRocketState = sendRocketState,
 	broadcastTeamScore = broadcastTeamScore,
 	firePlayerDied = firePlayerDied,
 }

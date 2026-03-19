@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 
 local CombatRemotes = require(script.Parent.CombatRemotes)
 
@@ -25,6 +26,11 @@ end
 local function initPlayerGrenades(state, userId)
 	state.grenadeCount[userId] = GrenadeConfig.maxCapacity or 3
 	state.grenadeRegenTimes[userId] = {}
+end
+
+local function initPlayerRockets(state, userId)
+	state.rocketCount[userId] = RocketLauncherConfig.maxRockets or 3
+	state.rocketRegenTimes[userId] = {}
 end
 
 local function processGrenadeRegen(state)
@@ -45,8 +51,27 @@ local function processGrenadeRegen(state)
 	end
 end
 
+local function processRocketRegen(state)
+	local now = os.clock()
+	local maxCap = RocketLauncherConfig.maxRockets or 3
+	for userId, regenTimes in pairs(state.rocketRegenTimes) do
+		while #regenTimes > 0 and regenTimes[1] <= now do
+			table.remove(regenTimes, 1)
+			local count = state.rocketCount[userId] or 0
+			if count < maxCap then
+				state.rocketCount[userId] = count + 1
+				local player = Players:GetPlayerByUserId(userId)
+				if player then
+					CombatRemotes.sendRocketState(state, player, state.rocketCount[userId])
+				end
+			end
+		end
+	end
+end
+
 local function processReloads(state)
 	processGrenadeRegen(state)
+	processRocketRegen(state)
 	local now = os.clock()
 	for userId, gunReloads in pairs(state.reloadEndAt) do
 		for gunId, endTime in pairs(gunReloads) do
@@ -74,6 +99,7 @@ end
 return {
 	initPlayerAmmo = initPlayerAmmo,
 	initPlayerGrenades = initPlayerGrenades,
+	initPlayerRockets = initPlayerRockets,
 	processReloads = processReloads,
 	startReloadLoop = startReloadLoop,
 }

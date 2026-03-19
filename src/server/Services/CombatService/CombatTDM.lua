@@ -55,6 +55,12 @@ local function endMatch(state, winningTeam)
 		end
 	end
 	state.diedConnections = {}
+	for _, conn in pairs(state.characterAddedConnections or {}) do
+		if conn and conn.Disconnect then
+			conn:Disconnect()
+		end
+	end
+	state.characterAddedConnections = {}
 	local bluePlayers, redPlayers = buildLeaderboardData(state)
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent and state.matchEndedRE then

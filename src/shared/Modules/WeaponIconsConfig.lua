@@ -9,4 +9,5 @@ return {
 	Rifle = 168510758,
 	Shotgun = 4753989987,
 	Grenade = 913025958,
+	RocketLauncher = 5834509428,
 }

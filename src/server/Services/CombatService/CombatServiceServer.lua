@@ -18,12 +18,25 @@ local CombatRemotes = require(script.Parent.CombatRemotes)
 local CombatAmmo = require(script.Parent.CombatAmmo)
 local CombatBullets = require(script.Parent.CombatBullets)
 local CombatGrenades = require(script.Parent.CombatGrenades)
+local CombatRockets = require(script.Parent.CombatRockets)
 local CombatTDM = require(script.Parent.CombatTDM)
+local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
 
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
 
 local state = CombatState()
+
+local function giveRocketLauncherTool(player)
+	local imports = ReplicatedStorage:FindFirstChild("Imports")
+	local models3D = imports and imports:FindFirstChild("3DModels")
+	local template = models3D and models3D:FindFirstChild("RocketLauncherTool")
+	if template and template:IsA("Tool") and player:FindFirstChild("Backpack") then
+		local tool = template:Clone()
+		tool.Name = "RocketLauncher"
+		tool.Parent = player.Backpack
+	end
+end
 
 local function setupWallCollisionGroups()
 	pcall(function()
@@ -156,6 +169,42 @@ local function bindHandlers()
 		local startPos = character.HumanoidRootPart.Position + aimDirection.Unit * 2
 		CombatGrenades.spawnGrenade(state, player, startPos, aimDirection)
 	end)
+
+	state.throwRocketRE.OnServerEvent:Connect(function(player, aimDirection)
+		if state.matchEnded then
+			return
+		end
+		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
+			return
+		end
+		local uid = player.UserId
+		local count = state.rocketCount[uid] or 0
+		if count <= 0 then
+			return
+		end
+		state.rocketCount[uid] = count - 1
+		local newCount = state.rocketCount[uid]
+		CombatRemotes.sendRocketState(state, player, newCount)
+		if newCount <= 0 then
+			WeaponInventoryServer.removeWeapon(player, "RocketLauncher")
+			local rl = player.Backpack and player.Backpack:FindFirstChild("RocketLauncher")
+			if rl then
+				rl:Destroy()
+			end
+			if player.Character then
+				rl = player.Character:FindFirstChild("RocketLauncher")
+				if rl then
+					rl:Destroy()
+				end
+			end
+		end
+		local character = player.Character
+		if not character or not character:FindFirstChild("HumanoidRootPart") then
+			return
+		end
+		local startPos = character.HumanoidRootPart.Position + aimDirection.Unit * 2
+		CombatRockets.spawnRocket(state, player, startPos, aimDirection)
+	end)
 end
 
 return {
@@ -183,6 +232,15 @@ return {
 			state.playerDeaths[p.UserId] = 0
 			CombatAmmo.initPlayerAmmo(state, p.UserId)
 			CombatAmmo.initPlayerGrenades(state, p.UserId)
+			local weapons = WeaponInventoryServer.getWeapons(p)
+			for _, w in ipairs(weapons) do
+				if w == "RocketLauncher" then
+					CombatAmmo.initPlayerRockets(state, p.UserId)
+					giveRocketLauncherTool(p)
+					break
+				end
+			end
+			WeaponInventoryServer.sendToPlayer(p)
 			local cf = TDMSpawnStrategy.getSpawnCFrame(p, CombatTDM.getTDMContext(state))
 			local character = p.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then
@@ -198,11 +256,33 @@ return {
 					end)
 				end
 			end
+			local conn = p.CharacterAdded:Connect(function()
+				local inv = WeaponInventoryServer.getWeapons(p)
+				for _, w in ipairs(inv) do
+					if w == "RocketLauncher" then
+						task.defer(function()
+							giveRocketLauncherTool(p)
+						end)
+						break
+					end
+				end
+			end)
+			state.characterAddedConnections[p.UserId] = conn
 			for gunId, ammo in pairs(state.ammoInMagazine[p.UserId] or {}) do
 				CombatRemotes.sendAmmoState(state, p, gunId, ammo, false)
 			end
 			CombatRemotes.sendGrenadeState(state, p, state.grenadeCount[p.UserId] or 0)
+			if state.rocketCount[p.UserId] then
+				CombatRemotes.sendRocketState(state, p, state.rocketCount[p.UserId])
+			end
 		end
 		CombatRemotes.broadcastTeamScore(state)
 	end,
+
+	InitRocketsForPlayer = function(player)
+		CombatAmmo.initPlayerRockets(state, player.UserId)
+		CombatRemotes.sendRocketState(state, player, state.rocketCount[player.UserId] or 0)
+	end,
+
+	GiveRocketLauncherTool = giveRocketLauncherTool,
 }

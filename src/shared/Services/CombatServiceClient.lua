@@ -20,6 +20,7 @@ local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local FireGunRE = nil
 local AmmoStateRE = nil
 local ThrowGrenadeRE = nil
+local ThrowRocketRE = nil
 local shootingEnabled = false
 local currentWeapon = "Pistol"
 local inputConnection = nil
@@ -29,6 +30,9 @@ local renderSteppedConnection = nil
 local ammoState = {}
 local lastFiredAt = 0
 local grenadeCount = 0
+local rocketCount = 0
+local availableWeapons = { "Pistol", "Rifle", "Shotgun", "Grenade" }
+local weaponInventorySubscribers = {}
 local ammoStateSubscribers = {}
 local matchEndedSubscribers = {}
 local weaponChangedSubscribers = {}
@@ -150,7 +154,6 @@ local function playGrenadeThrowSound()
 end
 
 local function preloadCombatSounds()
-	print("Preloading combat sounds")
 	local ids = {}
 	for _, gun in pairs(GunsConfig) do
 		if gun.gunshotSoundId then
@@ -165,6 +168,13 @@ local function preloadCombatSounds()
 	end
 	if GrenadeConfig.explosionSoundId then
 		table.insert(ids, GrenadeConfig.explosionSoundId)
+	end
+	local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
+	if RocketLauncherConfig.throwSoundId then
+		table.insert(ids, RocketLauncherConfig.throwSoundId)
+	end
+	if RocketLauncherConfig.explosionSoundId then
+		table.insert(ids, RocketLauncherConfig.explosionSoundId)
 	end
 	if #ids > 0 then
 		ContentProvider:PreloadAsync(ids)
@@ -192,6 +202,42 @@ local function fireInDirection(dir)
 	FireGunRE:FireServer(dir, currentWeapon)
 end
 
+local function playRocketThrowSound()
+	local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
+	local soundId = RocketLauncherConfig.throwSoundId
+	if not soundId then
+		return
+	end
+	local character = Players.LocalPlayer.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	local parent = rootPart or Workspace
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = 1
+	sound.RollOffMode = Enum.RollOffMode.Inverse
+	sound.RollOffMaxDistance = 200
+	sound.RollOffMinDistance = 10
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
+local function throwRocket(dir)
+	if not shootingEnabled or not ThrowRocketRE or not dir then
+		return
+	end
+	if currentWeapon ~= "RocketLauncher" then
+		return
+	end
+	if rocketCount <= 0 then
+		return
+	end
+	playRocketThrowSound()
+	ThrowRocketRE:FireServer(dir)
+end
+
 -- Fire when aiming joystick is off-axis (mobile). No fire when Grenade selected.
 local function throwGrenade(dir)
 	if not shootingEnabled or not ThrowGrenadeRE or not dir then
@@ -211,7 +257,7 @@ local function onRenderStepped()
 	if not shootingEnabled or not FireGunRE then
 		return
 	end
-	if currentWeapon == "Grenade" then
+	if currentWeapon == "Grenade" or currentWeapon == "RocketLauncher" then
 		return
 	end
 	local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
@@ -227,7 +273,7 @@ local function onInputBegan(input, gameProcessed)
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if currentWeapon ~= "Grenade" then
+		if currentWeapon ~= "Grenade" and currentWeapon ~= "RocketLauncher" then
 			local dir = getAimDirectionFromMouse()
 			if dir then
 				fireInDirection(dir)
@@ -235,11 +281,15 @@ local function onInputBegan(input, gameProcessed)
 		end
 		return
 	end
-	-- Grenade: G key (desktop only; mobile uses joystick release)
+	-- Grenade/Rocket: G key (desktop only; mobile uses joystick release)
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
 		local dir = getAimDirectionFromMouse()
 		if dir then
-			throwGrenade(dir)
+			if currentWeapon == "Grenade" then
+				throwGrenade(dir)
+			elseif currentWeapon == "RocketLauncher" then
+				throwRocket(dir)
+			end
 		end
 	end
 end
@@ -282,8 +332,11 @@ return {
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
 		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
+		ThrowRocketRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_ROCKET)
 		local matchEndedRE = folder:WaitForChild(CombatConfig.REMOTES.MATCH_ENDED)
 		local grenadeStateRE = folder:WaitForChild(CombatConfig.REMOTES.GRENADE_STATE)
+		local rocketStateRE = folder:WaitForChild(CombatConfig.REMOTES.ROCKET_STATE)
+		local weaponInventoryRE = folder:WaitForChild(CombatConfig.REMOTES.WEAPON_INVENTORY)
 
 		-- Equip weapon when character spawns (e.g. arena entry, respawn)
 		local player = Players.LocalPlayer
@@ -304,11 +357,15 @@ return {
 				task.defer(cb, payload)
 			end
 		end)
-		-- Mobile: grenade thrown when right joystick released (last direction before lift)
+		-- Mobile: grenade/rocket thrown when right joystick released (last direction before lift)
 		if UserInputService.TouchEnabled then
 			local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
 			RotationJoystickGUI.SubscribeOnRelease(function(worldDir)
-				throwGrenade(worldDir)
+				if currentWeapon == "Grenade" then
+					throwGrenade(worldDir)
+				elseif currentWeapon == "RocketLauncher" then
+					throwRocket(worldDir)
+				end
 			end)
 		end
 		AmmoStateRE.OnClientEvent:Connect(function(gunId, ammoCount, isReloading)
@@ -324,9 +381,39 @@ return {
 			notifyAmmoSubscribers()
 		end)
 		grenadeStateRE.OnClientEvent:Connect(function(count)
-				grenadeCount = count
-				notifyAmmoSubscribers()
-			end)
+			grenadeCount = count
+			notifyAmmoSubscribers()
+		end)
+		rocketStateRE.OnClientEvent:Connect(function(count)
+			rocketCount = count
+			notifyAmmoSubscribers()
+		end)
+		weaponInventoryRE.OnClientEvent:Connect(function(weapons)
+			availableWeapons = weapons or { "Pistol", "Rifle", "Shotgun", "Grenade" }
+			local stillHas = false
+			for _, w in ipairs(availableWeapons) do
+				if w == currentWeapon then
+					stillHas = true
+					break
+				end
+			end
+			if not stillHas and #availableWeapons > 0 then
+				currentWeapon = availableWeapons[1]
+				for _, w in ipairs(availableWeapons) do
+					if w == "Rifle" then
+						currentWeapon = "Rifle"
+						break
+					end
+				end
+				equipCurrentWeapon()
+				for _, cb in ipairs(weaponChangedSubscribers) do
+					task.defer(cb)
+				end
+			end
+			for _, cb in ipairs(weaponInventorySubscribers) do
+				task.defer(cb)
+			end
+		end)
 	end,
 
 	SubscribeAmmoState = function(callback)
@@ -384,4 +471,23 @@ return {
 			max = maxCap,
 		}
 	end,
+
+	GetRocketState = function()
+		local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
+		local maxCap = RocketLauncherConfig.maxRockets or 3
+		return {
+			count = rocketCount,
+			max = maxCap,
+		}
+	end,
+
+	GetAvailableWeapons = function()
+		return availableWeapons
+	end,
+
+	SubscribeWeaponInventory = function(callback)
+		table.insert(weaponInventorySubscribers, callback)
+	end,
+
+	ThrowRocket = throwRocket,
 }

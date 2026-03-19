@@ -45,10 +45,14 @@ LeaderboardGUI.Init()
 local TDMScoreGUI = require(Shared.UI.TDMScoreGUI)
 TDMScoreGUI.Init()
 
+local RespawnTimerGUI = require(Shared.UI.RespawnTimerGUI)
+RespawnTimerGUI.Init()
+
 CombatServiceClient.SubscribeMatchEnded(function(payload)
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	TDMScoreGUI.Hide()
+	RespawnTimerGUI.Hide()
 	if payload then
 		LeaderboardGUI.Show(payload)
 	end
@@ -69,6 +73,7 @@ LobbyServiceClient.Subscribe(function(state)
 		WeaponSelectGUI.Hide()
 		ReloadBarGUI.Hide()
 		TDMScoreGUI.Hide()
+		RespawnTimerGUI.Hide()
 		LeaderboardGUI.Hide()
 	end
 end)
@@ -86,6 +91,7 @@ else
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	TDMScoreGUI.Hide()
+	RespawnTimerGUI.Hide()
 end
 
 print("Client startup complete.")

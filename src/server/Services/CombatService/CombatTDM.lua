@@ -119,6 +119,7 @@ local function onPlayerDied(state, deadPlayer)
 		end
 	end
 	state.diedConnections[uid] = nil
+	CombatRemotes.firePlayerDied(state, deadPlayer, TDMConfig.RESPAWN_DELAY)
 	task.delay(TDMConfig.RESPAWN_DELAY, function()
 		if state.matchEnded then
 			return

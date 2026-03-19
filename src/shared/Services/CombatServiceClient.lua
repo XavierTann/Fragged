@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
@@ -26,6 +27,7 @@ local renderSteppedConnection = nil
 
 -- [gunId] = { ammo = number, isReloading = boolean, reloadStartedAt = number? }
 local ammoState = {}
+local lastFiredAt = 0
 local grenadeCount = 0
 local ammoStateSubscribers = {}
 local matchEndedSubscribers = {}
@@ -76,6 +78,99 @@ local function canFire()
 	return ammo > 0 and not isReloading
 end
 
+local function canFireByRate()
+	local gun = GunsConfig[currentWeapon] or GunsConfig.Pistol
+	local fireRate = gun.fireRate or 0.4
+	return (os.clock() - lastFiredAt) >= fireRate
+end
+
+local function playGunshotSound(gunId)
+	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local soundId = gun.gunshotSoundId
+	if not soundId then
+		return
+	end
+	local character = Players.LocalPlayer.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	local parent = rootPart or Workspace
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = 1
+	sound.RollOffMode = Enum.RollOffMode.Inverse
+	sound.RollOffMaxDistance = 200
+	sound.RollOffMinDistance = 10
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
+local function playReloadSound(gunId)
+	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local soundId = gun.reloadSoundId
+	if not soundId then
+		return
+	end
+	local character = Players.LocalPlayer.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	local parent = rootPart or Workspace
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = 1
+	sound.RollOffMode = Enum.RollOffMode.Inverse
+	sound.RollOffMaxDistance = 200
+	sound.RollOffMinDistance = 10
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
+local function playGrenadeThrowSound()
+	local soundId = GrenadeConfig.throwSoundId
+	if not soundId then
+		return
+	end
+	local character = Players.LocalPlayer.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	local parent = rootPart or Workspace
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = 1
+	sound.RollOffMode = Enum.RollOffMode.Inverse
+	sound.RollOffMaxDistance = 200
+	sound.RollOffMinDistance = 10
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
+local function preloadCombatSounds()
+	print("Preloading combat sounds")
+	local ids = {}
+	for _, gun in pairs(GunsConfig) do
+		if gun.gunshotSoundId then
+			table.insert(ids, gun.gunshotSoundId)
+		end
+		if gun.reloadSoundId then
+			table.insert(ids, gun.reloadSoundId)
+		end
+	end
+	if GrenadeConfig.throwSoundId then
+		table.insert(ids, GrenadeConfig.throwSoundId)
+	end
+	if GrenadeConfig.explosionSoundId then
+		table.insert(ids, GrenadeConfig.explosionSoundId)
+	end
+	if #ids > 0 then
+		ContentProvider:PreloadAsync(ids)
+	end
+end
+
 local function notifyAmmoSubscribers()
 	for _, cb in ipairs(ammoStateSubscribers) do
 		task.defer(cb)
@@ -89,6 +184,11 @@ local function fireInDirection(dir)
 	if not canFire() then
 		return
 	end
+	if not canFireByRate() then
+		return
+	end
+	lastFiredAt = os.clock()
+	playGunshotSound(currentWeapon)
 	FireGunRE:FireServer(dir, currentWeapon)
 end
 
@@ -103,6 +203,7 @@ local function throwGrenade(dir)
 	if grenadeCount <= 0 then
 		return
 	end
+	playGrenadeThrowSound()
 	ThrowGrenadeRE:FireServer(dir)
 end
 
@@ -145,6 +246,7 @@ end
 
 local function setShootingEnabled(enabled)
 	shootingEnabled = enabled
+	lastFiredAt = 0
 	if inputConnection then
 		inputConnection:Disconnect()
 		inputConnection = nil
@@ -154,6 +256,7 @@ local function setShootingEnabled(enabled)
 		renderSteppedConnection = nil
 	end
 	if enabled then
+		preloadCombatSounds()
 		renderSteppedConnection = RunService.RenderStepped:Connect(onRenderStepped)
 		if not UserInputService.TouchEnabled then
 			inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
@@ -214,6 +317,7 @@ return {
 			ammoState[gunId].isReloading = isReloading
 			if isReloading then
 				ammoState[gunId].reloadStartedAt = os.clock()
+				playReloadSound(gunId)
 			else
 				ammoState[gunId].reloadStartedAt = nil
 			end

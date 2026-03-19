@@ -116,6 +116,28 @@ local function spawnGrenade(state, thrower, startPos, direction)
 		local center = rootPart.Position
 		grenade:Destroy()
 
+		if cfg.explosionSoundId then
+			local soundAnchor = Instance.new("Part")
+			soundAnchor.Name = "ExplosionSoundAnchor"
+			soundAnchor.Size = Vector3.new(0.1, 0.1, 0.1)
+			soundAnchor.Transparency = 1
+			soundAnchor.CanCollide = false
+			soundAnchor.Anchored = true
+			soundAnchor.CFrame = CFrame.new(center)
+			soundAnchor.Parent = getGrenadesFolder()
+			local sound = Instance.new("Sound")
+			sound.SoundId = cfg.explosionSoundId
+			sound.Volume = 1
+			sound.RollOffMode = Enum.RollOffMode.Inverse
+			sound.RollOffMaxDistance = 300
+			sound.RollOffMinDistance = 10
+			sound.Parent = soundAnchor
+			sound:Play()
+			sound.Ended:Connect(function()
+				soundAnchor:Destroy()
+			end)
+		end
+
 		local explosionPart = Instance.new("Part")
 		explosionPart.Name = "Explosion"
 		explosionPart.Shape = Enum.PartType.Ball

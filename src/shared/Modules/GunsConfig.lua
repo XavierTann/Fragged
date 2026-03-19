@@ -14,6 +14,8 @@ return {
 		bulletColor = Color3.fromRGB(220, 180, 80),
 		magazineSize = 8,
 		reloadTime = 1.2,
+		gunshotSoundId = "rbxassetid://138905044369113",
+		reloadSoundId = "rbxassetid://140301163976554",
 	},
 	Rifle = {
 		name = "Rifle",
@@ -24,6 +26,8 @@ return {
 		bulletColor = Color3.fromRGB(180, 200, 220),
 		magazineSize = 24,
 		reloadTime = 2.0,
+		gunshotSoundId = "rbxassetid://139083804782836",
+		reloadSoundId = "rbxassetid://140301163976554",
 	},
 	Shotgun = {
 		name = "Shotgun",
@@ -36,5 +40,7 @@ return {
 		spreadDegrees = 12,
 		magazineSize = 4,
 		reloadTime = 2.5,
+		gunshotSoundId = "rbxassetid://123510386263285",
+		reloadSoundId = "rbxassetid://140301163976554",
 	},
 }

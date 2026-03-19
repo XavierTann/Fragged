@@ -12,6 +12,8 @@ return {
 	radius = 12, -- explosion radius in studs
 	maxCapacity = 3, -- grenades per player
 	regenerationTime = 5, -- seconds per grenade to regenerate (each slot regens independently)
+	throwSoundId = "rbxassetid://140246981967568",
+	explosionSoundId = "rbxassetid://139210252225248",
 	-- Visual
 	size = Vector3.new(0.5, 0.5, 0.5),
 	color = Color3.fromRGB(60, 100, 50),

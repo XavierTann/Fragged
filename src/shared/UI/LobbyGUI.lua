@@ -1,6 +1,6 @@
 --[[
 	LobbyGUI
-	Shop lobby: "Enter portal to find match" or "Find match" button.
+	Shop lobby: "Find match" button.
 	Waiting lobby: "Waiting for players (X/Y)", Leave button, countdown when match starting.
 ]]
 
@@ -52,7 +52,7 @@ local function createShopView(parent)
 	hint.Size = UDim2.new(1, -16, 0, 14)
 	hint.Position = UDim2.fromOffset(8, 24)
 	hint.BackgroundTransparency = 1
-	hint.Text = "Enter the portal to join the waiting lobby and find a match."
+	hint.Text = "Join the waiting lobby to find a match."
 	hint.TextColor3 = Color3.fromRGB(200, 200, 200)
 	hint.TextSize = 10
 	hint.Font = Enum.Font.Gotham
@@ -65,7 +65,7 @@ local function createShopView(parent)
 	findMatchBtn.Size = UDim2.new(1, -16, 0, 24)
 	findMatchBtn.Position = UDim2.fromOffset(8, 44)
 	findMatchBtn.BackgroundColor3 = Color3.fromRGB(56, 142, 60)
-	findMatchBtn.Text = "Find match (enter waiting lobby)"
+	findMatchBtn.Text = "Find match"
 	findMatchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	findMatchBtn.TextSize = 11
 	findMatchBtn.Font = Enum.Font.GothamMedium

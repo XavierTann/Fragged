@@ -14,6 +14,9 @@ TouchControlUtils.Init()
 
 game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 
+local CharacterServiceClient = require(Shared.Services.CharacterServiceClient)
+CharacterServiceClient.Init()
+
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 

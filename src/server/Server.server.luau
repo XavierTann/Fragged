@@ -13,6 +13,7 @@ local CombatService = Services:WaitForChild("CombatService"):WaitForChild("Comba
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
+
 CombatServiceModule.Init()
 
 LobbyServiceModule.Init(function(players)

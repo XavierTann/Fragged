@@ -12,6 +12,8 @@ local LocalPlayer = Players.LocalPlayer
 local gui = nil
 local container = nil
 
+local BACKGROUND_TRANSPARENCY = 0.45
+
 local TEAM_COLORS = {
 	Blue = Color3.fromRGB(80, 120, 200),
 	Red = Color3.fromRGB(200, 80, 80),
@@ -61,6 +63,7 @@ local function addTeamSection(parent, teamName, players, yOffset)
 		row.Size = UDim2.new(1, -32, 0, 32)
 		row.Position = UDim2.fromOffset(16, rowY + (i - 1) * 36)
 		row.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+		row.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 		row.BorderSizePixel = 0
 		row.Parent = parent
 
@@ -110,6 +113,7 @@ local function showLeaderboard(payload)
 		container.Size = UDim2.fromScale(0.65, 0.75)
 		container.Position = UDim2.fromScale(0.175, 0.125)
 		container.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+		container.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 		container.BorderSizePixel = 0
 		container.Parent = gui
 		local corner = Instance.new("UICorner")

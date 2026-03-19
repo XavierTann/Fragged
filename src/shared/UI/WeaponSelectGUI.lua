@@ -149,7 +149,7 @@ local function createWeaponBar(parent)
 		local ammoLabel = Instance.new("TextLabel")
 		ammoLabel.Name = "AmmoLabel"
 		ammoLabel.Size = UDim2.new(1, -8, 0, 14)
-		ammoLabel.Position = UDim2.new(0, 4, 1, -16)
+		ammoLabel.Position = UDim2.new(0, 8, 1, 0)
 		ammoLabel.AnchorPoint = Vector2.new(0, 1)
 		ammoLabel.BackgroundTransparency = 1
 		ammoLabel.Text = "0/0"

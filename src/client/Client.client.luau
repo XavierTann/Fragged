@@ -12,6 +12,8 @@ local LobbyConfig = require(Shared.Modules.LobbyConfig)
 local TouchControlUtils = require(Shared.Modules.TouchControlUtils)
 TouchControlUtils.Init()
 
+game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 
@@ -59,6 +61,7 @@ LobbyServiceClient.Subscribe(function(state)
 		ReloadBarGUI.Show()
 		TDMScoreGUI.Show()
 		LeaderboardGUI.Hide()
+		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 	else
 		WeaponSelectGUI.Hide()
 		ReloadBarGUI.Hide()
@@ -75,6 +78,7 @@ if inArena then
 	WeaponSelectGUI.Show()
 	ReloadBarGUI.Show()
 	TDMScoreGUI.Show()
+	CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 else
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()

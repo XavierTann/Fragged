@@ -216,6 +216,14 @@ return {
 
 	SetCurrentWeapon = function(gunId)
 		currentWeapon = gunId or "Pistol"
+		-- Equip the matching Tool from StarterPack
+		local player = Players.LocalPlayer
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local tool = player.Backpack and player.Backpack:FindFirstChild(currentWeapon)
+		if humanoid and tool then
+			humanoid:EquipTool(tool)
+		end
 	end,
 
 	GetCurrentWeapon = function()

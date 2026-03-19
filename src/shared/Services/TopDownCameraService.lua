@@ -9,7 +9,7 @@ local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 
 -- Config: height above character (studs), optional angle (0 = straight down)
-local HEIGHT_ABOVE = 20
+local HEIGHT_ABOVE = 28
 local ANGLE_FROM_VERTICAL = 0 -- 0 = straight down; increase for slight tilt
 
 local camera = Workspace.CurrentCamera

@@ -8,6 +8,7 @@ print("Client starting.")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local LobbyConfig = require(Shared.Modules.LobbyConfig)
 local TouchControlUtils = require(Shared.Modules.TouchControlUtils)
 TouchControlUtils.Init()
 

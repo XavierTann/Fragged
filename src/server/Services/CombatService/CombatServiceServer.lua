@@ -135,13 +135,20 @@ local function bindHandlers()
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
 			return
 		end
-		local now = os.clock()
 		local uid = player.UserId
-		local last = state.lastGrenadeThrownAt[uid] or 0
-		if now - last < GrenadeConfig.cooldown then
+		local count = state.grenadeCount[uid] or 0
+		if count <= 0 then
 			return
 		end
-		state.lastGrenadeThrownAt[uid] = now
+		state.grenadeCount[uid] = count - 1
+		local regenTimes = state.grenadeRegenTimes[uid]
+		if not regenTimes then
+			regenTimes = {}
+			state.grenadeRegenTimes[uid] = regenTimes
+		end
+		table.insert(regenTimes, os.clock() + (GrenadeConfig.regenerationTime or 5))
+		table.sort(regenTimes)
+		CombatRemotes.sendGrenadeState(state, player, state.grenadeCount[uid])
 		local character = player.Character
 		if not character or not character:FindFirstChild("HumanoidRootPart") then
 			return
@@ -175,6 +182,7 @@ return {
 			state.playerKills[p.UserId] = 0
 			state.playerDeaths[p.UserId] = 0
 			CombatAmmo.initPlayerAmmo(state, p.UserId)
+			CombatAmmo.initPlayerGrenades(state, p.UserId)
 			local cf = TDMSpawnStrategy.getSpawnCFrame(p, CombatTDM.getTDMContext(state))
 			local character = p.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then
@@ -193,6 +201,7 @@ return {
 			for gunId, ammo in pairs(state.ammoInMagazine[p.UserId] or {}) do
 				CombatRemotes.sendAmmoState(state, p, gunId, ammo, false)
 			end
+			CombatRemotes.sendGrenadeState(state, p, state.grenadeCount[p.UserId] or 0)
 		end
 		CombatRemotes.broadcastTeamScore(state)
 	end,

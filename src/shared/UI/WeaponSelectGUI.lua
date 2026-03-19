@@ -71,8 +71,9 @@ local function updateAmmoLabels()
 		local label = ammoLabelMap[itemId]
 		if label then
 			if itemId == "Grenade" then
-				label.Text = ""
-				label.Visible = false
+				local state = CombatServiceClient.GetGrenadeState()
+				label.Text = string.format("%d/%d", state.count, state.max)
+				label.Visible = true
 			else
 				local state = CombatServiceClient.GetAmmoState(itemId)
 				label.Text = string.format("%d/%d", state.ammo, state.maxAmmo)

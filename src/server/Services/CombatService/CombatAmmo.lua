@@ -1,6 +1,6 @@
 --[[
 	CombatAmmo
-	Ammo state and reload logic.
+	Ammo state and reload logic. Also grenade count and regeneration.
 ]]
 
 local Players = game:GetService("Players")
@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
+local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 
 local CombatRemotes = require(script.Parent.CombatRemotes)
 
@@ -21,7 +22,31 @@ local function initPlayerAmmo(state, userId)
 	end
 end
 
+local function initPlayerGrenades(state, userId)
+	state.grenadeCount[userId] = GrenadeConfig.maxCapacity or 3
+	state.grenadeRegenTimes[userId] = {}
+end
+
+local function processGrenadeRegen(state)
+	local now = os.clock()
+	local maxCap = GrenadeConfig.maxCapacity or 3
+	for userId, regenTimes in pairs(state.grenadeRegenTimes) do
+		while #regenTimes > 0 and regenTimes[1] <= now do
+			table.remove(regenTimes, 1)
+			local count = state.grenadeCount[userId] or 0
+			if count < maxCap then
+				state.grenadeCount[userId] = count + 1
+				local player = Players:GetPlayerByUserId(userId)
+				if player then
+					CombatRemotes.sendGrenadeState(state, player, state.grenadeCount[userId])
+				end
+			end
+		end
+	end
+end
+
 local function processReloads(state)
+	processGrenadeRegen(state)
 	local now = os.clock()
 	for userId, gunReloads in pairs(state.reloadEndAt) do
 		for gunId, endTime in pairs(gunReloads) do
@@ -48,6 +73,7 @@ end
 
 return {
 	initPlayerAmmo = initPlayerAmmo,
+	initPlayerGrenades = initPlayerGrenades,
 	processReloads = processReloads,
 	startReloadLoop = startReloadLoop,
 }

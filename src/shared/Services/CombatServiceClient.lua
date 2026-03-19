@@ -14,6 +14,7 @@ local RunService = game:GetService("RunService")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
+local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 
 local FireGunRE = nil
 local AmmoStateRE = nil
@@ -25,6 +26,7 @@ local renderSteppedConnection = nil
 
 -- [gunId] = { ammo = number, isReloading = boolean, reloadStartedAt = number? }
 local ammoState = {}
+local grenadeCount = 0
 local ammoStateSubscribers = {}
 local matchEndedSubscribers = {}
 local weaponChangedSubscribers = {}
@@ -96,6 +98,9 @@ local function throwGrenade(dir)
 		return
 	end
 	if currentWeapon ~= "Grenade" then
+		return
+	end
+	if grenadeCount <= 0 then
 		return
 	end
 	ThrowGrenadeRE:FireServer(dir)
@@ -175,6 +180,7 @@ return {
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
 		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
 		local matchEndedRE = folder:WaitForChild(CombatConfig.REMOTES.MATCH_ENDED)
+		local grenadeStateRE = folder:WaitForChild(CombatConfig.REMOTES.GRENADE_STATE)
 
 		-- Equip weapon when character spawns (e.g. arena entry, respawn)
 		local player = Players.LocalPlayer
@@ -213,6 +219,10 @@ return {
 			end
 			notifyAmmoSubscribers()
 		end)
+		grenadeStateRE.OnClientEvent:Connect(function(count)
+				grenadeCount = count
+				notifyAmmoSubscribers()
+			end)
 	end,
 
 	SubscribeAmmoState = function(callback)
@@ -261,5 +271,13 @@ return {
 
 	GetCurrentWeapon = function()
 		return currentWeapon
+	end,
+
+	GetGrenadeState = function()
+		local maxCap = GrenadeConfig.maxCapacity or 3
+		return {
+			count = grenadeCount,
+			max = maxCap,
+		}
 	end,
 }

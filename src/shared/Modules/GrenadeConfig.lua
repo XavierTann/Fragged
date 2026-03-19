@@ -1,5 +1,6 @@
 --[[
 	Grenade configuration for throwable explosive.
+	Consumable ammo with independent per-slot regeneration.
 ]]
 
 return {
@@ -9,7 +10,8 @@ return {
 	throwArcUp = 0.7, -- upward component for arc (0 = flat, 1 = mostly up)
 	damage = 60, -- damage at center
 	radius = 12, -- explosion radius in studs
-	cooldown = 4, -- seconds between throws per player
+	maxCapacity = 3, -- grenades per player
+	regenerationTime = 5, -- seconds per grenade to regenerate (each slot regens independently)
 	-- Visual
 	size = Vector3.new(0.5, 0.5, 0.5),
 	color = Color3.fromRGB(60, 100, 50),

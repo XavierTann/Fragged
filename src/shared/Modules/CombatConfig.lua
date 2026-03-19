@@ -13,5 +13,6 @@ return {
 		THROW_GRENADE = "ThrowGrenade",
 		MATCH_ENDED = "MatchEnded", -- Server -> Client: { winningTeam, bluePlayers, redPlayers }
 		TEAM_SCORE_UPDATE = "TeamScoreUpdate", -- Server -> Client: blueKills, redKills (real-time)
+		GRENADE_STATE = "GrenadeState", -- Server -> Client: grenadeCount (current)
 	},
 }

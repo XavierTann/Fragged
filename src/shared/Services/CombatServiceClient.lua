@@ -27,6 +27,7 @@ local renderSteppedConnection = nil
 local ammoState = {}
 local ammoStateSubscribers = {}
 local matchEndedSubscribers = {}
+local weaponChangedSubscribers = {}
 
 local function getAimDirectionFromMouse()
 	local player = Players.LocalPlayer
@@ -224,6 +225,13 @@ return {
 		if humanoid and tool then
 			humanoid:EquipTool(tool)
 		end
+		for _, cb in ipairs(weaponChangedSubscribers) do
+			task.defer(cb)
+		end
+	end,
+
+	SubscribeWeaponChanged = function(callback)
+		table.insert(weaponChangedSubscribers, callback)
 	end,
 
 	GetCurrentWeapon = function()

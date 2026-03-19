@@ -11,7 +11,7 @@ local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 
 local GRENADES_FOLDER_NAME = "CombatGrenades"
 local COLLISION_GROUP_GRENADES = "Grenades"
-local GRENADE_TEMPLATE_NAME = "Grenade"
+local GRENADE_TEMPLATE_NAME = "GrenadeVisual"
 
 local function getGrenadesFolder()
 	local folder = Workspace:FindFirstChild(GRENADES_FOLDER_NAME)

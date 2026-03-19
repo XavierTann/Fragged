@@ -8,7 +8,7 @@ return {
 	Pistol = {
 		name = "Pistol",
 		bulletSpeed = 200,
-		damage = 25,
+		damage = 40,
 		fireRate = 0.4, -- slow, deliberate shots
 		bulletSize = Vector3.new(0.25, 0.25, 0.8),
 		bulletColor = Color3.fromRGB(220, 180, 80),
@@ -33,12 +33,12 @@ return {
 		name = "Shotgun",
 		bulletSpeed = 120, -- slower, close range
 		damage = 12, -- per pellet
-		fireRate = 0.8, -- slow between bursts
+		fireRate = 0.5, -- slow between bursts
 		bulletSize = Vector3.new(0.35, 0.35, 0.5),
 		bulletColor = Color3.fromRGB(200, 150, 100),
 		pelletCount = 8,
 		spreadDegrees = 12,
-		magazineSize = 4,
+		magazineSize = 6,
 		reloadTime = 2.5,
 		gunshotSoundId = "rbxassetid://123510386263285",
 		reloadSoundId = "rbxassetid://140301163976554",

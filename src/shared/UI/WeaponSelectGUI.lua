@@ -15,6 +15,7 @@ local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServ
 
 local gui = nil
 local buttonMap = {} -- gunId -> ImageButton
+local ammoLabelMap = {} -- gunId -> TextLabel
 
 local WEAPON_ORDER = { "Pistol", "Rifle", "Shotgun", "Grenade" }
 local BAR_HEIGHT = 56
@@ -55,6 +56,26 @@ local function updateSelection(gunId)
 		local fallback = btn:FindFirstChild("Fallback")
 		if fallback then
 			fallback.TextColor3 = selected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
+		end
+		local ammoLabel = ammoLabelMap[id]
+		if ammoLabel then
+			ammoLabel.TextColor3 = selected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
+		end
+	end
+end
+
+local function updateAmmoLabels()
+	for _, itemId in ipairs(WEAPON_ORDER) do
+		local label = ammoLabelMap[itemId]
+		if label then
+			if itemId == "Grenade" then
+				label.Text = ""
+				label.Visible = false
+			else
+				local state = CombatServiceClient.GetAmmoState(itemId)
+				label.Text = string.format("%d/%d", state.ammo, state.maxAmmo)
+				label.Visible = true
+			end
 		end
 	end
 end
@@ -119,14 +140,31 @@ local function createWeaponBar(parent)
 		accentCorner.CornerRadius = UDim.new(0, 8)
 		accentCorner.Parent = accent
 
+		local ammoLabel = Instance.new("TextLabel")
+		ammoLabel.Name = "AmmoLabel"
+		ammoLabel.Size = UDim2.new(1, -8, 0, 14)
+		ammoLabel.Position = UDim2.new(0, 4, 1, -16)
+		ammoLabel.AnchorPoint = Vector2.new(0, 1)
+		ammoLabel.BackgroundTransparency = 1
+		ammoLabel.Text = "0/0"
+		ammoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		ammoLabel.TextSize = 11
+		ammoLabel.Font = Enum.Font.GothamMedium
+		ammoLabel.TextXAlignment = Enum.TextXAlignment.Left
+		ammoLabel.Parent = btn
+
 		btn.MouseButton1Click:Connect(function()
 			CombatServiceClient.SetCurrentWeapon(itemId)
 			updateSelection(itemId)
 		end)
 
 		buttonMap[itemId] = btn
+		ammoLabelMap[itemId] = ammoLabel
 	end
 
+	CombatServiceClient.SubscribeAmmoState(updateAmmoLabels)
+	CombatServiceClient.SubscribeWeaponChanged(updateAmmoLabels)
+	updateAmmoLabels()
 	updateSelection(CombatServiceClient.GetCurrentWeapon())
 end
 
@@ -147,6 +185,7 @@ return {
 	Show = function()
 		if gui then
 			gui.Enabled = true
+			updateAmmoLabels()
 			updateSelection(CombatServiceClient.GetCurrentWeapon())
 		end
 	end,

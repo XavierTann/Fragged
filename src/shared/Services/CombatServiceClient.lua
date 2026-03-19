@@ -156,6 +156,18 @@ local function setShootingEnabled(enabled)
 	end
 end
 
+local function equipCurrentWeapon()
+	local player = Players.LocalPlayer
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local tool = player.Backpack and player.Backpack:FindFirstChild(currentWeapon)
+	if humanoid and tool then
+		humanoid:EquipTool(tool)
+		return true
+	end
+	return false
+end
+
 return {
 	Init = function()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
@@ -163,6 +175,20 @@ return {
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
 		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
 		local matchEndedRE = folder:WaitForChild(CombatConfig.REMOTES.MATCH_ENDED)
+
+		-- Equip weapon when character spawns (e.g. arena entry, respawn)
+		local player = Players.LocalPlayer
+		player.CharacterAdded:Connect(function()
+			if shootingEnabled then
+				task.defer(function()
+					if not equipCurrentWeapon() then
+						task.delay(0.2, function()
+							equipCurrentWeapon()
+						end)
+					end
+				end)
+			end
+		end)
 		matchEndedRE.OnClientEvent:Connect(function(payload)
 			setShootingEnabled(false)
 			for _, cb in ipairs(matchEndedSubscribers) do
@@ -217,13 +243,12 @@ return {
 
 	SetCurrentWeapon = function(gunId)
 		currentWeapon = gunId or "Pistol"
-		-- Equip the matching Tool from StarterPack
-		local player = Players.LocalPlayer
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		local tool = player.Backpack and player.Backpack:FindFirstChild(currentWeapon)
-		if humanoid and tool then
-			humanoid:EquipTool(tool)
+		if not equipCurrentWeapon() then
+			task.defer(function()
+				if not equipCurrentWeapon() then
+					task.delay(0.2, equipCurrentWeapon)
+				end
+			end)
 		end
 		for _, cb in ipairs(weaponChangedSubscribers) do
 			task.defer(cb)

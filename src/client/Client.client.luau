@@ -36,9 +36,6 @@ WeaponSelectGUI.Init()
 local ReloadBarGUI = require(Shared.UI.ReloadBarGUI)
 ReloadBarGUI.Init()
 
-local AmmoCounterGUI = require(Shared.UI.AmmoCounterGUI)
-AmmoCounterGUI.Init()
-
 local LeaderboardGUI = require(Shared.UI.LeaderboardGUI)
 LeaderboardGUI.Init()
 
@@ -48,7 +45,6 @@ TDMScoreGUI.Init()
 CombatServiceClient.SubscribeMatchEnded(function(payload)
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
-	AmmoCounterGUI.Hide()
 	TDMScoreGUI.Hide()
 	if payload then
 		LeaderboardGUI.Show(payload)
@@ -63,14 +59,12 @@ LobbyServiceClient.Subscribe(function(state)
 	if inArena then
 		WeaponSelectGUI.Show()
 		ReloadBarGUI.Show()
-		AmmoCounterGUI.Show()
 		TDMScoreGUI.Show()
 		LeaderboardGUI.Hide()
 		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 	else
 		WeaponSelectGUI.Hide()
 		ReloadBarGUI.Hide()
-		AmmoCounterGUI.Hide()
 		TDMScoreGUI.Hide()
 		LeaderboardGUI.Hide()
 	end
@@ -83,13 +77,11 @@ CombatServiceClient.SetShootingEnabled(inArena)
 if inArena then
 	WeaponSelectGUI.Show()
 	ReloadBarGUI.Show()
-	AmmoCounterGUI.Show()
 	TDMScoreGUI.Show()
 	CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 else
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
-	AmmoCounterGUI.Hide()
 	TDMScoreGUI.Hide()
 end
 

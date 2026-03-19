@@ -21,6 +21,8 @@ local WEAPON_ORDER = { "Pistol", "Rifle", "Shotgun", "Grenade" }
 local BAR_HEIGHT = 56
 local BUTTON_WIDTH = 100
 local BUTTON_GAP = 8
+local BACKGROUND_TRANSPARENCY = 0.45
+local ICON_TRANSPARENCY = 0.35
 
 local function getIconImage(weaponId)
 	local assetId = WeaponIconsConfig[weaponId]
@@ -88,6 +90,7 @@ local function createWeaponBar(parent)
 	bar.Position = UDim2.fromScale(0.5, 1)
 	bar.AnchorPoint = Vector2.new(0.5, 1)
 	bar.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
+	bar.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 	bar.BorderSizePixel = 0
 	bar.Parent = parent
 
@@ -108,8 +111,10 @@ local function createWeaponBar(parent)
 		btn.Size = UDim2.fromOffset(BUTTON_WIDTH, BAR_HEIGHT)
 		btn.Position = UDim2.fromOffset(12 + (i - 1) * (BUTTON_WIDTH + BUTTON_GAP), 8)
 		btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
+		btn.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 		btn.Image = iconImage
 		btn.ImageColor3 = Color3.fromRGB(200, 200, 200)
+		btn.ImageTransparency = ICON_TRANSPARENCY
 		btn.ScaleType = Enum.ScaleType.Fit
 		btn.BorderSizePixel = 0
 		btn.Parent = bar

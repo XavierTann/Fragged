@@ -37,8 +37,8 @@ local function createGui()
 
 	local container = Instance.new("Frame")
 	container.Name = "ScoreContainer"
-	container.Size = UDim2.fromOffset(140, 72)
-	container.Position = UDim2.new(1, -156, 0, 16)
+	container.Size = UDim2.fromOffset(80, 72)
+	container.Position = UDim2.new(1, -100, 0, -40)
 	container.AnchorPoint = Vector2.new(0, 0)
 	container.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	container.BackgroundTransparency = BACKGROUND_TRANSPARENCY

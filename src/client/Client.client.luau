@@ -45,6 +45,9 @@ LeaderboardGUI.Init()
 local TDMScoreGUI = require(Shared.UI.TDMScoreGUI)
 TDMScoreGUI.Init()
 
+local HealthGUI = require(Shared.UI.HealthGUI)
+HealthGUI.Init()
+
 local RespawnTimerGUI = require(Shared.UI.RespawnTimerGUI)
 RespawnTimerGUI.Init()
 
@@ -52,6 +55,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	TDMScoreGUI.Hide()
+	HealthGUI.Hide()
 	RespawnTimerGUI.Hide()
 	if payload then
 		LeaderboardGUI.Show(payload)
@@ -60,37 +64,39 @@ end)
 
 -- Enable shooting and weapon select only in arena
 LobbyServiceClient.Subscribe(function(state)
-	-- local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
-	local inArena = true
+	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
 	CombatServiceClient.SetShootingEnabled(inArena)
 	if inArena then
 		WeaponSelectGUI.Show()
 		ReloadBarGUI.Show()
 		TDMScoreGUI.Show()
+		HealthGUI.Show()
 		LeaderboardGUI.Hide()
 		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 	else
 		WeaponSelectGUI.Hide()
 		ReloadBarGUI.Hide()
 		TDMScoreGUI.Hide()
+		HealthGUI.Hide()
 		RespawnTimerGUI.Hide()
 		LeaderboardGUI.Hide()
 	end
 end)
 
 local initialState = LobbyServiceClient.GetState()
--- local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
-local inArena = true
+local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
 CombatServiceClient.SetShootingEnabled(inArena)
 if inArena then
 	WeaponSelectGUI.Show()
 	ReloadBarGUI.Show()
 	TDMScoreGUI.Show()
+	HealthGUI.Show()
 	CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 else
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	TDMScoreGUI.Hide()
+	HealthGUI.Hide()
 	RespawnTimerGUI.Hide()
 end
 

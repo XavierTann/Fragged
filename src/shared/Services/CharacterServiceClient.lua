@@ -18,6 +18,7 @@ local function applyCharacterRestrictions(character)
 	end
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 end
 
 return {

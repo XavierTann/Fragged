@@ -20,6 +20,7 @@ local touchStartPos = Vector2.zero
 local onReleaseCallbacks = {}
 local thumbStartPos = Vector2.zero
 local lastProcessedTouchPos = nil -- reject InputChanged from other finger ( sudden jumps )
+local activeTouchInput = nil -- touch that started on our joystick (for correlating InputEnded)
 
 local function createGui()
 	if gui then
@@ -95,6 +96,7 @@ end
 
 local function snapToCenter()
 	isActive = false
+	activeTouchInput = nil
 	lastProcessedTouchPos = nil
 	currentDirection = Vector2.zero
 	updateThumbPosition(currentDirection)
@@ -104,8 +106,8 @@ local function onInputEnded(input)
 	if input.UserInputType ~= Enum.UserInputType.Touch then
 		return
 	end
-	-- Only snap when the touch that ended was in our joystick zone
-	if not isTouchInRightJoystickZone(input.Position.X, input.Position.Y) then
+	-- Only snap when the touch that ended is the one that started on our joystick
+	if input ~= activeTouchInput then
 		return
 	end
 	if not isActive then
@@ -153,7 +155,7 @@ local function initJoystick(parent)
 	backgroundFrame.Name = "RotationJoystickBackground"
 	backgroundFrame.Size = UDim2.fromOffset(120, 120)
 	-- Position at bottom-right where Roblox's jump button was (now removed)
-	backgroundFrame.Position = UDim2.new(1, 0, 1, 0)
+	backgroundFrame.Position = UDim2.new(1, 0, 1, -100)
 	backgroundFrame.AnchorPoint = Vector2.new(1, 1)
 	backgroundFrame.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
 	backgroundFrame.BackgroundTransparency = 0.3
@@ -186,6 +188,7 @@ local function initJoystick(parent)
 			return
 		end
 		isActive = true
+		activeTouchInput = input
 		lastProcessedTouchPos = Vector2.new(input.Position.X, input.Position.Y)
 		touchStartPos = lastProcessedTouchPos
 		local cx = backgroundFrame.AbsolutePosition.X + backgroundFrame.AbsoluteSize.X / 2

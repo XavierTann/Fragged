@@ -10,8 +10,8 @@ return {
 		bulletSpeed = 200,
 		damage = 40,
 		fireRate = 0.4, -- slow, deliberate shots
-		bulletSize = Vector3.new(0.25, 0.25, 0.8),
-		bulletColor = Color3.fromRGB(220, 180, 80),
+		bulletSize = Vector3.new(0.4, 0.4, 1.2),
+		bulletColor = Color3.fromRGB(255, 220, 100),
 		magazineSize = 8,
 		reloadTime = 1.2,
 		gunshotSoundId = "rbxassetid://138905044369113",
@@ -22,8 +22,8 @@ return {
 		bulletSpeed = 250,
 		damage = 18,
 		fireRate = 0.12, -- fast shooting
-		bulletSize = Vector3.new(0.2, 0.2, 0.6),
-		bulletColor = Color3.fromRGB(180, 200, 220),
+		bulletSize = Vector3.new(0.35, 0.35, 1.0),
+		bulletColor = Color3.fromRGB(120, 200, 255),
 		magazineSize = 24,
 		reloadTime = 2.0,
 		gunshotSoundId = "rbxassetid://139083804782836",
@@ -34,8 +34,8 @@ return {
 		bulletSpeed = 120, -- slower, close range
 		damage = 12, -- per pellet
 		fireRate = 0.5, -- slow between bursts
-		bulletSize = Vector3.new(0.35, 0.35, 0.5),
-		bulletColor = Color3.fromRGB(200, 150, 100),
+		bulletSize = Vector3.new(0.5, 0.5, 0.9),
+		bulletColor = Color3.fromRGB(255, 180, 80),
 		pelletCount = 8,
 		spreadDegrees = 12,
 		magazineSize = 6,

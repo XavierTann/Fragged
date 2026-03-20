@@ -22,6 +22,8 @@ local function getBulletsFolder()
 	return folder
 end
 
+local TRACER_TRAIL_LENGTH = 4 -- studs behind bullet
+
 local function spawnBullet(state, shooter, startPos, direction, gunId)
 	local gun = GunsConfig[gunId] or GunsConfig.Pistol
 	local dir = direction.Unit
@@ -34,6 +36,27 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	bullet.CanCollide = false
 	bullet.CFrame = CFrame.lookAt(startPos, startPos + dir)
 	bullet.Parent = getBulletsFolder()
+
+	-- Beam tracer trail behind bullet
+	local att0 = Instance.new("Attachment")
+	att0.Position = Vector3.new(0, 0, -TRACER_TRAIL_LENGTH)
+	att0.Parent = bullet
+	local att1 = Instance.new("Attachment")
+	att1.Position = Vector3.new(0, 0, gun.bulletSize.Z / 2)
+	att1.Parent = bullet
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.Color = ColorSequence.new(gun.bulletColor)
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.Width0 = gun.bulletSize.X * 1.5
+	beam.Width1 = gun.bulletSize.X * 0.5
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	beam.Parent = bullet
 	local shooterUserId = shooter.UserId
 	local speed = gun.bulletSpeed
 	local lastPos = startPos

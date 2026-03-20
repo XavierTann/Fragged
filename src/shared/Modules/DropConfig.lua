@@ -11,9 +11,9 @@ return {
 	DROP_SPAWN_TAG = "DropSpawnArea",
 
 	-- Spawn interval in seconds
-	SPAWN_INTERVAL_SECONDS = 5,
+	SPAWN_INTERVAL_SECONDS = 10,
 	-- Maximum active drops in the world
-	MAX_ACTIVE_DROPS = 10,
+	MAX_ACTIVE_DROPS = 5,
 	-- Minimum spacing between drops (studs) to avoid overlap
 	MIN_DROP_SPACING = 4,
 

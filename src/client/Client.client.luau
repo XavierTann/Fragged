@@ -15,6 +15,9 @@ TouchControlUtils.Init()
 local CharacterServiceClient = require(Shared.Services.CharacterServiceClient)
 CharacterServiceClient.Init()
 
+local MovementDirectionIndicatorClient = require(Shared.Services.MovementDirectionIndicatorClient)
+MovementDirectionIndicatorClient.Init()
+
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 
@@ -77,7 +80,6 @@ LobbyServiceClient.Subscribe(function(state)
 		ReloadBarGUI.Show()
 		TDMScoreGUI.Show()
 		HealthGUI.Show()
-		OverheadHealthBarGUI.Show()
 		TeamIndicatorGUI.Show()
 		LeaderboardGUI.Hide()
 		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
@@ -101,7 +103,6 @@ if inArena then
 	ReloadBarGUI.Show()
 	TDMScoreGUI.Show()
 	HealthGUI.Show()
-	OverheadHealthBarGUI.Show()
 	TeamIndicatorGUI.Show()
 	CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 else

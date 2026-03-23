@@ -39,7 +39,9 @@ local weaponChangedSubscribers = {}
 local teamAssignmentSubscribers = {}
 local currentTeamAssignment = nil
 
-local function getAimDirectionFromMouse()
+-- minGroundSeparation: XZ distance from root to mouse hit on ground plane; below = nil (forgiving for firing)
+local function getAimDirectionFromMouse(minGroundSeparation)
+	minGroundSeparation = minGroundSeparation or 0.01
 	local player = Players.LocalPlayer
 	local character = player.Character
 	if not character then
@@ -64,10 +66,11 @@ local function getAimDirectionFromMouse()
 	end
 	local hitPoint = origin + direction * t
 	local aim = (hitPoint - root.Position)
-	if aim.Magnitude < 0.01 then
+	local flat = Vector3.new(aim.X, 0, aim.Z)
+	if flat.Magnitude < minGroundSeparation then
 		return nil
 	end
-	return aim.Unit
+	return flat.Unit
 end
 
 local function getAmmoStateForWeapon(gunId)
@@ -518,4 +521,7 @@ return {
 	GetTeamAssignment = function()
 		return currentTeamAssignment
 	end,
+
+	-- World-space unit direction on XZ from mouse vs character; optional minGroundSeparation (studs on XZ)
+	GetAimDirectionXZ = getAimDirectionFromMouse,
 }

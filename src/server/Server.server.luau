@@ -11,12 +11,15 @@ local Services = Server:WaitForChild("Services")
 local LobbyService = Services:WaitForChild("LobbyService"):WaitForChild("LobbyServiceServer")
 local CombatService = Services:WaitForChild("CombatService"):WaitForChild("CombatServiceServer")
 local DropService = Services:WaitForChild("DropService"):WaitForChild("DropServiceServer")
+local CharacterService = Services:WaitForChild("CharacterService"):WaitForChild("CharacterServiceServer")
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
 local DropServiceModule = require(DropService)
+local CharacterServiceModule = require(CharacterService)
 local WeaponInventoryServer = require(Services:WaitForChild("CombatService"):WaitForChild("WeaponInventoryServer"))
 
+CharacterServiceModule.Init()
 CombatServiceModule.Init()
 
 DropServiceModule.SetPickupCallback(function(player, dropType, _drop)

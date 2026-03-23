@@ -12,10 +12,6 @@ local LobbyConfig = require(Shared.Modules.LobbyConfig)
 local TouchControlUtils = require(Shared.Modules.TouchControlUtils)
 TouchControlUtils.Init()
 
-local StarterGui = game:GetService("StarterGui")
-StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
-StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
-
 local CharacterServiceClient = require(Shared.Services.CharacterServiceClient)
 CharacterServiceClient.Init()
 

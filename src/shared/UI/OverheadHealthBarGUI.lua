@@ -25,7 +25,6 @@ local COLOR_ENEMY          = Color3.fromRGB(220, 70, 70)
 -- [userId] -> "Blue" | "Red"
 local playerTeams = {}
 local myTeam      = nil
-local active      = false
 
 -- [userId] -> { characterAdded, health, maxHealth, died }
 local playerConnections = {}
@@ -257,17 +256,10 @@ return {
 		-- end
 	end,
 
-	Show = function()
-		active = true
-		-- for _, player in ipairs(Players:GetPlayers()) do
-		-- 	if player ~= LocalPlayer then
-		-- 		setupPlayer(player)
-		-- 	end
-		-- end
-	end,
+	
 
 	Hide = function()
-		active = false
+		-- active = false
 		-- Clear team state so stale assignments from this round never influence
 		-- bar colors at the start of the next round before TEAM_ASSIGNMENT arrives.
 		myTeam      = nil

@@ -1,8 +1,9 @@
 --[[
 	CombatServiceClient
 	Firing input and FireGun remote. Only active when in arena (enabled by startup).
-	Mobile: fire when aiming joystick is pulled off-axis (direction = player facing).
-	Desktop: fire on mouse click (mouse aim).
+	Mobile: Pistol/Rifle fire while aim joystick is off-axis; Shotgun matches Grenade/Rocket
+	(fire on joystick release with last aim direction).
+	Desktop: Pistol/Rifle on LMB; Shotgun matches Grenade/Rocket (G key + mouse aim, no LMB).
 	Respects ammo and reload state from server to prevent spamming.
 ]]
 
@@ -243,7 +244,7 @@ local function throwRocket(dir)
 	ThrowRocketRE:FireServer(dir)
 end
 
--- Fire when aiming joystick is off-axis (mobile). No fire when Grenade selected.
+-- Fire when aiming joystick is off-axis (mobile). No continuous fire for release-style weapons.
 local function throwGrenade(dir)
 	if not shootingEnabled or not ThrowGrenadeRE or not dir then
 		return
@@ -262,7 +263,7 @@ local function onRenderStepped()
 	if not shootingEnabled or not FireGunRE then
 		return
 	end
-	if currentWeapon == "Grenade" or currentWeapon == "RocketLauncher" then
+	if currentWeapon == "Grenade" or currentWeapon == "RocketLauncher" or currentWeapon == "Shotgun" then
 		return
 	end
 	local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
@@ -272,13 +273,13 @@ local function onRenderStepped()
 	end
 end
 
--- Fire on click (desktop fallback), grenade on G key when Grenade selected
+-- Fire on click (desktop) for hold-fire guns; Grenade/Rocket/Shotgun use G (desktop) or joystick release (mobile)
 local function onInputBegan(input, gameProcessed)
 	if gameProcessed then
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if currentWeapon ~= "Grenade" and currentWeapon ~= "RocketLauncher" then
+		if currentWeapon ~= "Grenade" and currentWeapon ~= "RocketLauncher" and currentWeapon ~= "Shotgun" then
 			local dir = getAimDirectionFromMouse()
 			if dir then
 				fireInDirection(dir)
@@ -286,7 +287,7 @@ local function onInputBegan(input, gameProcessed)
 		end
 		return
 	end
-	-- Grenade/Rocket: G key (desktop only; mobile uses joystick release)
+	-- Grenade/Rocket/Shotgun: G key (desktop only; mobile uses joystick release)
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
 		local dir = getAimDirectionFromMouse()
 		if dir then
@@ -294,6 +295,8 @@ local function onInputBegan(input, gameProcessed)
 				throwGrenade(dir)
 			elseif currentWeapon == "RocketLauncher" then
 				throwRocket(dir)
+			elseif currentWeapon == "Shotgun" then
+				fireInDirection(dir)
 			end
 		end
 	end
@@ -380,7 +383,7 @@ return {
 				task.defer(cb, payload)
 			end
 		end)
-		-- Mobile: grenade/rocket thrown when right joystick released (last direction before lift)
+		-- Mobile: grenade/rocket/shotgun fire when right joystick released (last direction before lift)
 		if UserInputService.TouchEnabled then
 			local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
 			RotationJoystickGUI.SubscribeOnRelease(function(worldDir)
@@ -388,6 +391,8 @@ return {
 					throwGrenade(worldDir)
 				elseif currentWeapon == "RocketLauncher" then
 					throwRocket(worldDir)
+				elseif currentWeapon == "Shotgun" then
+					fireInDirection(worldDir)
 				end
 			end)
 		end

@@ -38,6 +38,8 @@ return {
 		bulletColor = Color3.fromRGB(255, 180, 80),
 		pelletCount = 8,
 		spreadDegrees = 12,
+		-- Client direction indicator: sector radius on XZ (studs)
+		aimPreviewRangeStuds = 28,
 		magazineSize = 6,
 		reloadTime = 2.5,
 		gunshotSoundId = "rbxassetid://123510386263285",

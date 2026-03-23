@@ -109,6 +109,8 @@ local function spawnGrenade(state, thrower, startPos, direction)
 		grenade = rootPart
 	end
 
+	grenade:SetAttribute("ThrowerUserId", thrower.UserId)
+
 	task.delay(cfg.fuseTime, function()
 		if not grenade or not grenade.Parent then
 			return

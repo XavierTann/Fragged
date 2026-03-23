@@ -33,6 +33,7 @@ local function ensureRemotes(state)
 	state.throwRocketRE = getOrCreate(CombatConfig.REMOTES.THROW_ROCKET)
 	state.weaponInventoryRE = getOrCreate(CombatConfig.REMOTES.WEAPON_INVENTORY)
 	state.playerDiedRE = getOrCreate(CombatConfig.REMOTES.PLAYER_DIED)
+	state.teamAssignmentRE = getOrCreate(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
@@ -59,6 +60,12 @@ local function firePlayerDied(state, player, respawnDelaySeconds)
 	end
 end
 
+local function sendTeamAssignment(state, player, myTeam, playerTeams)
+	if state.teamAssignmentRE then
+		state.teamAssignmentRE:FireClient(player, myTeam, playerTeams)
+	end
+end
+
 local function broadcastTeamScore(state)
 	if not state.teamScoreUpdateRE then
 		return
@@ -79,4 +86,5 @@ return {
 	sendRocketState = sendRocketState,
 	broadcastTeamScore = broadcastTeamScore,
 	firePlayerDied = firePlayerDied,
+	sendTeamAssignment = sendTeamAssignment,
 }

@@ -53,12 +53,20 @@ HealthGUI.Init()
 local RespawnTimerGUI = require(Shared.UI.RespawnTimerGUI)
 RespawnTimerGUI.Init()
 
+local OverheadHealthBarGUI = require(Shared.UI.OverheadHealthBarGUI)
+OverheadHealthBarGUI.Init()
+
+local TeamIndicatorGUI = require(Shared.UI.TeamIndicatorGUI)
+TeamIndicatorGUI.Init()
+
 CombatServiceClient.SubscribeMatchEnded(function(payload)
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	TDMScoreGUI.Hide()
 	HealthGUI.Hide()
 	RespawnTimerGUI.Hide()
+	OverheadHealthBarGUI.Hide()
+	TeamIndicatorGUI.Hide()
 	if payload then
 		LeaderboardGUI.Show(payload)
 	end
@@ -73,6 +81,8 @@ LobbyServiceClient.Subscribe(function(state)
 		ReloadBarGUI.Show()
 		TDMScoreGUI.Show()
 		HealthGUI.Show()
+		OverheadHealthBarGUI.Show()
+		TeamIndicatorGUI.Show()
 		LeaderboardGUI.Hide()
 		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 	else
@@ -81,6 +91,8 @@ LobbyServiceClient.Subscribe(function(state)
 		TDMScoreGUI.Hide()
 		HealthGUI.Hide()
 		RespawnTimerGUI.Hide()
+		OverheadHealthBarGUI.Hide()
+		TeamIndicatorGUI.Hide()
 		LeaderboardGUI.Hide()
 	end
 end)
@@ -93,6 +105,8 @@ if inArena then
 	ReloadBarGUI.Show()
 	TDMScoreGUI.Show()
 	HealthGUI.Show()
+	OverheadHealthBarGUI.Show()
+	TeamIndicatorGUI.Show()
 	CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 else
 	WeaponSelectGUI.Hide()
@@ -100,6 +114,8 @@ else
 	TDMScoreGUI.Hide()
 	HealthGUI.Hide()
 	RespawnTimerGUI.Hide()
+	OverheadHealthBarGUI.Hide()
+	TeamIndicatorGUI.Hide()
 end
 
 print("Client startup complete.")

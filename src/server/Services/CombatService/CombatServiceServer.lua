@@ -271,13 +271,16 @@ return {
 			for gunId, ammo in pairs(state.ammoInMagazine[p.UserId] or {}) do
 				CombatRemotes.sendAmmoState(state, p, gunId, ammo, false)
 			end
-			CombatRemotes.sendGrenadeState(state, p, state.grenadeCount[p.UserId] or 0)
-			if state.rocketCount[p.UserId] then
-				CombatRemotes.sendRocketState(state, p, state.rocketCount[p.UserId])
-			end
+		CombatRemotes.sendGrenadeState(state, p, state.grenadeCount[p.UserId] or 0)
+		if state.rocketCount[p.UserId] then
+			CombatRemotes.sendRocketState(state, p, state.rocketCount[p.UserId])
 		end
-		CombatRemotes.broadcastTeamScore(state)
-	end,
+	end
+	CombatRemotes.broadcastTeamScore(state)
+	for _, p in ipairs(players) do
+		CombatRemotes.sendTeamAssignment(state, p, state.playerTeams[p.UserId] or "Blue", state.playerTeams)
+	end
+end,
 
 	InitRocketsForPlayer = function(player)
 		CombatAmmo.initPlayerRockets(state, player.UserId)

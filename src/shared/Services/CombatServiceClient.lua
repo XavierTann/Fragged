@@ -36,6 +36,8 @@ local weaponInventorySubscribers = {}
 local ammoStateSubscribers = {}
 local matchEndedSubscribers = {}
 local weaponChangedSubscribers = {}
+local teamAssignmentSubscribers = {}
+local currentTeamAssignment = nil
 
 local function getAimDirectionFromMouse()
 	local player = Players.LocalPlayer
@@ -337,6 +339,24 @@ return {
 		local grenadeStateRE = folder:WaitForChild(CombatConfig.REMOTES.GRENADE_STATE)
 		local rocketStateRE = folder:WaitForChild(CombatConfig.REMOTES.ROCKET_STATE)
 		local weaponInventoryRE = folder:WaitForChild(CombatConfig.REMOTES.WEAPON_INVENTORY)
+		local teamAssignmentRE = folder:WaitForChild(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
+
+		teamAssignmentRE.OnClientEvent:Connect(function(myTeam, playerTeamsTable)
+			-- RemoteEvent serializes non-sequential integer keys as strings;
+			-- convert them back to numbers so UserId lookups work correctly.
+			local fixedTeams = {}
+			for id, team in pairs(playerTeamsTable or {}) do
+				fixedTeams[tonumber(id)] = team
+			end
+			currentTeamAssignment = { myTeam = myTeam, playerTeams = fixedTeams }
+			print("[TeamAssignment] myTeam:", myTeam)
+			for userId, team in pairs(fixedTeams) do
+				print("[TeamAssignment]  userId:", userId, "-> team:", team)
+			end
+			for _, cb in ipairs(teamAssignmentSubscribers) do
+				task.defer(cb, currentTeamAssignment)
+			end
+		end)
 
 		-- Equip weapon when character spawns (e.g. arena entry, respawn)
 		local player = Players.LocalPlayer
@@ -490,4 +510,12 @@ return {
 	end,
 
 	ThrowRocket = throwRocket,
+
+	SubscribeTeamAssignment = function(callback)
+		table.insert(teamAssignmentSubscribers, callback)
+	end,
+
+	GetTeamAssignment = function()
+		return currentTeamAssignment
+	end,
 }

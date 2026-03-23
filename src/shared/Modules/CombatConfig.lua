@@ -18,5 +18,6 @@ return {
 		ROCKET_STATE = "RocketState", -- Server -> Client: rocketCount (current)
 		WEAPON_INVENTORY = "WeaponInventory", -- Server -> Client: { "Pistol", "Rifle", ... }
 		PLAYER_DIED = "PlayerDied", -- Server -> Client: respawnDelaySeconds (local player died in TDM)
+		TEAM_ASSIGNMENT = "TeamAssignment", -- Server -> Client: myTeam, playerTeams table
 	},
 }

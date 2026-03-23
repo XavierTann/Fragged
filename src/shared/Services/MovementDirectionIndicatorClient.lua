@@ -1,8 +1,10 @@
 --[[
 	MovementDirectionIndicatorClient
 	Blue: movement from Humanoid.MoveDirection (WASD, move thumbstick, gamepad left).
-	Red: line along shooting direction when off-axis — touch: rotation joystick pulled
-	from center; desktop: mouse ground point farther than AIM_MIN_CURSOR_GROUND_DIST on XZ.
+	Weapon aim (off-axis only):
+	- Rifle: red Beam toward aim (short range preview).
+	- RocketLauncher: white flat rectangle, width ≈ rocket cross-section, length = max range.
+	Other weapons: no aim overlay.
 ]]
 
 local Players = game:GetService("Players")
@@ -13,40 +15,65 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 local RotationJoystickGUI = require(Shared.UI.RotationJoystickGUI)
+local RocketLauncherConfig = require(Shared.Modules.RocketLauncherConfig)
 
 local LocalPlayer = Players.LocalPlayer
 
 -- Studs from HumanoidRootPart position on XZ; Y is raised slightly for visibility
 local OFFSET_RADIUS = 3.25
--- World length of the red aim line (studs from root to tip on XZ)
+-- Rifle beam length (studs from root toward aim on XZ)
 local AIM_LINE_LENGTH = 8.5
 local Y_ABOVE_ROOT = 0.2
 local AIM_Y_ABOVE_ROOT = 0.34
 local DOT_DIAMETER = 0.38
 -- Beam width (studs); FaceCamera helps readability in top-down view
 local AIM_BEAM_WIDTH = 0.28
+-- Rocket preview: vertical thickness of the white slab (world Y)
+local ROCKET_RECT_THICKNESS = 0.14
 
 local MIN_INPUT_MAGNITUDE = 0.04
--- Hide aim line when the cursor’s ground aim is near the character (still on-axis)
+-- Hide aim when the cursor’s ground aim is near the character (still on-axis)
 local AIM_MIN_CURSOR_GROUND_DIST = 1.15
 local SMOOTH_RATE = 14
 local AIM_SMOOTH_RATE = 16
 
 local renderConnection = nil
 local dotPart = nil
-local aimLinePart = nil
+local aimBeamHost = nil
+local aimRocketRect = nil
 local smoothedOffsetXZ = Vector3.zero
 local smoothedAimOffsetXZ = Vector3.zero
+
+local function getRocketAimRange()
+	local c = RocketLauncherConfig
+	return c.aimMaxRangeStuds or (c.speed * c.fuseTime)
+end
+
+local function getRocketAimWidth()
+	local c = RocketLauncherConfig
+	if c.aimIndicatorWidthStuds then
+		return c.aimIndicatorWidthStuds
+	end
+	return math.max(c.size.X, c.size.Y) * (c.scale or 1)
+end
+
+local function destroyAimVisuals()
+	if aimBeamHost then
+		aimBeamHost:Destroy()
+		aimBeamHost = nil
+	end
+	if aimRocketRect then
+		aimRocketRect:Destroy()
+		aimRocketRect = nil
+	end
+end
 
 local function destroyDots()
 	if dotPart then
 		dotPart:Destroy()
 		dotPart = nil
 	end
-	if aimLinePart then
-		aimLinePart:Destroy()
-		aimLinePart = nil
-	end
+	destroyAimVisuals()
 end
 
 local function ensureDot(character)
@@ -73,17 +100,16 @@ local function ensureDot(character)
 	return p
 end
 
-local function ensureAimLine(character)
-	if aimLinePart and aimLinePart.Parent == character then
-		return aimLinePart
+local function ensureAimBeamHost(character)
+	if aimBeamHost and aimBeamHost.Parent == character then
+		return aimBeamHost
 	end
-	if aimLinePart then
-		aimLinePart:Destroy()
-		aimLinePart = nil
+	if aimBeamHost then
+		aimBeamHost:Destroy()
+		aimBeamHost = nil
 	end
-	-- Invisible carrier; visible segment is a Beam (cylinders read as dots from straight above)
 	local p = Instance.new("Part")
-	p.Name = "AimDirectionIndicator"
+	p.Name = "AimDirectionBeamHost"
 	p.Size = Vector3.one * 0.05
 	p.Anchored = true
 	p.CanCollide = false
@@ -113,22 +139,49 @@ local function ensureAimLine(character)
 	beam.Enabled = false
 	beam.Parent = p
 
-	aimLinePart = p
+	aimBeamHost = p
 	return p
 end
 
-local function aimDirectionToOffsetXZ()
+local function ensureAimRocketRect(character)
+	if aimRocketRect and aimRocketRect.Parent == character then
+		return aimRocketRect
+	end
+	if aimRocketRect then
+		aimRocketRect:Destroy()
+		aimRocketRect = nil
+	end
+	local p = Instance.new("Part")
+	p.Name = "AimRocketPathIndicator"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = Color3.new(1, 1, 1)
+	p.Transparency = 1
+	p.Parent = character
+	aimRocketRect = p
+	return p
+end
+
+local function aimOffsetTargetXZ(weapon)
+	if weapon ~= "Rifle" and weapon ~= "RocketLauncher" then
+		return Vector3.zero
+	end
+	local spanLength = weapon == "RocketLauncher" and getRocketAimRange() or AIM_LINE_LENGTH
+
 	if UserInputService.TouchEnabled then
 		local joyDir = RotationJoystickGUI.GetWorldDirectionXZ()
 		if joyDir then
-			return joyDir * AIM_LINE_LENGTH
+			return joyDir * spanLength
 		end
 		return Vector3.zero
 	end
 
 	local dir = CombatServiceClient.GetAimDirectionXZ(AIM_MIN_CURSOR_GROUND_DIST)
 	if dir then
-		return dir * AIM_LINE_LENGTH
+		return dir * spanLength
 	end
 	return Vector3.zero
 end
@@ -166,40 +219,81 @@ local function onRenderStep(dt)
 	local pos = root.Position + Vector3.new(smoothedOffsetXZ.X, Y_ABOVE_ROOT, smoothedOffsetXZ.Z)
 	part.CFrame = CFrame.new(pos)
 
-	local targetAim = aimDirectionToOffsetXZ()
+	local weapon = CombatServiceClient.GetCurrentWeapon()
+	local targetAim = aimOffsetTargetXZ(weapon)
 	local aimAlpha = 1 - math.exp(-AIM_SMOOTH_RATE * dt)
 	smoothedAimOffsetXZ = smoothedAimOffsetXZ:Lerp(targetAim, aimAlpha)
 
-	local aimPart = ensureAimLine(character)
-	local beam = aimPart:FindFirstChild("AimDirectionBeam")
-	local att0 = aimPart:FindFirstChild("AimLineStart")
-	local att1 = aimPart:FindFirstChild("AimLineEnd")
 	local showAim = smoothedAimOffsetXZ.Magnitude > 0.08
-	if beam then
-		beam.Enabled = showAim
-	end
 	local yLift = Vector3.new(0, AIM_Y_ABOVE_ROOT, 0)
 	local startPos = root.Position + yLift
-	local endPos = root.Position + Vector3.new(smoothedAimOffsetXZ.X, AIM_Y_ABOVE_ROOT, smoothedAimOffsetXZ.Z)
-	local span = endPos - startPos
-	local length = span.Magnitude
-	if length > 0.001 and att0 and att1 then
-		local dir = span.Unit
-		local mid = startPos + dir * (length * 0.5)
-		local aux = math.abs(dir.Y) < 0.95 and Vector3.yAxis or Vector3.zAxis
-		local right = dir:Cross(aux)
-		if right.Magnitude < 0.001 then
-			aux = Vector3.xAxis
-			right = dir:Cross(aux)
+
+	if weapon == "Rifle" then
+		local beamHost = ensureAimBeamHost(character)
+		local beam = beamHost:FindFirstChild("AimDirectionBeam")
+		local att0 = beamHost:FindFirstChild("AimLineStart")
+		local att1 = beamHost:FindFirstChild("AimLineEnd")
+		if aimRocketRect then
+			aimRocketRect.Transparency = 1
 		end
-		right = right.Unit
-		aimPart.CFrame = CFrame.fromMatrix(mid, right, dir)
-		att0.Position = Vector3.new(0, -length * 0.5, 0)
-		att1.Position = Vector3.new(0, length * 0.5, 0)
-	elseif att0 and att1 then
-		aimPart.CFrame = CFrame.new(startPos)
-		att0.Position = Vector3.zero
-		att1.Position = Vector3.zero
+		if beam then
+			beam.Enabled = showAim
+		end
+		local endPos = root.Position + Vector3.new(smoothedAimOffsetXZ.X, AIM_Y_ABOVE_ROOT, smoothedAimOffsetXZ.Z)
+		local span = endPos - startPos
+		local length = span.Magnitude
+		if length > 0.001 and att0 and att1 then
+			local dir = span.Unit
+			local mid = startPos + dir * (length * 0.5)
+			local aux = math.abs(dir.Y) < 0.95 and Vector3.yAxis or Vector3.zAxis
+			local right = dir:Cross(aux)
+			if right.Magnitude < 0.001 then
+				aux = Vector3.xAxis
+				right = dir:Cross(aux)
+			end
+			right = right.Unit
+			beamHost.CFrame = CFrame.fromMatrix(mid, right, dir)
+			att0.Position = Vector3.new(0, -length * 0.5, 0)
+			att1.Position = Vector3.new(0, length * 0.5, 0)
+		elseif att0 and att1 then
+			beamHost.CFrame = CFrame.new(startPos)
+			att0.Position = Vector3.zero
+			att1.Position = Vector3.zero
+		end
+	elseif weapon == "RocketLauncher" then
+		local rect = ensureAimRocketRect(character)
+		local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
+		if beam then
+			beam.Enabled = false
+		end
+		local range = getRocketAimRange()
+		local width = getRocketAimWidth()
+		if showAim and smoothedAimOffsetXZ.Magnitude > 0.12 then
+			local flat = Vector3.new(smoothedAimOffsetXZ.X, 0, smoothedAimOffsetXZ.Z)
+			local dir = flat.Unit
+			local right = Vector3.new(-dir.Z, 0, dir.X)
+			if right.Magnitude < 0.001 then
+				right = Vector3.new(1, 0, 0)
+			else
+				right = right.Unit
+			end
+			local mid = startPos + dir * (range * 0.5)
+			rect.Size = Vector3.new(width, ROCKET_RECT_THICKNESS, range)
+			rect.CFrame = CFrame.fromMatrix(mid, right, Vector3.yAxis)
+			rect.Transparency = 0.42
+		else
+			rect.Transparency = 1
+		end
+	else
+		if aimBeamHost then
+			local b = aimBeamHost:FindFirstChild("AimDirectionBeam")
+			if b then
+				b.Enabled = false
+			end
+		end
+		if aimRocketRect then
+			aimRocketRect.Transparency = 1
+		end
 	end
 end
 

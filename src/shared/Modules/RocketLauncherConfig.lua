@@ -18,6 +18,10 @@ return {
 	color = Color3.fromRGB(180, 100, 40),
 	material = Enum.Material.Neon,
 	restitution = 0.3,
+	-- Client aim rectangle: max straight-line travel (studs) if nothing is hit; matches Heartbeat mover
+	aimMaxRangeStuds = nil, -- nil => speed * fuseTime
+	-- Cross-range width (studs) for client aim rectangle
+	aimIndicatorWidthStuds = 0.6,
 	throwSoundId = "rbxassetid://140444375264585",
 	explosionSoundId = "rbxassetid://134825578212679",
 }

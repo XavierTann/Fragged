@@ -34,11 +34,20 @@ local function ensureRemotes(state)
 	state.weaponInventoryRE = getOrCreate(CombatConfig.REMOTES.WEAPON_INVENTORY)
 	state.playerDiedRE = getOrCreate(CombatConfig.REMOTES.PLAYER_DIED)
 	state.teamAssignmentRE = getOrCreate(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
+	state.fireGunRejectedRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
 	if state.ammoStateRE then
 		state.ammoStateRE:FireClient(player, gunId, ammoCount, isReloading)
+	end
+end
+
+-- reason: string (e.g. InvalidArgs, WeaponNotOwned, NotEquipped, BadOrigin, BadDirection, Cooldown, Reloading, EmptyMag).
+-- resetClientFireRate: if true, client clears local lastFiredAt so mispredicted shots do not block the next press.
+local function sendFireGunRejected(state, player, reason, gunId, resetClientFireRate)
+	if state.fireGunRejectedRE then
+		state.fireGunRejectedRE:FireClient(player, reason, gunId, resetClientFireRate == true)
 	end
 end
 
@@ -82,6 +91,7 @@ end
 return {
 	ensureRemotes = ensureRemotes,
 	sendAmmoState = sendAmmoState,
+	sendFireGunRejected = sendFireGunRejected,
 	sendGrenadeState = sendGrenadeState,
 	sendRocketState = sendRocketState,
 	broadcastTeamScore = broadcastTeamScore,

@@ -8,7 +8,11 @@ return {
 	DEFAULT_HEALTH = 100,
 	REMOTE_FOLDER_NAME = "CombatRemotes",
 	REMOTES = {
+		-- Client -> Server: (shotOrigin: Vector3, aimDirection: Vector3, gunId: string).
+		-- Server -> Client: FireGunRejected(reason, gunId, resetClientFireRate) when a shot is rejected
+		-- after the client may have shown predicted feedback; resetClientFireRate clears local fire-rate gate.
 		FIRE_GUN = "FireGun",
+		FIRE_GUN_REJECTED = "FireGunRejected",
 		AMMO_STATE = "AmmoState", -- Server -> Client: ammo count, isReloading, gunId
 		THROW_GRENADE = "ThrowGrenade",
 		THROW_ROCKET = "ThrowRocket",

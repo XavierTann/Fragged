@@ -27,6 +27,7 @@ local TRACER_TRAIL_LENGTH = 4 -- studs behind bullet
 local function spawnBullet(state, shooter, startPos, direction, gunId)
 	local gun = GunsConfig[gunId] or GunsConfig.Pistol
 	local dir = direction.Unit
+	local shooterUserId = shooter.UserId
 	local bullet = Instance.new("Part")
 	bullet.Name = "Bullet"
 	bullet.Size = gun.bulletSize
@@ -35,9 +36,11 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	bullet.Anchored = true
 	bullet.CanCollide = false
 	bullet.CFrame = CFrame.lookAt(startPos, startPos + dir)
+	-- Shooter's client hides this replica (they already see predicted tracers); others still see it.
+	bullet:SetAttribute("ShooterUserId", shooterUserId)
 	bullet.Parent = getBulletsFolder()
 
-	-- Beam tracer trail behind bullet
+	-- Beam tracer trail behind bullet (hidden locally for shooter — see CombatServiceClient)
 	local att0 = Instance.new("Attachment")
 	att0.Position = Vector3.new(0, 0, -TRACER_TRAIL_LENGTH)
 	att0.Parent = bullet
@@ -57,7 +60,6 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	beam.Parent = bullet
-	local shooterUserId = shooter.UserId
 	local speed = gun.bulletSpeed
 	local lastPos = startPos
 	local params = RaycastParams.new()

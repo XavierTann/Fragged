@@ -28,5 +28,6 @@ return function()
 		throwGrenadeRE = nil,
 		matchEndedRE = nil,
 		teamScoreUpdateRE = nil,
+		fireGunRejectedRE = nil,
 	}
 end

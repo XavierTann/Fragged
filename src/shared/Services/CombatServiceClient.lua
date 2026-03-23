@@ -1,6 +1,10 @@
 --[[
 	CombatServiceClient
 	Firing input and FireGun remote. Only active when in arena (enabled by startup).
+	Predicted feedback (muzzle flash, recoil, sound, local-only tracers) runs immediately, then FireGun
+	sends shotOrigin, aim direction, and gunId. The server is authoritative: validates origin/direction
+	bounds, inventory, equipped tool, ammo, cooldown, and reload; on reject it may fire FireGunRejected
+	(resetClientFireRate) and AmmoState to resync.
 	Mobile: Pistol/Rifle fire while aim joystick is off-axis; Shotgun matches Grenade/Rocket
 	(fire on joystick release with last aim direction).
 	Desktop: Pistol/Rifle on LMB; Shotgun matches Grenade/Rocket (G key + mouse aim, no LMB).
@@ -13,6 +17,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ContentProvider = game:GetService("ContentProvider")
+local Debris = game:GetService("Debris")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
@@ -193,6 +198,201 @@ local function notifyAmmoSubscribers()
 	end
 end
 
+-- Matches server muzzle offset (HumanoidRootPart + aim * 2).
+local function getShotOriginForDirection(character, dir)
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root or not dir or dir.Magnitude < 0.01 then
+		return nil
+	end
+	return root.Position + dir.Unit * 2
+end
+
+local PREDICTED_TRACER_TRAIL = 4
+local PREDICTED_TRACER_MAX_TIME = 0.35
+
+local RECOIL_PITCH_DEG = {
+	Pistol = 0.65,
+	Rifle = 0.38,
+	Shotgun = 1.8,
+}
+
+local function applyLocalRecoil(gunId)
+	local pitch = RECOIL_PITCH_DEG[gunId] or 0.5
+	local cam = Workspace.CurrentCamera
+	if cam then
+		cam.CFrame = cam.CFrame * CFrame.Angles(math.rad(-pitch), 0, 0)
+	end
+end
+
+local function playMuzzleFlash(origin, dir)
+	if not origin or not dir or dir.Magnitude < 0.01 then
+		return
+	end
+	local look = dir.Unit
+	local flash = Instance.new("Part")
+	flash.Name = "PredictedMuzzleFlash"
+	flash.Size = Vector3.new(0.15, 0.15, 0.15)
+	flash.Transparency = 1
+	flash.Anchored = true
+	flash.CanCollide = false
+	flash.CanQuery = false
+	flash.CastShadow = false
+	flash.CFrame = CFrame.lookAt(origin, origin + look)
+	flash.Parent = Workspace
+	local light = Instance.new("PointLight")
+	light.Brightness = 5
+	light.Range = 10
+	light.Color = Color3.fromRGB(255, 230, 180)
+	light.Parent = flash
+	Debris:AddItem(flash, 0.07)
+end
+
+local function getPredictedShotsFolder()
+	local folder = Workspace:FindFirstChild("LocalPredictedShots")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "LocalPredictedShots"
+		folder.Parent = Workspace
+	end
+	return folder
+end
+
+local BULLETS_FOLDER_NAME = "CombatBullets"
+
+-- Server-replicated bullets duplicate predicted VFX for the shooter; hide ours locally only.
+local function hideOwnServerBulletReplica(inst)
+	if not inst:IsA("BasePart") or inst.Name ~= "Bullet" then
+		return
+	end
+	if inst:GetAttribute("ShooterUserId") ~= Players.LocalPlayer.UserId then
+		return
+	end
+	inst.LocalTransparencyModifier = 1
+	for _, d in ipairs(inst:GetDescendants()) do
+		if d:IsA("Beam") then
+			d.Enabled = false
+		end
+	end
+end
+
+local function wireHideOwnReplicatedBullets()
+	local function bind(folder)
+		for _, c in ipairs(folder:GetChildren()) do
+			hideOwnServerBulletReplica(c)
+		end
+		folder.ChildAdded:Connect(hideOwnServerBulletReplica)
+	end
+	local folder = Workspace:FindFirstChild(BULLETS_FOLDER_NAME)
+	if folder then
+		bind(folder)
+	else
+		Workspace.ChildAdded:Connect(function(child)
+			if child.Name == BULLETS_FOLDER_NAME then
+				bind(child)
+			end
+		end)
+	end
+end
+
+-- Cosmetic only; does not deal damage. Stops at geometry (local raycast).
+local function spawnPredictedTracer(startPos, direction, gunId)
+	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local dir = direction.Unit
+	local bullet = Instance.new("Part")
+	bullet.Name = "PredictedTracer"
+	bullet.Size = gun.bulletSize
+	bullet.Color = gun.bulletColor
+	bullet.Material = Enum.Material.Neon
+	bullet.Transparency = 0.35
+	bullet.Anchored = true
+	bullet.CanCollide = false
+	bullet.CanQuery = false
+	bullet.CastShadow = false
+	bullet.CFrame = CFrame.lookAt(startPos, startPos + dir)
+	bullet.Parent = getPredictedShotsFolder()
+
+	local att0 = Instance.new("Attachment")
+	att0.Position = Vector3.new(0, 0, -PREDICTED_TRACER_TRAIL)
+	att0.Parent = bullet
+	local att1 = Instance.new("Attachment")
+	att1.Position = Vector3.new(0, 0, gun.bulletSize.Z / 2)
+	att1.Parent = bullet
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.Color = ColorSequence.new(gun.bulletColor)
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.Width0 = gun.bulletSize.X * 1.5
+	beam.Width1 = gun.bulletSize.X * 0.5
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.35),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	beam.Parent = bullet
+
+	local speed = gun.bulletSpeed
+	local lastPos = startPos
+	local params = RaycastParams.new()
+	local filter = { bullet, getPredictedShotsFolder() }
+	local character = Players.LocalPlayer.Character
+	if character then
+		filter[#filter + 1] = character
+	end
+	params.FilterDescendantsInstances = filter
+	params.FilterType = Enum.RaycastFilterType.Exclude
+
+	local conn
+	local t0 = os.clock()
+	conn = RunService.RenderStepped:Connect(function(dt)
+		if not bullet.Parent then
+			conn:Disconnect()
+			return
+		end
+		if os.clock() - t0 > PREDICTED_TRACER_MAX_TIME then
+			conn:Disconnect()
+			bullet:Destroy()
+			return
+		end
+		local move = dir * speed * dt
+		local newPos = lastPos + move
+		local result = Workspace:Raycast(lastPos, move, params)
+		if result then
+			conn:Disconnect()
+			bullet:Destroy()
+			return
+		end
+		lastPos = newPos
+		bullet.CFrame = CFrame.lookAt(newPos, newPos + dir)
+	end)
+end
+
+local function playPredictedGunfire(gunId, shotOrigin, aimDir)
+	playMuzzleFlash(shotOrigin, aimDir)
+	applyLocalRecoil(gunId)
+	playGunshotSound(gunId)
+
+	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local pelletCount = gun.pelletCount or 1
+	local spreadDeg = gun.spreadDegrees or 0
+	for _ = 1, pelletCount do
+		local d = aimDir.Unit
+		if spreadDeg > 0 and pelletCount > 1 then
+			local angle = math.rad(spreadDeg * (math.random() * 2 - 1))
+			local perp = Vector3.new(-d.Z, 0, d.X)
+			if perp.Magnitude < 0.001 then
+				perp = Vector3.new(1, 0, 0)
+			else
+				perp = perp.Unit
+			end
+			d = (d * math.cos(angle) + perp * math.sin(angle)).Unit
+			local angle2 = math.rad(spreadDeg * 0.5 * (math.random() * 2 - 1))
+			d = (d * math.cos(angle2) + Vector3.new(0, 1, 0) * math.sin(angle2)).Unit
+		end
+		spawnPredictedTracer(shotOrigin, d, gunId)
+	end
+end
+
 local function fireInDirection(dir)
 	if not shootingEnabled or not FireGunRE or not dir then
 		return
@@ -203,9 +403,14 @@ local function fireInDirection(dir)
 	if not canFireByRate() then
 		return
 	end
+	local character = Players.LocalPlayer.Character
+	local shotOrigin = getShotOriginForDirection(character, dir)
+	if not shotOrigin then
+		return
+	end
 	lastFiredAt = os.clock()
-	playGunshotSound(currentWeapon)
-	FireGunRE:FireServer(dir, currentWeapon)
+	playPredictedGunfire(currentWeapon, shotOrigin, dir)
+	FireGunRE:FireServer(shotOrigin, dir, currentWeapon)
 end
 
 local function playRocketThrowSound()
@@ -334,10 +539,12 @@ local function equipCurrentWeapon()
 	return false
 end
 
-return {
+	return {
 	Init = function()
+		wireHideOwnReplicatedBullets()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
+		local fireGunRejectedRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
 		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
 		ThrowRocketRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_ROCKET)
@@ -346,6 +553,12 @@ return {
 		local rocketStateRE = folder:WaitForChild(CombatConfig.REMOTES.ROCKET_STATE)
 		local weaponInventoryRE = folder:WaitForChild(CombatConfig.REMOTES.WEAPON_INVENTORY)
 		local teamAssignmentRE = folder:WaitForChild(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
+
+		fireGunRejectedRE.OnClientEvent:Connect(function(_reason, _gunId, resetClientFireRate)
+			if resetClientFireRate then
+				lastFiredAt = 0
+			end
+		end)
 
 		teamAssignmentRE.OnClientEvent:Connect(function(myTeam, playerTeamsTable)
 			-- RemoteEvent serializes non-sequential integer keys as strings;

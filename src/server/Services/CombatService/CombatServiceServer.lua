@@ -1,6 +1,8 @@
 --[[
 	CombatService (server)
 	Shooting (visible bullets), health, round end. Server-authoritative.
+	FireGun: validate round membership, weapon inventory, equipped Tool, ammo/cooldown/reload,
+	client shot origin vs HRP+aim*2, then spawn bullets at authoritative muzzle (HRP + aim * 2).
 	Init() sets up remotes and handlers. StartRound(players, onRoundEnd) is called when arena round starts.
 ]]
 
@@ -25,7 +27,99 @@ local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
 
+-- Client-reported muzzle must be near server-expected point (root + aim * 2).
+local FIRE_ORIGIN_MAX_ERROR_STUDS = 6
+local FIRE_ORIGIN_MAX_DISTANCE_FROM_ROOT_STUDS = 14
+-- Aim must be a valid horizontal-ish world direction (matches client XZ aim, blocks degenerate axes).
+local FIRE_AIM_MIN_HORIZONTAL = 0.08
+local FIRE_AIM_MAX_VERTICAL_ABS = 0.95
+
 local state = CombatState()
+
+local function playerInActiveRound(player)
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p == player then
+			return true
+		end
+	end
+	return false
+end
+
+local function sendAuthoritativeAmmoForGun(player, gunId)
+	local uid = player.UserId
+	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	state.ammoInMagazine[uid] = state.ammoInMagazine[uid] or {}
+	state.reloadEndAt[uid] = state.reloadEndAt[uid] or {}
+	local ammo = state.ammoInMagazine[uid][gunId]
+	if ammo == nil then
+		ammo = gun.magazineSize or 6
+		state.ammoInMagazine[uid][gunId] = ammo
+	end
+	local isReloading = state.reloadEndAt[uid][gunId] ~= nil and os.clock() < state.reloadEndAt[uid][gunId]
+	CombatRemotes.sendAmmoState(state, player, gunId, ammo, isReloading)
+end
+
+local function isFiniteVector3(v)
+	return typeof(v) == "Vector3" and v.X == v.X and v.Y == v.Y and v.Z == v.Z
+end
+
+local function parseFireGunArgs(a, b, c)
+	-- FireServer(shotOrigin, aimDirection, gunId) — required for validation and prediction sync.
+	if typeof(a) == "Vector3" and typeof(b) == "Vector3" and typeof(c) == "string" then
+		return a, b, c
+	end
+	return nil, nil, nil
+end
+
+local function validateClientShotOrigin(rootPos, shotOrigin, aimUnit)
+	if not shotOrigin or not isFiniteVector3(shotOrigin) then
+		return false
+	end
+	if (shotOrigin - rootPos).Magnitude > FIRE_ORIGIN_MAX_DISTANCE_FROM_ROOT_STUDS then
+		return false
+	end
+	local expected = rootPos + aimUnit * 2
+	return (shotOrigin - expected).Magnitude <= FIRE_ORIGIN_MAX_ERROR_STUDS
+end
+
+-- Returns unit direction or nil if out of bounds / non-finite.
+local function validateFireAimDirection(aimDirection)
+	if typeof(aimDirection) ~= "Vector3" or not isFiniteVector3(aimDirection) or aimDirection.Magnitude < 0.01 then
+		return nil
+	end
+	local u = aimDirection.Unit
+	if not isFiniteVector3(u) or u.Magnitude < 0.99 then
+		return nil
+	end
+	if Vector3.new(u.X, 0, u.Z).Magnitude < FIRE_AIM_MIN_HORIZONTAL then
+		return nil
+	end
+	if math.abs(u.Y) > FIRE_AIM_MAX_VERTICAL_ABS then
+		return nil
+	end
+	return u
+end
+
+local function rejectFire(player, reason, gunId, resetClientFireRate, sendAmmo)
+	CombatRemotes.sendFireGunRejected(state, player, reason, gunId, resetClientFireRate == true)
+	if sendAmmo ~= false and gunId and GunsConfig[gunId] then
+		sendAuthoritativeAmmoForGun(player, gunId)
+	end
+end
+
+local function playerOwnsGun(player, gunId)
+	for _, w in ipairs(WeaponInventoryServer.getWeapons(player)) do
+		if w == gunId then
+			return true
+		end
+	end
+	return false
+end
+
+local function characterHasGunEquipped(character, gunId)
+	local tool = character:FindFirstChild(gunId)
+	return tool and tool:IsA("Tool")
+end
 
 local function giveRocketLauncherTool(player)
 	local imports = ReplicatedStorage:FindFirstChild("Imports")
@@ -68,23 +162,59 @@ local function setupBulletBlockerWalls()
 end
 
 local function bindHandlers()
-	state.fireGunRE.OnServerEvent:Connect(function(player, aimDirection, gunId)
+	state.fireGunRE.OnServerEvent:Connect(function(player, a, b, c)
 		if state.matchEnded then
 			return
 		end
-		if not aimDirection or typeof(aimDirection) ~= "Vector3" then
+		if not playerInActiveRound(player) then
 			return
 		end
-		if aimDirection.Magnitude < 0.01 then
+
+		local shotOrigin, aimDirection, gunId = parseFireGunArgs(a, b, c)
+		if not shotOrigin or not aimDirection or not gunId then
+			CombatRemotes.sendFireGunRejected(state, player, "InvalidArgs", nil, true)
 			return
 		end
-		gunId = gunId or "Pistol"
-		local gun = GunsConfig[gunId] or GunsConfig.Pistol
+
+		if not GunsConfig[gunId] then
+			CombatRemotes.sendFireGunRejected(state, player, "InvalidWeapon", nil, true)
+			return
+		end
+
+		local aimUnit = validateFireAimDirection(aimDirection)
+		if not aimUnit then
+			rejectFire(player, "BadDirection", gunId, true)
+			return
+		end
+
+		if not playerOwnsGun(player, gunId) then
+			rejectFire(player, "WeaponNotOwned", gunId, true)
+			return
+		end
+
+		local character = player.Character
+		if not character or not character:FindFirstChild("HumanoidRootPart") then
+			rejectFire(player, "NoCharacter", gunId, true)
+			return
+		end
+		if not characterHasGunEquipped(character, gunId) then
+			rejectFire(player, "NotEquipped", gunId, true)
+			return
+		end
+
+		local root = character.HumanoidRootPart
+		if not validateClientShotOrigin(root.Position, shotOrigin, aimUnit) then
+			rejectFire(player, "BadOrigin", gunId, true)
+			return
+		end
+
+		local gun = GunsConfig[gunId]
 		local now = os.clock()
 		local uid = player.UserId
 
 		local last = state.lastFiredAt[uid] or 0
 		if now - last < gun.fireRate then
+			rejectFire(player, "Cooldown", gunId, false)
 			return
 		end
 
@@ -97,7 +227,7 @@ local function bindHandlers()
 		end
 
 		if state.reloadEndAt[uid][gunId] and now < state.reloadEndAt[uid][gunId] then
-			CombatRemotes.sendAmmoState(state, player, gunId, ammo, true)
+			rejectFire(player, "Reloading", gunId, false)
 			return
 		end
 
@@ -105,7 +235,7 @@ local function bindHandlers()
 			if not state.reloadEndAt[uid][gunId] then
 				state.reloadEndAt[uid][gunId] = now + (gun.reloadTime or 1.5)
 			end
-			CombatRemotes.sendAmmoState(state, player, gunId, 0, true)
+			rejectFire(player, "EmptyMag", gunId, false)
 			return
 		end
 
@@ -113,16 +243,11 @@ local function bindHandlers()
 		state.ammoInMagazine[uid][gunId] = ammo - 1
 		local newAmmo = state.ammoInMagazine[uid][gunId]
 
-		local character = player.Character
-		if not character or not character:FindFirstChild("HumanoidRootPart") then
-			return
-		end
-		local root = character.HumanoidRootPart
-		local startPos = root.Position + aimDirection.Unit * 2
+		local startPos = root.Position + aimUnit * 2
 		local pelletCount = gun.pelletCount or 1
 		local spreadDeg = gun.spreadDegrees or 0
 		for _ = 1, pelletCount do
-			local dir = aimDirection.Unit
+			local dir = aimUnit
 			if spreadDeg > 0 and pelletCount > 1 then
 				local angle = math.rad(spreadDeg * (math.random() * 2 - 1))
 				local perp = Vector3.new(-dir.Z, 0, dir.X)
@@ -271,16 +396,16 @@ return {
 			for gunId, ammo in pairs(state.ammoInMagazine[p.UserId] or {}) do
 				CombatRemotes.sendAmmoState(state, p, gunId, ammo, false)
 			end
-		CombatRemotes.sendGrenadeState(state, p, state.grenadeCount[p.UserId] or 0)
-		if state.rocketCount[p.UserId] then
-			CombatRemotes.sendRocketState(state, p, state.rocketCount[p.UserId])
+			CombatRemotes.sendGrenadeState(state, p, state.grenadeCount[p.UserId] or 0)
+			if state.rocketCount[p.UserId] then
+				CombatRemotes.sendRocketState(state, p, state.rocketCount[p.UserId])
+			end
 		end
-	end
-	CombatRemotes.broadcastTeamScore(state)
-	for _, p in ipairs(players) do
-		CombatRemotes.sendTeamAssignment(state, p, state.playerTeams[p.UserId] or "Blue", state.playerTeams)
-	end
-end,
+		CombatRemotes.broadcastTeamScore(state)
+		for _, p in ipairs(players) do
+			CombatRemotes.sendTeamAssignment(state, p, state.playerTeams[p.UserId] or "Blue", state.playerTeams)
+		end
+	end,
 
 	InitRocketsForPlayer = function(player)
 		CombatAmmo.initPlayerRockets(state, player.UserId)

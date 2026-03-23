@@ -1,5 +1,5 @@
 --[[
-	Direction indicator — weapon aim previews (off-axis): Rifle beam, Shotgun sector,
+	Direction indicator — weapon aim previews (off-axis): Rifle/Pistol line beam, Shotgun sector,
 	Rocket rectangle, Grenade chain.
 ]]
 
@@ -324,7 +324,8 @@ local function applyGrenadeTrajectoryPoints(points, enabled)
 end
 
 local function getAimOffsetTargetXZ(weapon)
-	if weapon ~= "Rifle"
+	if weapon ~= "Pistol"
+		and weapon ~= "Rifle"
 		and weapon ~= "Shotgun"
 		and weapon ~= "RocketLauncher"
 		and weapon ~= "Grenade"
@@ -497,6 +498,7 @@ local function updateGrenade(ctx)
 end
 
 local weaponHandlers = {
+	Pistol = updateRifle,
 	Rifle = updateRifle,
 	Shotgun = updateShotgun,
 	RocketLauncher = updateRocketLauncher,

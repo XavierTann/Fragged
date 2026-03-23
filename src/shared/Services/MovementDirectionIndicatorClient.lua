@@ -4,6 +4,7 @@
 	Weapon aim (off-axis only):
 	- Rifle: red Beam toward aim (short range preview).
 	- RocketLauncher: white flat rectangle, width ≈ rocket cross-section, length = max range.
+	- Grenade: white Beams — polyline for first flight, one straight segment for rebound direction.
 	Other weapons: no aim overlay.
 ]]
 
@@ -16,6 +17,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 local RotationJoystickGUI = require(Shared.UI.RotationJoystickGUI)
 local RocketLauncherConfig = require(Shared.Modules.RocketLauncherConfig)
+local GrenadeTrajectoryUtils = require(Shared.Modules.GrenadeTrajectoryUtils)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -30,6 +32,9 @@ local DOT_DIAMETER = 0.38
 local AIM_BEAM_WIDTH = 0.28
 -- Rocket preview: vertical thickness of the white slab (world Y)
 local ROCKET_RECT_THICKNESS = 0.14
+-- Grenade: pre-bounce samples + one rebound endpoint (+ small buffer for attachments)
+local GRENADE_MAX_VERTS = GrenadeTrajectoryUtils.DEFAULT_MAX_PRE_BOUNCE_POINTS + 2
+local GRENADE_BEAM_WIDTH = 0.065
 
 local MIN_INPUT_MAGNITUDE = 0.04
 -- Hide aim when the cursor’s ground aim is near the character (still on-axis)
@@ -41,6 +46,9 @@ local renderConnection = nil
 local dotPart = nil
 local aimBeamHost = nil
 local aimRocketRect = nil
+local grenadeAimHost = nil
+local grenadeChainAttachments = {}
+local grenadeChainBeams = {}
 local smoothedOffsetXZ = Vector3.zero
 local smoothedAimOffsetXZ = Vector3.zero
 
@@ -57,6 +65,15 @@ local function getRocketAimWidth()
 	return math.max(c.size.X, c.size.Y) * (c.scale or 1)
 end
 
+local function destroyGrenadeAimChain()
+	if grenadeAimHost then
+		grenadeAimHost:Destroy()
+		grenadeAimHost = nil
+	end
+	grenadeChainAttachments = {}
+	grenadeChainBeams = {}
+end
+
 local function destroyAimVisuals()
 	if aimBeamHost then
 		aimBeamHost:Destroy()
@@ -66,6 +83,7 @@ local function destroyAimVisuals()
 		aimRocketRect:Destroy()
 		aimRocketRect = nil
 	end
+	destroyGrenadeAimChain()
 end
 
 local function destroyDots()
@@ -165,8 +183,77 @@ local function ensureAimRocketRect(character)
 	return p
 end
 
+local function ensureGrenadeAimChain(character)
+	if grenadeAimHost and grenadeAimHost.Parent == character then
+		return
+	end
+	destroyGrenadeAimChain()
+	local p = Instance.new("Part")
+	p.Name = "GrenadeAimChainHost"
+	p.Size = Vector3.one * 0.05
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.Transparency = 1
+	p.Parent = character
+
+	for i = 1, GRENADE_MAX_VERTS do
+		local a = Instance.new("Attachment")
+		a.Name = "GrenadeAimAtt_" .. i
+		a.Parent = p
+		grenadeChainAttachments[i] = a
+	end
+	for seg = 1, GRENADE_MAX_VERTS - 1 do
+		local b = Instance.new("Beam")
+		b.Name = "GrenadeAimBeam_" .. seg
+		b.Attachment0 = grenadeChainAttachments[seg]
+		b.Attachment1 = grenadeChainAttachments[seg + 1]
+		b.Width0 = GRENADE_BEAM_WIDTH
+		b.Width1 = GRENADE_BEAM_WIDTH
+		b.Color = ColorSequence.new(Color3.new(1, 1, 1))
+		b.Transparency = NumberSequence.new(0.12)
+		b.LightEmission = 0.2
+		b.FaceCamera = true
+		b.Segments = 1
+		b.Enabled = false
+		b.Parent = p
+		grenadeChainBeams[seg] = b
+	end
+	grenadeAimHost = p
+end
+
+local function hideGrenadeAimChain()
+	for _, b in ipairs(grenadeChainBeams) do
+		if b then
+			b.Enabled = false
+		end
+	end
+end
+
+local function applyGrenadeTrajectoryPoints(points, enabled)
+	if #grenadeChainBeams == 0 or #grenadeChainAttachments == 0 then
+		return
+	end
+	local n = #points
+	if not enabled or n < 2 or not grenadeAimHost then
+		hideGrenadeAimChain()
+		return
+	end
+	local origin = points[1]
+	grenadeAimHost.CFrame = CFrame.new(origin)
+	for i = 1, GRENADE_MAX_VERTS do
+		local worldPt = (i <= n and points[i] or points[n])
+		grenadeChainAttachments[i].Position = worldPt - origin
+	end
+	local maxSeg = math.min(n - 1, #grenadeChainBeams)
+	for i = 1, #grenadeChainBeams do
+		grenadeChainBeams[i].Enabled = i <= maxSeg
+	end
+end
+
 local function aimOffsetTargetXZ(weapon)
-	if weapon ~= "Rifle" and weapon ~= "RocketLauncher" then
+	if weapon ~= "Rifle" and weapon ~= "RocketLauncher" and weapon ~= "Grenade" then
 		return Vector3.zero
 	end
 	local spanLength = weapon == "RocketLauncher" and getRocketAimRange() or AIM_LINE_LENGTH
@@ -229,6 +316,7 @@ local function onRenderStep(dt)
 	local startPos = root.Position + yLift
 
 	if weapon == "Rifle" then
+		destroyGrenadeAimChain()
 		local beamHost = ensureAimBeamHost(character)
 		local beam = beamHost:FindFirstChild("AimDirectionBeam")
 		local att0 = beamHost:FindFirstChild("AimLineStart")
@@ -261,6 +349,7 @@ local function onRenderStep(dt)
 			att1.Position = Vector3.zero
 		end
 	elseif weapon == "RocketLauncher" then
+		destroyGrenadeAimChain()
 		local rect = ensureAimRocketRect(character)
 		local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
 		if beam then
@@ -284,6 +373,26 @@ local function onRenderStep(dt)
 		else
 			rect.Transparency = 1
 		end
+	elseif weapon == "Grenade" then
+		local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
+		if beam then
+			beam.Enabled = false
+		end
+		if aimRocketRect then
+			aimRocketRect.Transparency = 1
+		end
+		ensureGrenadeAimChain(character)
+		if showAim and smoothedAimOffsetXZ.Magnitude > 0.12 then
+			local flat = Vector3.new(smoothedAimOffsetXZ.X, 0, smoothedAimOffsetXZ.Z)
+			local simplified = GrenadeTrajectoryUtils.computeSimplifiedGrenadePath(character, flat.Unit)
+			local pts = GrenadeTrajectoryUtils.mergeGrenadePreviewPoints(
+				simplified,
+				GrenadeTrajectoryUtils.DEFAULT_MAX_PRE_BOUNCE_POINTS
+			)
+			applyGrenadeTrajectoryPoints(pts, true)
+		else
+			applyGrenadeTrajectoryPoints({}, false)
+		end
 	else
 		if aimBeamHost then
 			local b = aimBeamHost:FindFirstChild("AimDirectionBeam")
@@ -294,6 +403,7 @@ local function onRenderStep(dt)
 		if aimRocketRect then
 			aimRocketRect.Transparency = 1
 		end
+		destroyGrenadeAimChain()
 	end
 end
 

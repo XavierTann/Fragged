@@ -1,0 +1,82 @@
+--[[
+	DirectionIndicatorClient
+	Orchestrates move-direction dot + weapon aim overlays. Implementation under
+	Shared/Services/DirectionIndicator/.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local CombatServiceClient = require(Shared.Services.CombatServiceClient)
+local Config = require(Shared.Services.DirectionIndicator.Config)
+local MovementDot = require(Shared.Services.DirectionIndicator.MovementDot)
+local WeaponAimOverlays = require(Shared.Services.DirectionIndicator.WeaponAimOverlays)
+
+local LocalPlayer = Players.LocalPlayer
+
+local renderConnection = nil
+local smoothedAimOffsetXZ = Vector3.zero
+local cachedWeapon = "Pistol"
+
+local function onRenderStep(dt)
+	local character = LocalPlayer.Character
+	if not character or not character.Parent then
+		MovementDot.destroy()
+		WeaponAimOverlays.destroyAll()
+		smoothedAimOffsetXZ = Vector3.zero
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root then
+		return
+	end
+
+	MovementDot.update(dt, character, humanoid, root)
+
+	local weapon = cachedWeapon
+	local targetAim = WeaponAimOverlays.getAimOffsetTargetXZ(weapon)
+	local aimAlpha = 1 - math.exp(-Config.AIM_SMOOTH_RATE * dt)
+	smoothedAimOffsetXZ = smoothedAimOffsetXZ:Lerp(targetAim, aimAlpha)
+
+	local showAim = smoothedAimOffsetXZ.Magnitude > 0.08
+	local startPos = root.Position + Vector3.new(0, Config.AIM_Y_ABOVE_ROOT, 0)
+
+	WeaponAimOverlays.updateForWeapon({
+		character = character,
+		root = root,
+		weapon = weapon,
+		showAim = showAim,
+		smoothedAimOffsetXZ = smoothedAimOffsetXZ,
+		startPos = startPos,
+	})
+end
+
+return {
+	Init = function()
+		if renderConnection then
+			renderConnection:Disconnect()
+			renderConnection = nil
+		end
+		MovementDot.destroy()
+		WeaponAimOverlays.destroyAll()
+		smoothedAimOffsetXZ = Vector3.zero
+		cachedWeapon = CombatServiceClient.GetCurrentWeapon()
+
+		CombatServiceClient.SubscribeWeaponChanged(function()
+			cachedWeapon = CombatServiceClient.GetCurrentWeapon()
+		end)
+
+		LocalPlayer.CharacterRemoving:Connect(function()
+			MovementDot.destroy()
+			WeaponAimOverlays.destroyAll()
+			smoothedAimOffsetXZ = Vector3.zero
+			MovementDot.resetSmoothed()
+		end)
+
+		renderConnection = RunService.RenderStepped:Connect(onRenderStep)
+	end,
+}

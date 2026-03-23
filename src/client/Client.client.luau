@@ -15,8 +15,8 @@ TouchControlUtils.Init()
 local CharacterServiceClient = require(Shared.Services.CharacterServiceClient)
 CharacterServiceClient.Init()
 
-local MovementDirectionIndicatorClient = require(Shared.Services.MovementDirectionIndicatorClient)
-MovementDirectionIndicatorClient.Init()
+local DirectionIndicatorClient = require(Shared.Services.DirectionIndicatorClient)
+DirectionIndicatorClient.Init()
 
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()

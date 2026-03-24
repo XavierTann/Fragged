@@ -29,6 +29,7 @@ local FireGunRE = nil
 local AmmoStateRE = nil
 local ThrowGrenadeRE = nil
 local ThrowRocketRE = nil
+local GetLiveLeaderboardRF = nil
 local shootingEnabled = false
 local currentWeapon = "Pistol"
 local inputConnection = nil
@@ -705,6 +706,7 @@ end
 		local rocketStateRE = folder:WaitForChild(CombatConfig.REMOTES.ROCKET_STATE)
 		local weaponInventoryRE = folder:WaitForChild(CombatConfig.REMOTES.WEAPON_INVENTORY)
 		local teamAssignmentRE = folder:WaitForChild(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
+		GetLiveLeaderboardRF = folder:WaitForChild(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
 
 		fireGunRejectedRE.OnClientEvent:Connect(function(_reason, _gunId, resetClientFireRate)
 			if resetClientFireRate then
@@ -890,6 +892,20 @@ end
 
 	GetTeamAssignment = function()
 		return currentTeamAssignment
+	end,
+
+	-- Active TDM round only; nil if match ended or not in round
+	RequestLiveLeaderboard = function()
+		if not GetLiveLeaderboardRF then
+			return nil
+		end
+		local ok, result = pcall(function()
+			return GetLiveLeaderboardRF:InvokeServer()
+		end)
+		if ok then
+			return result
+		end
+		return nil
 	end,
 
 	-- World-space unit direction on XZ from mouse vs character; optional minGroundSeparation (studs on XZ)

@@ -23,6 +23,15 @@ local function ensureRemotes(state)
 		end
 		return r
 	end
+	local function getOrCreateRemoteFunction(name)
+		local r = folder:FindFirstChild(name)
+		if not r then
+			r = Instance.new("RemoteFunction")
+			r.Name = name
+			r.Parent = folder
+		end
+		return r
+	end
 	state.fireGunRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN)
 	state.ammoStateRE = getOrCreate(CombatConfig.REMOTES.AMMO_STATE)
 	state.throwGrenadeRE = getOrCreate(CombatConfig.REMOTES.THROW_GRENADE)
@@ -35,6 +44,7 @@ local function ensureRemotes(state)
 	state.playerDiedRE = getOrCreate(CombatConfig.REMOTES.PLAYER_DIED)
 	state.teamAssignmentRE = getOrCreate(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
 	state.fireGunRejectedRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
+	state.getLiveLeaderboardRF = getOrCreateRemoteFunction(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)

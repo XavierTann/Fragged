@@ -345,6 +345,18 @@ local function bindHandlers()
 		local startPos = root.Position + aimDirection.Unit * 2
 		CombatRockets.spawnRocket(state, player, startPos, aimDirection)
 	end)
+
+	state.getLiveLeaderboardRF.OnServerInvoke = function(player)
+		if state.matchEnded or not playerInActiveRound(player) then
+			return nil
+		end
+		local bluePlayers, redPlayers = CombatTDM.buildLeaderboardData(state)
+		return {
+			bluePlayers = bluePlayers,
+			redPlayers = redPlayers,
+			isLiveScoreboard = true,
+		}
+	end
 end
 
 return {

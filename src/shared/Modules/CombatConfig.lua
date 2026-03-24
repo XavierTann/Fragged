@@ -17,6 +17,8 @@ return {
 		THROW_GRENADE = "ThrowGrenade",
 		THROW_ROCKET = "ThrowRocket",
 		MATCH_ENDED = "MatchEnded", -- Server -> Client: { winningTeam, bluePlayers, redPlayers }
+		-- Client -> Server Invoke: live K/D table during an active TDM round only; returns nil if not in round
+		GET_LIVE_LEADERBOARD = "GetLiveLeaderboard",
 		TEAM_SCORE_UPDATE = "TeamScoreUpdate", -- Server -> Client: blueKills, redKills (real-time)
 		GRENADE_STATE = "GrenadeState", -- Server -> Client: grenadeCount (current)
 		ROCKET_STATE = "RocketState", -- Server -> Client: rocketCount (current)

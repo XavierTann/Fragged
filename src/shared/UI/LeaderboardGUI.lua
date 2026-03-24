@@ -2,7 +2,7 @@
 	LeaderboardGUI
 	Displays TDM match results with both teams visible to all players.
 	Red Team and Blue Team sections, each with Player name, Kills, Deaths.
-	Shown when MatchEnded fires.
+	Shown when MatchEnded fires, or mid-match when opened from ScoreboardButtonGUI (isLiveScoreboard).
 ]]
 
 local Players = game:GetService("Players")
@@ -11,6 +11,8 @@ local LocalPlayer = Players.LocalPlayer
 
 local gui = nil
 local container = nil
+local bodyFrame = nil
+local closeLiveButton = nil
 
 local BACKGROUND_TRANSPARENCY = 0.45
 
@@ -34,12 +36,52 @@ local function createGui()
 end
 
 local function clearLeaderboard()
-	if not container then
+	if not bodyFrame then
 		return
 	end
-	for _, child in ipairs(container:GetChildren()) do
+	for _, child in ipairs(bodyFrame:GetChildren()) do
 		child:Destroy()
 	end
+end
+
+local function hideLeaderboard()
+	if gui then
+		gui.Enabled = false
+	end
+	if closeLiveButton then
+		closeLiveButton.Visible = false
+	end
+end
+
+local function ensureCloseLiveButton()
+	createGui()
+	if not container then
+		return nil
+	end
+	if closeLiveButton and closeLiveButton.Parent then
+		return closeLiveButton
+	end
+	closeLiveButton = Instance.new("TextButton")
+	closeLiveButton.Name = "CloseLiveScoreboard"
+	closeLiveButton.Size = UDim2.fromOffset(140, 40)
+	closeLiveButton.Position = UDim2.new(0.5, -70, 1, -16)
+	closeLiveButton.AnchorPoint = Vector2.new(0.5, 1)
+	closeLiveButton.BackgroundColor3 = Color3.fromRGB(55, 65, 90)
+	closeLiveButton.BackgroundTransparency = BACKGROUND_TRANSPARENCY
+	closeLiveButton.BorderSizePixel = 0
+	closeLiveButton.Text = "Close"
+	closeLiveButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+	closeLiveButton.TextSize = 16
+	closeLiveButton.Font = Enum.Font.GothamBold
+	closeLiveButton.AutoButtonColor = true
+	closeLiveButton.ZIndex = 2
+	closeLiveButton.Visible = false
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 8)
+	closeCorner.Parent = closeLiveButton
+	closeLiveButton.MouseButton1Click:Connect(hideLeaderboard)
+	closeLiveButton.Parent = container
+	return closeLiveButton
 end
 
 local function addTeamSection(parent, teamName, players, yOffset)
@@ -120,12 +162,22 @@ local function showLeaderboard(payload)
 		corner.CornerRadius = UDim.new(0, 16)
 		corner.Parent = container
 	end
+	if not bodyFrame then
+		bodyFrame = Instance.new("Frame")
+		bodyFrame.Name = "Body"
+		bodyFrame.Size = UDim2.new(1, 0, 1, -56)
+		bodyFrame.Position = UDim2.fromOffset(0, 0)
+		bodyFrame.BackgroundTransparency = 1
+		bodyFrame.BorderSizePixel = 0
+		bodyFrame.Parent = container
+	end
 	clearLeaderboard()
 	gui.Enabled = true
 
 	local bluePlayers = payload.bluePlayers or {}
 	local redPlayers = payload.redPlayers or {}
 	local winningTeam = payload.winningTeam
+	local isLive = payload.isLiveScoreboard == true
 
 	-- Title and winner
 	local title = Instance.new("TextLabel")
@@ -133,14 +185,14 @@ local function showLeaderboard(payload)
 	title.Size = UDim2.new(1, -32, 0, 40)
 	title.Position = UDim2.fromOffset(16, 16)
 	title.BackgroundTransparency = 1
-	title.Text = "Match Results"
+	title.Text = isLive and "Scoreboard" or "Match Results"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
 	title.TextSize = 24
 	title.Font = Enum.Font.GothamBold
-	title.Parent = container
+	title.Parent = bodyFrame
 
 	local yOffset = 60
-	if winningTeam then
+	if winningTeam and not isLive then
 		local winnerColor = TEAM_COLORS[winningTeam] or Color3.fromRGB(120, 220, 120)
 		local winnerLabel = Instance.new("TextLabel")
 		winnerLabel.Size = UDim2.new(1, -32, 0, 24)
@@ -150,19 +202,16 @@ local function showLeaderboard(payload)
 		winnerLabel.TextColor3 = winnerColor
 		winnerLabel.TextSize = 18
 		winnerLabel.Font = Enum.Font.GothamMedium
-		winnerLabel.Parent = container
+		winnerLabel.Parent = bodyFrame
 		yOffset = 84
 	end
 
-	-- Red Team section
-	yOffset = addTeamSection(container, "Red", redPlayers, yOffset) + 16
-	-- Blue Team section
-	addTeamSection(container, "Blue", bluePlayers, yOffset)
-end
+	yOffset = addTeamSection(bodyFrame, "Red", redPlayers, yOffset) + 16
+	addTeamSection(bodyFrame, "Blue", bluePlayers, yOffset)
 
-local function hideLeaderboard()
-	if gui then
-		gui.Enabled = false
+	local btn = ensureCloseLiveButton()
+	if btn then
+		btn.Visible = isLive
 	end
 end
 

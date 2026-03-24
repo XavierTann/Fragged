@@ -24,5 +24,17 @@ return {
 			visualSize = Vector3.new(3, 1, 1),
 			visualColor = Color3.fromRGB(80, 60, 40),
 		},
+		-- ReplicatedStorage.Imports.3DModels.HealthPack (Model). Part fields = fallback if asset missing.
+		HealthPack = {
+			weight = 2,
+			modelAssetName = "HealthPack",
+			-- World rotation at pivot before ground snap. (-90,0,0) lays a Y-upright mesh flat on XZ.
+			placementRotationDegrees = Vector3.new(-90, 0, 0),
+			groundClearanceStuds = 0.04,
+			visualSize = Vector3.new(1.5, 0.55, 1.1),
+			visualColor = Color3.fromRGB(45, 255, 130),
+			material = Enum.Material.Neon,
+			anchored = true,
+		},
 	},
 }

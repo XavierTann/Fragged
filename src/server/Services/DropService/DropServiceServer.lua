@@ -90,13 +90,56 @@ local function findGroundPosition(spawnArea)
 		local result = Workspace:Raycast(pos, Vector3.new(0, -100, 0), params)
 		if result and result.Instance then
 			local groundY = result.Position.Y
-			local finalPos = Vector3.new(pos.X, groundY + 0.5, pos.Z)
-			if isPositionValid(finalPos, nil) then
-				return finalPos
+			local samplePos = Vector3.new(pos.X, groundY + 0.5, pos.Z)
+			if isPositionValid(samplePos, nil) then
+				return { gx = pos.X, gz = pos.Z, groundY = groundY }
 			end
 		end
 	end
 	return nil
+end
+
+local function resolveModelTemplate(dropType, cfg, models3D)
+	if not models3D then
+		return nil
+	end
+	if cfg.modelAssetName then
+		local t = models3D:FindFirstChild(cfg.modelAssetName)
+		if t and (t:IsA("Model") or t:IsA("BasePart")) then
+			return t
+		end
+	end
+	if dropType == "RocketLauncher" then
+		local t = models3D:FindFirstChild("RocketLauncherModel")
+		if t and (t:IsA("Model") or t:IsA("BasePart")) then
+			return t
+		end
+	end
+	return nil
+end
+
+-- After pivot + rotation, shift model along world Y so AABB bottom matches ground + clearance (no local-Y drift).
+local function snapModelBoundingBoxBottomToGround(model, groundY, clearanceStuds)
+	local clearance = clearanceStuds or 0.04
+	local cf, size = model:GetBoundingBox()
+	local bottomY = cf.Position.Y - size.Y * 0.5
+	local lift = (groundY + clearance) - bottomY
+	local pivot = model:GetPivot()
+	model:PivotTo(CFrame.new(pivot.Position + Vector3.new(0, lift, 0)) * pivot.Rotation)
+end
+
+local function placementRotationFromConfig(cfg)
+	local d = cfg.placementRotationDegrees
+	if d and typeof(d) == "Vector3" then
+		return CFrame.Angles(math.rad(d.X), math.rad(d.Y), math.rad(d.Z))
+	end
+	return CFrame.new()
+end
+
+-- No physical blocking; CanTouch keeps Touched firing for pickup when CanCollide is false.
+local function configurePickupPart(part)
+	part.CanCollide = false
+	part.CanTouch = true
 end
 
 local function spawnDrop()
@@ -114,49 +157,72 @@ local function spawnDrop()
 		return nil
 	end
 
-	local pos = findGroundPosition(spawnArea)
-	if not pos then
+	local spot = findGroundPosition(spawnArea)
+	if not spot then
 		return nil
 	end
+	local gx, gz, groundY = spot.gx, spot.gz, spot.groundY
 
 	local drop
 	local imports = ReplicatedStorage:FindFirstChild("Imports")
 	local models3D = imports and imports:FindFirstChild("3DModels")
-	local modelTemplate = dropType == "RocketLauncher" and models3D and models3D:FindFirstChild("RocketLauncherModel")
-	if modelTemplate and (modelTemplate:IsA("Model") or modelTemplate:IsA("BasePart")) then
+	local modelTemplate = resolveModelTemplate(dropType, cfg, models3D)
+	if modelTemplate then
 		drop = modelTemplate:Clone()
 		drop.Name = "Drop_" .. dropType
-		-- Anchor all parts so the model stays together instead of scattering
-		for _, desc in ipairs(drop:GetDescendants()) do
-			if desc:IsA("BasePart") then
-				desc.Anchored = true
-				desc.CanCollide = true
+		if drop:IsA("BasePart") then
+			drop.Anchored = true
+			configurePickupPart(drop)
+		else
+			for _, desc in ipairs(drop:GetDescendants()) do
+				if desc:IsA("BasePart") then
+					desc.Anchored = true
+					configurePickupPart(desc)
+				end
 			end
 		end
 		drop.Parent = getDropsFolder()
-		local orient = CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0)
-		if drop:IsA("Model") then
-			drop:PivotTo(orient)
+
+		if dropType == "RocketLauncher" then
+			local pos = Vector3.new(gx, groundY + 0.5, gz)
+			local orient = CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0)
+			if drop:IsA("Model") then
+				drop:PivotTo(orient)
+			else
+				drop.CFrame = orient
+			end
 		else
-			drop.CFrame = orient
+			if drop:IsA("Model") and not drop.PrimaryPart then
+				drop.PrimaryPart = drop:FindFirstChildWhichIsA("BasePart", true)
+			end
+			local rot = placementRotationFromConfig(cfg)
+			local pivotPos = Vector3.new(gx, groundY, gz)
+			drop:PivotTo(CFrame.new(pivotPos) * rot)
+			snapModelBoundingBoxBottomToGround(drop, groundY, cfg.groundClearanceStuds)
 		end
 	else
 		drop = Instance.new("Part")
 		drop.Name = "Drop_" .. dropType
-		drop.Size = cfg.visualSize or Vector3.new(1, 1, 1)
+		local sizeVec = cfg.visualSize or Vector3.new(1, 1, 1)
+		drop.Size = sizeVec
 		drop.Color = cfg.visualColor or Color3.fromRGB(120, 120, 120)
-		drop.Material = Enum.Material.SmoothPlastic
-		drop.Anchored = false
-		drop.CanCollide = true
-		drop.CFrame = CFrame.new(pos)
-		drop.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, 0.5, 1, 1)
+		drop.Material = cfg.material or Enum.Material.SmoothPlastic
+		drop.Anchored = cfg.anchored == true
+		configurePickupPart(drop)
+		local centerY = groundY + sizeVec.Y * 0.5 + 0.02
+		drop.CFrame = CFrame.new(gx, centerY, gz)
+		if not drop.Anchored then
+			drop.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, 0.5, 1, 1)
+		end
 		drop.Parent = getDropsFolder()
 	end
 
 	drop:SetAttribute("DropType", dropType)
 
+	local pickupLocked = false
+	local failedPickupCooldownUntil = 0
 	local function onTouched(hit)
-		if not drop.Parent then
+		if os.clock() < failedPickupCooldownUntil or pickupLocked or not drop.Parent then
 			return
 		end
 		local model = hit:FindFirstAncestorOfClass("Model")
@@ -167,17 +233,22 @@ local function spawnDrop()
 		if not player then
 			return
 		end
-		if onPickupCallback then
-			local consumed = onPickupCallback(player, dropType, drop)
-			if consumed then
-				for i, d in ipairs(activeDrops) do
-					if d == drop then
-						table.remove(activeDrops, i)
-						break
-					end
+		if not onPickupCallback then
+			return
+		end
+		pickupLocked = true
+		local consumed = onPickupCallback(player, dropType, drop)
+		if consumed then
+			for i, d in ipairs(activeDrops) do
+				if d == drop then
+					table.remove(activeDrops, i)
+					break
 				end
-				drop:Destroy()
 			end
+			drop:Destroy()
+		else
+			failedPickupCooldownUntil = os.clock() + 0.35
+			pickupLocked = false
 		end
 	end
 

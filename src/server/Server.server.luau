@@ -30,6 +30,18 @@ DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 			CombatServiceModule.GiveRocketLauncherTool(player)
 			return true
 		end
+		return false
+	elseif dropType == "HealthPack" then
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then
+			return false
+		end
+		if humanoid.Health >= humanoid.MaxHealth then
+			return false
+		end
+		humanoid.Health = humanoid.MaxHealth
+		return true
 	end
 	return false
 end)

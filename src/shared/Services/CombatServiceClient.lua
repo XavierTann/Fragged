@@ -90,7 +90,16 @@ local function getAmmoStateForWeapon(gunId)
 	return gun.magazineSize or 6, false, nil
 end
 
+local function isLocalPlayerAlive()
+	local character = Players.LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	return humanoid ~= nil and humanoid.Health > 0
+end
+
 local function canFire()
+	if not isLocalPlayerAlive() then
+		return false
+	end
 	local ammo, isReloading = getAmmoStateForWeapon(currentWeapon)
 	return ammo > 0 and not isReloading
 end
@@ -569,6 +578,9 @@ local function throwRocket(dir)
 	if not shootingEnabled or not ThrowRocketRE or not dir then
 		return
 	end
+	if not isLocalPlayerAlive() then
+		return
+	end
 	if currentWeapon ~= "RocketLauncher" then
 		return
 	end
@@ -582,6 +594,9 @@ end
 -- Fire when aiming joystick is off-axis (mobile). No continuous fire for release-style weapons.
 local function throwGrenade(dir)
 	if not shootingEnabled or not ThrowGrenadeRE or not dir then
+		return
+	end
+	if not isLocalPlayerAlive() then
 		return
 	end
 	if currentWeapon ~= "Grenade" then

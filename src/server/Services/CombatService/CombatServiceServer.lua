@@ -197,6 +197,11 @@ local function bindHandlers()
 			rejectFire(player, "NoCharacter", gunId, true)
 			return
 		end
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then
+			rejectFire(player, "Dead", gunId, true)
+			return
+		end
 		if not characterHasGunEquipped(character, gunId) then
 			rejectFire(player, "NotEquipped", gunId, true)
 			return
@@ -270,7 +275,16 @@ local function bindHandlers()
 		if state.matchEnded then
 			return
 		end
+		if not playerInActiveRound(player) then
+			return
+		end
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
+			return
+		end
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not character or not humanoid or humanoid.Health <= 0 or not root then
 			return
 		end
 		local uid = player.UserId
@@ -287,11 +301,7 @@ local function bindHandlers()
 		table.insert(regenTimes, os.clock() + (GrenadeConfig.regenerationTime or 5))
 		table.sort(regenTimes)
 		CombatRemotes.sendGrenadeState(state, player, state.grenadeCount[uid])
-		local character = player.Character
-		if not character or not character:FindFirstChild("HumanoidRootPart") then
-			return
-		end
-		local startPos = character.HumanoidRootPart.Position + aimDirection.Unit * 2
+		local startPos = root.Position + aimDirection.Unit * 2
 		CombatGrenades.spawnGrenade(state, player, startPos, aimDirection)
 	end)
 
@@ -299,7 +309,16 @@ local function bindHandlers()
 		if state.matchEnded then
 			return
 		end
+		if not playerInActiveRound(player) then
+			return
+		end
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
+			return
+		end
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not character or not humanoid or humanoid.Health <= 0 or not root then
 			return
 		end
 		local uid = player.UserId
@@ -323,11 +342,7 @@ local function bindHandlers()
 				end
 			end
 		end
-		local character = player.Character
-		if not character or not character:FindFirstChild("HumanoidRootPart") then
-			return
-		end
-		local startPos = character.HumanoidRootPart.Position + aimDirection.Unit * 2
+		local startPos = root.Position + aimDirection.Unit * 2
 		CombatRockets.spawnRocket(state, player, startPos, aimDirection)
 	end)
 end

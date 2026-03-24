@@ -34,6 +34,13 @@ local function onRenderStep(dt)
 	if not humanoid or not root then
 		return
 	end
+	if humanoid.Health <= 0 then
+		MovementDot.destroy()
+		WeaponAimOverlays.destroyAll()
+		smoothedAimOffsetXZ = Vector3.zero
+		MovementDot.resetSmoothed()
+		return
+	end
 
 	MovementDot.update(dt, character, humanoid, root)
 

@@ -73,7 +73,8 @@ end)
 
 -- Enable shooting and weapon select only in arena
 LobbyServiceClient.Subscribe(function(state)
-	local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
+	-- local inArena = state and state.phase == LobbyConfig.PHASE.ARENA
+	local inArena = true
 	CombatServiceClient.SetShootingEnabled(inArena)
 	if inArena then
 		WeaponSelectGUI.Show()
@@ -96,7 +97,8 @@ LobbyServiceClient.Subscribe(function(state)
 end)
 
 local initialState = LobbyServiceClient.GetState()
-local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
+-- local inArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
+local inArena = true
 CombatServiceClient.SetShootingEnabled(inArena)
 if inArena then
 	WeaponSelectGUI.Show()

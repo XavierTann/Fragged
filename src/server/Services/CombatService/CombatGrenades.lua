@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local GrenadeAngularResistance = require(ReplicatedStorage.Shared.Modules.GrenadeAngularResistance)
 
 local GRENADES_FOLDER_NAME = "CombatGrenades"
 local COLLISION_GROUP_GRENADES = "Grenades"
@@ -110,6 +111,8 @@ local function spawnGrenade(state, thrower, startPos, direction)
 	end
 
 	grenade:SetAttribute("ThrowerUserId", thrower.UserId)
+
+	GrenadeAngularResistance.attach(rootPart, cfg)
 
 	task.delay(cfg.fuseTime, function()
 		if not grenade or not grenade.Parent then

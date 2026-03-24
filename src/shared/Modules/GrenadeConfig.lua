@@ -20,4 +20,7 @@ return {
 	material = Enum.Material.Neon,
 	-- Physics: bounciness (Restitution)
 	restitution = 0.6,
+	-- Contact-only angular drag (AssemblyAngularVelocity * exp(-k*dt) per Heartbeat); see GrenadeAngularResistance
+	angularDragPerSecond = 4,
+	contactPaddingStuds = 0.18,
 }

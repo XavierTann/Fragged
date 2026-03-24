@@ -23,6 +23,7 @@ local Debris = game:GetService("Debris")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local GrenadeAngularResistance = require(ReplicatedStorage.Shared.Modules.GrenadeAngularResistance)
 
 local FireGunRE = nil
 local AmmoStateRE = nil
@@ -390,6 +391,7 @@ local function spawnPredictedGrenade(startPos, aimDirection)
 			end
 			grenade.Parent = getPredictedShotsFolder()
 			configurePredictedGrenadeRootLikeServer(rootPart, startPos, velocity, cfg)
+			GrenadeAngularResistance.attach(rootPart, cfg)
 		else
 			grenade:Destroy()
 			grenade = nil
@@ -411,6 +413,7 @@ local function spawnPredictedGrenade(startPos, aimDirection)
 		rootPart.CollisionGroup = COLLISION_GROUP_GRENADES
 		rootPart.Parent = getPredictedShotsFolder()
 		grenade = rootPart
+		GrenadeAngularResistance.attach(rootPart, cfg)
 	end
 
 	local fuseTime = cfg.fuseTime

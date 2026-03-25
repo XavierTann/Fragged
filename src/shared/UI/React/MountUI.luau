@@ -8,7 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local React = require(ReplicatedStorage.Packages.React)
 local ReactRoblox = require(ReplicatedStorage.Packages.ReactRoblox)
 
-local RootUI = require(ReplicatedStorage.Shared.UI.RootUI)
+local RootUI = require(ReplicatedStorage.Shared.UI.React.RootUI)
 
 local MountUI = {}
 

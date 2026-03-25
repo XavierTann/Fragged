@@ -27,7 +27,7 @@ CombatServiceClient.Init()
 local TopDownCameraService = require(Shared.Services.TopDownCameraService)
 TopDownCameraService.Init()
 
-local MountUI = require(Shared.UI.MountUI)
+local MountUI = require(Shared.UI.React.MountUI)
 MountUI.Init()
 
 local LobbyGUI = require(Shared.UI.LobbyGUI)

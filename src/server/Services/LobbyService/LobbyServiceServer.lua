@@ -37,7 +37,6 @@ local function bindRemoteHandlers()
 		if not state.matchStartingAt and #state.waitingQueue >= LobbyConfig.MIN_PLAYERS then
 			state.matchStartingAt = os.clock()
 			state.countdownEndTime = os.clock() + LobbyConfig.ARENA_COUNTDOWN_SECONDS
-			print("[Lobby] Countdown started – " .. #state.waitingQueue .. " player(s) in waiting lobby (" .. tostring(LobbyConfig.ARENA_COUNTDOWN_SECONDS) .. "s).")
 			LobbyQueue.broadcastStateToWaiting(state, remotes)
 			LobbyQueue.startCountdownTick(state, remotes)
 			task.delay(LobbyConfig.ARENA_COUNTDOWN_SECONDS, function()

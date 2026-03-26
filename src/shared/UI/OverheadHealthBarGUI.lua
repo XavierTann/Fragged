@@ -31,20 +31,12 @@ local playerConnections = {}
 
 local function getBarColor(userId)
 	local theirTeam = playerTeams[userId]
-	print("[getBarColor] userId:", userId, "| myTeam:", myTeam, "| theirTeam:", theirTeam)
-	print("[getBarColor] playerTeams dump:")
-	for id, team in pairs(playerTeams) do
-		print("  userId:", id, "-> team:", team)
-	end
+	
+	
 	if not theirTeam or not myTeam then
-		print("[getBarColor] -> COLOR_ENEMY (team data missing)")
 		return COLOR_ENEMY
 	end
-	if theirTeam == myTeam then
-		print("[getBarColor] -> COLOR_FRIENDLY (teammate)")
-	else
-		print("[getBarColor] -> COLOR_ENEMY (opponent)")
-	end
+	
 	return (theirTeam == myTeam) and COLOR_FRIENDLY or COLOR_ENEMY
 end
 
@@ -117,7 +109,6 @@ local function disconnectHealthConnections(userId)
 end
 
 local function bindCharacter(player, character)
-	print("Binding")
 	local userId = player.UserId
 	disconnectHealthConnections(userId)
 
@@ -129,7 +120,6 @@ local function bindCharacter(player, character)
 		head = character:WaitForChild("Head", 5)
 	end
 	if not head then
-		print("No head")
 		return
 	end
 
@@ -138,7 +128,6 @@ local function bindCharacter(player, character)
 		humanoid = character:WaitForChild("Humanoid", 5)
 	end
 	if not humanoid then
-		print("No humanoid")
 		return
 	end
 
@@ -149,17 +138,13 @@ local function bindCharacter(player, character)
 	conns.health = humanoid.HealthChanged:Connect(function()
 		updateBar(billboard, humanoid, userId)
 	end)
-	print("Connected health")
 	conns.maxHealth = humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(function()
 		updateBar(billboard, humanoid, userId)
 	end)
-	print("Connected max health")
 	conns.died = humanoid.Died:Connect(function()
 		updateBar(billboard, humanoid, userId)
 	end)
-	print("Connected died")
 	playerConnections[userId] = conns
-	print("Connected")
 end
 
 local function setupPlayer(player)
@@ -168,7 +153,6 @@ local function setupPlayer(player)
 
 	if not playerConnections[userId].characterAdded then
 		playerConnections[userId].characterAdded = player.CharacterAdded:Connect(function(character)
-			print("Character added")
 			bindCharacter(player, character)
 		end)
 	end
@@ -228,8 +212,7 @@ return {
 			-- Call setupPlayer for every current player so that bars which were
 			-- withheld (because myTeam was nil) are created now with correct colors,
 			-- and any already-existing bars are recolored to match the new assignment.
-			print("Combatservice remote event fired")
-			print(myTeam)
+	
 
 				for _, player in ipairs(Players:GetPlayers()) do
 					if player ~= LocalPlayer then

@@ -43,9 +43,6 @@ ReloadBarGUI.Init()
 local LeaderboardGUI = require(Shared.UI.LeaderboardGUI)
 LeaderboardGUI.Init()
 
-local ScoreboardButtonGUI = require(Shared.UI.ScoreboardButtonGUI)
-ScoreboardButtonGUI.Init()
-
 local TDMScoreGUI = require(Shared.UI.TDMScoreGUI)
 TDMScoreGUI.Init()
 
@@ -64,9 +61,8 @@ TeamIndicatorGUI.Init()
 local postMatchLeaderboard = false
 local wasInArena = false
 
-local function applyArenaHud(inArena, showScoreboardButton, hideLeaderboardOverlay)
+local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	CombatServiceClient.SetShootingEnabled(inArena and not postMatchLeaderboard)
-	ScoreboardButtonGUI.SetVisible(showScoreboardButton == true)
 	if hideLeaderboardOverlay then
 		LeaderboardGUI.Hide()
 	end
@@ -97,7 +93,6 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	RespawnTimerGUI.Hide()
 	OverheadHealthBarGUI.Hide()
 	TeamIndicatorGUI.Hide()
-	ScoreboardButtonGUI.SetVisible(false)
 	if payload then
 		LeaderboardGUI.Show(payload)
 	end
@@ -111,15 +106,14 @@ LobbyServiceClient.Subscribe(function(state)
 		postMatchLeaderboard = false
 	end
 	wasInArena = inArena == true
-	local showScoreboardButton = inArena and not postMatchLeaderboard
 	local hideLeaderboardOverlay = (not inArena) or (inArena and not previousInArena)
-	applyArenaHud(inArena, showScoreboardButton, hideLeaderboardOverlay)
+	applyArenaHud(inArena, hideLeaderboardOverlay)
 end)
 
 local initialState = LobbyServiceClient.GetState()
 local initialInArena = initialState and initialState.phase == LobbyConfig.PHASE.ARENA
 wasInArena = initialInArena == true
 local initialHideLeaderboard = not initialInArena
-applyArenaHud(initialInArena, initialInArena and not postMatchLeaderboard, initialHideLeaderboard)
+applyArenaHud(initialInArena, initialHideLeaderboard)
 
 print("Client startup complete.")

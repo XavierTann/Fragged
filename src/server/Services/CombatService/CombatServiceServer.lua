@@ -354,7 +354,7 @@ local function bindHandlers()
 		return {
 			bluePlayers = bluePlayers,
 			redPlayers = redPlayers,
-			isLiveScoreboard = true,
+			isLiveLeaderboard = true,
 		}
 	end
 end

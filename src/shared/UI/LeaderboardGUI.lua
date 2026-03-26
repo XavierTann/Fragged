@@ -1,10 +1,10 @@
 --[[
 	LeaderboardGUI
-	Uses the StarterGui scoreboard template: ScreenGui > Scoreboard > ScoreboardBG > BlueTeam / RedTeam
+	Uses the StarterGui template: ScreenGui > Leaderboard > LeaderboardBG > BlueTeam / RedTeam
 	Each team may include a Title header Frame (left untouched), UIListLayout, and Player1..PlayerN row Frames
 	(cloned from one kept template; interior Name, Kills, Deaths, Assists on text controls).
-	Optional CloseButton (GuiButton, e.g. ImageButton) under Scoreboard closes the overlay.
-	Shown when MatchEnded fires, or mid-match from ScoreboardButtonGUI (isLiveScoreboard).
+	Optional CloseButton (GuiButton, e.g. ImageButton) under Leaderboard closes the overlay.
+	Shown when MatchEnded fires, or mid-match from TDMScore > Background (isLiveLeaderboard).
 ]]
 
 local Players = game:GetService("Players")
@@ -12,7 +12,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local screenGui = nil
-local scoreboardFrame = nil
+local leaderboardFrame = nil
 local blueTeamFrame = nil
 local redTeamFrame = nil
 local playerRowTemplate = nil
@@ -21,22 +21,22 @@ local templateCloseBoundFrame = nil
 
 local BACKGROUND_TRANSPARENCY = 0.45
 
-local function findScoreboardRefs()
+local function findLeaderboardRefs()
 	local pg = LocalPlayer:FindFirstChild("PlayerGui")
 	if not pg then
 		return false
 	end
 	for _, sg in ipairs(pg:GetChildren()) do
 		if sg:IsA("ScreenGui") then
-			local scoreboard = sg:FindFirstChild("Scoreboard")
-			if scoreboard and scoreboard:IsA("GuiObject") then
-				local bg = scoreboard:FindFirstChild("ScoreboardBG")
+			local root = sg:FindFirstChild("Leaderboard")
+			if root and root:IsA("GuiObject") then
+				local bg = root:FindFirstChild("LeaderboardBG")
 				if bg then
 					local blue = bg:FindFirstChild("BlueTeam")
 					local red = bg:FindFirstChild("RedTeam")
 					if blue and red then
 						screenGui = sg
-						scoreboardFrame = scoreboard
+						leaderboardFrame = root
 						blueTeamFrame = blue
 						redTeamFrame = red
 						return true
@@ -48,15 +48,15 @@ local function findScoreboardRefs()
 	return false
 end
 
-local function waitForScoreboardRefs()
+local function waitForLeaderboardRefs()
 	local deadline = os.clock() + 45
 	while os.clock() < deadline do
-		if findScoreboardRefs() then
+		if findLeaderboardRefs() then
 			return true
 		end
 		task.wait(0.25)
 	end
-	warn("[LeaderboardGUI] No scoreboard found under PlayerGui (ScreenGui > Scoreboard > ScoreboardBG > BlueTeam / RedTeam).")
+	warn("[LeaderboardGUI] No leaderboard found under PlayerGui (ScreenGui > Leaderboard > LeaderboardBG > BlueTeam / RedTeam).")
 	return false
 end
 
@@ -189,11 +189,9 @@ local function fillTeam(teamFrame, players)
 end
 
 local function hideLeaderboard()
-	if screenGui then
-		screenGui.Enabled = false
-	end
-	if scoreboardFrame and scoreboardFrame:IsA("GuiObject") then
-		scoreboardFrame.Visible = false
+	-- Do not set screenGui.Enabled = false: TDMScore and other HUD may share this ScreenGui.
+	if leaderboardFrame and leaderboardFrame:IsA("GuiObject") then
+		leaderboardFrame.Visible = false
 	end
 	if closeLiveButton then
 		closeLiveButton.Visible = false
@@ -201,14 +199,14 @@ local function hideLeaderboard()
 end
 
 local function ensureCloseLiveButton()
-	if not scoreboardFrame then
+	if not leaderboardFrame then
 		return nil
 	end
 	if closeLiveButton and closeLiveButton.Parent then
 		return closeLiveButton
 	end
 	closeLiveButton = Instance.new("TextButton")
-	closeLiveButton.Name = "CloseLiveScoreboard"
+	closeLiveButton.Name = "CloseLiveLeaderboard"
 	closeLiveButton.Size = UDim2.fromOffset(140, 40)
 	closeLiveButton.Position = UDim2.new(0.5, -70, 1, -16)
 	closeLiveButton.AnchorPoint = Vector2.new(0.5, 1)
@@ -226,36 +224,36 @@ local function ensureCloseLiveButton()
 	closeCorner.CornerRadius = UDim.new(0, 8)
 	closeCorner.Parent = closeLiveButton
 	closeLiveButton.MouseButton1Click:Connect(hideLeaderboard)
-	closeLiveButton.Parent = scoreboardFrame
+	closeLiveButton.Parent = leaderboardFrame
 	return closeLiveButton
 end
 
 local function bindTemplateCloseButton()
-	if not scoreboardFrame then
+	if not leaderboardFrame then
 		return
 	end
-	local closeBtn = scoreboardFrame:FindFirstChild("CloseButton")
+	local closeBtn = leaderboardFrame:FindFirstChild("CloseButton")
 	if not closeBtn or not closeBtn:IsA("GuiButton") then
 		return
 	end
-	if templateCloseBoundFrame == scoreboardFrame then
+	if templateCloseBoundFrame == leaderboardFrame then
 		return
 	end
-	templateCloseBoundFrame = scoreboardFrame
+	templateCloseBoundFrame = leaderboardFrame
 	closeBtn.Activated:Connect(hideLeaderboard)
 end
 
 local function applyOptionalTitleAndWinner(payload)
-	if not scoreboardFrame then
+	if not leaderboardFrame then
 		return
 	end
-	local isLive = payload.isLiveScoreboard == true
+	local isLive = payload.isLiveLeaderboard == true
 	-- Direct child only: avoid picking up BlueTeam/RedTeam "Title" header frames.
-	local titleInst = scoreboardFrame:FindFirstChild("Title")
+	local titleInst = leaderboardFrame:FindFirstChild("Title")
 	if titleInst and titleInst:IsA("TextLabel") then
-		titleInst.Text = isLive and "Scoreboard" or "Match Results"
+		titleInst.Text = isLive and "Leaderboard" or "Match Results"
 	end
-	local winnerInst = scoreboardFrame:FindFirstChild("WinnerText", true)
+	local winnerInst = leaderboardFrame:FindFirstChild("WinnerText", true)
 	if winnerInst and winnerInst:IsA("TextLabel") then
 		local wt = payload.winningTeam
 		if wt and not isLive then
@@ -269,7 +267,7 @@ local function applyOptionalTitleAndWinner(payload)
 end
 
 local function showLeaderboard(payload)
-	if not waitForScoreboardRefs() then
+	if not waitForLeaderboardRefs() then
 		return
 	end
 	ensurePlayerRowTemplate()
@@ -285,12 +283,12 @@ local function showLeaderboard(payload)
 	if screenGui then
 		screenGui.Enabled = true
 	end
-	if scoreboardFrame and scoreboardFrame:IsA("GuiObject") then
-		scoreboardFrame.Visible = true
+	if leaderboardFrame and leaderboardFrame:IsA("GuiObject") then
+		leaderboardFrame.Visible = true
 	end
 
 	bindTemplateCloseButton()
-	local templateCloseBtn = scoreboardFrame and scoreboardFrame:FindFirstChild("CloseButton")
+	local templateCloseBtn = leaderboardFrame and leaderboardFrame:FindFirstChild("CloseButton")
 	local hasTemplateClose = templateCloseBtn and templateCloseBtn:IsA("GuiButton")
 
 	if hasTemplateClose then
@@ -300,21 +298,18 @@ local function showLeaderboard(payload)
 	else
 		local btn = ensureCloseLiveButton()
 		if btn then
-			btn.Visible = payload.isLiveScoreboard == true
+			btn.Visible = payload.isLiveLeaderboard == true
 		end
 	end
 end
 
 local function init()
 	task.defer(function()
-		if waitForScoreboardRefs() then
+		if waitForLeaderboardRefs() then
 			ensurePlayerRowTemplate()
 			bindTemplateCloseButton()
-			if screenGui then
-				screenGui.Enabled = false
-			end
-			if scoreboardFrame and scoreboardFrame:IsA("GuiObject") then
-				scoreboardFrame.Visible = false
+			if leaderboardFrame and leaderboardFrame:IsA("GuiObject") then
+				leaderboardFrame.Visible = false
 			end
 		end
 	end)
@@ -327,8 +322,8 @@ return {
 			showLeaderboard(payload)
 		elseif screenGui then
 			screenGui.Enabled = true
-			if scoreboardFrame and scoreboardFrame:IsA("GuiObject") then
-				scoreboardFrame.Visible = true
+			if leaderboardFrame and leaderboardFrame:IsA("GuiObject") then
+				leaderboardFrame.Visible = true
 			end
 		end
 	end,

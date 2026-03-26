@@ -722,10 +722,7 @@ end
 				fixedTeams[tonumber(id)] = team
 			end
 			currentTeamAssignment = { myTeam = myTeam, playerTeams = fixedTeams }
-			print("[TeamAssignment] myTeam:", myTeam)
-			for userId, team in pairs(fixedTeams) do
-				print("[TeamAssignment]  userId:", userId, "-> team:", team)
-			end
+
 			for _, cb in ipairs(teamAssignmentSubscribers) do
 				task.defer(cb, currentTeamAssignment)
 			end

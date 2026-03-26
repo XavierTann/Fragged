@@ -108,7 +108,6 @@ local function sendToArena(state, remotes, teleportPlayerTo)
 		return
 	end
 	local toSend = math.min(#state.waitingQueue, LobbyConfig.MAX_PLAYERS)
-	print("[Lobby] Game starting – sending " .. toSend .. " player(s) to arena.")
 	local players = {}
 	for i = 1, toSend do
 		players[i] = state.waitingQueue[1]
@@ -155,7 +154,6 @@ local function addPlayerToWaitingLobby(state, remotes, teleportPlayerTo, player)
 	if not state.matchStartingAt and #state.waitingQueue >= LobbyConfig.MIN_PLAYERS then
 		state.matchStartingAt = os.clock()
 		state.countdownEndTime = os.clock() + LobbyConfig.ARENA_COUNTDOWN_SECONDS
-		print("[Lobby] Countdown started – " .. #state.waitingQueue .. " player(s) in waiting lobby (" .. tostring(LobbyConfig.ARENA_COUNTDOWN_SECONDS) .. "s).")
 		broadcastStateToWaiting(state, remotes)
 		startCountdownTick(state, remotes)
 		task.delay(LobbyConfig.ARENA_COUNTDOWN_SECONDS, function()

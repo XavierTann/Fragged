@@ -377,11 +377,13 @@ return {
 		state.teamKills = { Blue = 0, Red = 0 }
 		state.playerKills = {}
 		state.playerDeaths = {}
+		state.playerAssists = {}
 		for i, p in ipairs(players) do
 			state.currentRoundPlayers[#state.currentRoundPlayers + 1] = p
 			state.playerTeams[p.UserId] = (i % 2 == 1) and "Blue" or "Red"
 			state.playerKills[p.UserId] = 0
 			state.playerDeaths[p.UserId] = 0
+			state.playerAssists[p.UserId] = 0
 			CombatAmmo.initPlayerAmmo(state, p.UserId)
 			CombatAmmo.initPlayerGrenades(state, p.UserId)
 			local weapons = WeaponInventoryServer.getWeapons(p)

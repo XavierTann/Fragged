@@ -15,6 +15,7 @@ return function()
 		teamKills = { Blue = 0, Red = 0 },
 		playerKills = {},
 		playerDeaths = {},
+		playerAssists = {},
 		lastFiredAt = {},
 		ammoInMagazine = {},
 		grenadeCount = {}, -- uid -> current grenades (0 to maxCapacity)

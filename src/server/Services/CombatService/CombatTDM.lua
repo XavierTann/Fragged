@@ -23,9 +23,12 @@ local function buildLeaderboardData(state)
 		if p and p.Parent then
 			local team = state.playerTeams[p.UserId] or "Blue"
 			local entry = {
+				playerName = p.Name,
 				name = p.Name,
+				displayName = p.DisplayName,
 				kills = state.playerKills[p.UserId] or 0,
 				deaths = state.playerDeaths[p.UserId] or 0,
+				assists = (state.playerAssists and state.playerAssists[p.UserId]) or 0,
 			}
 			if team == "Blue" then
 				table.insert(bluePlayers, entry)

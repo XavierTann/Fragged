@@ -46,8 +46,15 @@ local function onRenderStep(dt)
 
 	local weapon = cachedWeapon
 	local targetAim = WeaponAimOverlays.getAimOffsetTargetXZ(weapon)
+	-- Smooth while aiming so the beam eases; when input drops to zero (e.g. joystick
+	-- released after a shot), snap immediately — otherwise showAim stays true until the
+	-- lerp decays past the threshold and the indicator feels laggy.
 	local aimAlpha = 1 - math.exp(-Config.AIM_SMOOTH_RATE * dt)
-	smoothedAimOffsetXZ = smoothedAimOffsetXZ:Lerp(targetAim, aimAlpha)
+	if targetAim.Magnitude < 1e-4 then
+		smoothedAimOffsetXZ = Vector3.zero
+	else
+		smoothedAimOffsetXZ = smoothedAimOffsetXZ:Lerp(targetAim, aimAlpha)
+	end
 
 	local showAim = smoothedAimOffsetXZ.Magnitude > 0.08
 	local startPos = root.Position + Vector3.new(0, Config.AIM_Y_ABOVE_ROOT, 0)

@@ -1,7 +1,7 @@
 --[[
 	DropService (server)
-	Random drop system: spawns collectible items within FactoryFloor bounds.
-	Modular and independent. Pickup logic delegates to callback.
+	Random drop system: spawns at TDM spawn markers (Workspace/SpawnLocations/TDMSpawnLocations),
+	with fallback to FactoryFloor raycast. Pickup logic delegates to callback.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,6 +10,7 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 
 local DropConfig = require(ReplicatedStorage.Shared.Modules.DropConfig)
+local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 
 local DROPS_FOLDER_NAME = "Drops"
 local activeDrops = {}
@@ -96,6 +97,56 @@ local function isPositionValid(pos, excludeDrop)
 	return true
 end
 
+local function getTdmSpawnFolder()
+	local parent = Workspace:FindFirstChild(TDMConfig.TDM_SPAWN_PARENT)
+	if not parent then
+		return nil
+	end
+	return parent:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
+end
+
+-- Top surface of spawn marker (XZ center); same idea as player spawn footing on the part.
+local function basePartTopY(part)
+	return part.Position.Y + part.Size.Y * 0.5
+end
+
+-- Collect TDMSpawnLocation* BaseParts / Models under TDMSpawnLocations (e.g. .../TDMSpawnLocation1..8).
+local function getTdmSpawnMarkers()
+	local folder = getTdmSpawnFolder()
+	if not folder then
+		return {}
+	end
+	local markers = {}
+	for _, child in ipairs(folder:GetChildren()) do
+		if child:IsA("BasePart") then
+			table.insert(markers, child)
+		elseif child:IsA("Model") and child.PrimaryPart then
+			table.insert(markers, child.PrimaryPart)
+		end
+	end
+	return markers
+end
+
+-- Random TDM spawn; retries for MIN_DROP_SPACING. Returns gx, gz, groundY (surface to place on).
+local function findGroundPositionAtTdmSpawn()
+	local markers = getTdmSpawnMarkers()
+	if #markers == 0 then
+		return nil
+	end
+	for _ = 1, 24 do
+		local part = markers[math.random(1, #markers)]
+		if part.Parent then
+			local gx, gz = part.Position.X, part.Position.Z
+			local groundY = basePartTopY(part)
+			local samplePos = Vector3.new(gx, groundY + 0.5, gz)
+			if isPositionValid(samplePos, nil) then
+				return { gx = gx, gz = gz, groundY = groundY }
+			end
+		end
+	end
+	return nil
+end
+
 local function findGroundPosition(spawnArea)
 	local cf = spawnArea.CFrame
 	local size = spawnArea.Size
@@ -145,7 +196,7 @@ end
 
 -- After pivot + rotation, shift model along world Y so AABB bottom matches ground + clearance (no local-Y drift).
 local function snapModelBoundingBoxBottomToGround(model, groundY, clearanceStuds)
-	local clearance = clearanceStuds or 0.04
+	local clearance = clearanceStuds or 0
 	local cf, size = model:GetBoundingBox()
 	local bottomY = cf.Position.Y - size.Y * 0.5
 	local lift = (groundY + clearance) - bottomY
@@ -176,10 +227,6 @@ local function cleanupDestroyedDrops()
 end
 
 local function spawnDrop()
-	local spawnArea = getSpawnArea()
-	if not spawnArea then
-		return nil
-	end
 	cleanupDestroyedDrops()
 
 	local dropType = getRandomDropType()
@@ -191,12 +238,19 @@ local function spawnDrop()
 		return nil
 	end
 
-	local spot = findGroundPosition(spawnArea)
+	local spot = findGroundPositionAtTdmSpawn()
+	if not spot then
+		local spawnArea = getSpawnArea()
+		if not spawnArea then
+			return nil
+		end
+		spot = findGroundPosition(spawnArea)
+	end
 	if not spot then
 		return nil
 	end
 	local gx, gz, groundY = spot.gx, spot.gz, spot.groundY
-	local placeY = groundY + (DropConfig.SPAWN_GROUND_EXTRA_HEIGHT or 0)
+	local placeY = groundY
 
 	local drop
 	local imports = ReplicatedStorage:FindFirstChild("Imports")
@@ -221,12 +275,10 @@ local function spawnDrop()
 		if dropType == "RocketLauncher" then
 			local rotX90 = CFrame.Angles(math.rad(90), 0, 0)
 			if drop:IsA("Model") then
-				drop:PivotTo(CFrame.new(gx, placeY + 2, gz) * rotX90)
+				drop:PivotTo(CFrame.new(gx, placeY, gz) * rotX90)
 				snapModelBoundingBoxBottomToGround(drop, placeY, cfg.groundClearanceStuds)
 			else
-				local clearance = cfg.groundClearanceStuds or 1.25
-				local halfExtent = math.max(drop.Size.X, drop.Size.Y, drop.Size.Z) * 0.5
-				drop.CFrame = CFrame.new(gx, placeY + clearance + halfExtent + 0.5, gz) * rotX90
+				drop.CFrame = CFrame.new(gx, placeY, gz) * rotX90
 			end
 		else
 			if drop:IsA("Model") and not drop.PrimaryPart then
@@ -246,7 +298,7 @@ local function spawnDrop()
 		drop.Material = cfg.material or Enum.Material.SmoothPlastic
 		drop.Anchored = cfg.anchored == true
 		configurePickupPart(drop)
-		local centerY = placeY + sizeVec.Y * 0.5 + 0.08
+		local centerY = placeY + sizeVec.Y * 0.5
 		drop.CFrame = CFrame.new(gx, centerY, gz)
 		if not drop.Anchored then
 			drop.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, 0.5, 1, 1)

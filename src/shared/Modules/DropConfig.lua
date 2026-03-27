@@ -17,15 +17,11 @@ return {
 	-- Optional per-type override: maxActive = 3
 	-- Minimum spacing between drops (studs) to avoid overlap
 	MIN_DROP_SPACING = 4,
-	-- Raise all drops this many studs above the raycast hit (avoids clipping into floor mesh)
-	SPAWN_GROUND_EXTRA_HEIGHT = 1.5,
 
 	-- Drop types with weight for rarity among types that are under their cap (higher = more common)
 	DROPS = {
 		RocketLauncher = {
 			weight = 1,
-			-- After X=90° placement, snap AABB bottom to placeY + this (studs); fixes pivot vs mesh sitting in floor
-			groundClearanceStuds = 1.25,
 			visualSize = Vector3.new(3, 1, 1),
 			visualColor = Color3.fromRGB(80, 60, 40),
 		},
@@ -35,7 +31,6 @@ return {
 			modelAssetName = "HealthPack",
 			-- World rotation at pivot before ground snap. (-90,0,0) lays a Y-upright mesh flat on XZ.
 			placementRotationDegrees = Vector3.new(-90, 0, 0),
-			groundClearanceStuds = 0.25,
 			visualSize = Vector3.new(1.5, 0.55, 1.1),
 			visualColor = Color3.fromRGB(45, 255, 130),
 			material = Enum.Material.Neon,

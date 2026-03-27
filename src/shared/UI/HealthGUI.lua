@@ -25,14 +25,15 @@ local function createGui()
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.DisplayOrder = 7
+	gui.IgnoreGuiInset = true
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 	container = Instance.new("Frame")
 	container.Name = "HealthContainer"
 	container.Size = UDim2.fromOffset(BAR_WIDTH + 16, BAR_HEIGHT + 16)
-	container.Position = UDim2.fromOffset(270, -30)
-	container.AnchorPoint = Vector2.new(0, 0)
+	container.AnchorPoint = Vector2.new(1, 0)
+	container.Position = UDim2.fromScale(1, 0)
 	container.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	container.BackgroundTransparency = 0.5
 	container.BorderSizePixel = 0

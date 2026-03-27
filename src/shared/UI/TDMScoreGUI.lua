@@ -24,6 +24,12 @@ local redScoreLabel = nil
 local backgroundClickConn = nil
 local wiredBackgroundButton = nil
 
+local function configureTdmScreenGui(sg)
+	if sg and sg:IsA("ScreenGui") then
+		sg.IgnoreGuiInset = true
+	end
+end
+
 local function findBackgroundButton(frame)
 	if not frame then
 		return nil
@@ -62,6 +68,7 @@ end
 local function bindRefs()
 	local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 	local screenGui = playerGui:WaitForChild("ScreenGui")
+	configureTdmScreenGui(screenGui)
 	tdmScoreFrame = screenGui:WaitForChild("TDMScore")
 	blueScoreLabel = tdmScoreFrame:WaitForChild("BlueTeamScore")
 	redScoreLabel = tdmScoreFrame:WaitForChild("RedTeamScore")
@@ -82,6 +89,7 @@ local function ensureRefs()
 	if not sg then
 		return false
 	end
+	configureTdmScreenGui(sg)
 	local frame = sg:FindFirstChild("TDMScore")
 	if not frame then
 		return false
@@ -123,6 +131,7 @@ return {
 		if ensureRefs() then
 			local sg = tdmScoreFrame:FindFirstAncestorOfClass("ScreenGui")
 			if sg then
+				configureTdmScreenGui(sg)
 				sg.Enabled = true
 			end
 			tdmScoreFrame.Visible = true

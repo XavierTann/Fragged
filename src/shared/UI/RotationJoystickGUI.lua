@@ -2,6 +2,10 @@
 	RotationJoystickGUI
 	Second joystick on the bottom-right for mobile. Rotates the player in the
 	direction of joystick movement. Only shown when TouchEnabled.
+	Release callbacks receive (worldDir, releaseInsideCancelZone). When release-to-fire
+	mode is on, a cancel zone above the joystick appears only while aim is off-axis
+	(thumb pulled from center). On lift, if the finger is inside that rect, callers
+	should skip firing. The zone is non-interactive (Active=false).
 ]]
 
 local Players = game:GetService("Players")
@@ -21,6 +25,20 @@ local onReleaseCallbacks = {}
 local thumbStartPos = Vector2.zero
 local lastProcessedTouchPos = nil -- reject InputChanged from other finger ( sudden jumps )
 local activeTouchInput = nil -- touch that started on our joystick (for correlating InputEnded)
+local cancelFireFrame = nil
+local cancelFireZoneActive = false
+
+local AIM_OFF_AXIS_EPS = 0.01
+local CANCEL_FIRE_DECAL_TEXTURE = "rbxassetid://12449337505"
+
+local function refreshCancelFireVisibility()
+	if not cancelFireFrame then
+		return
+	end
+	cancelFireFrame.Visible = cancelFireZoneActive
+		and isActive
+		and currentDirection.Magnitude > AIM_OFF_AXIS_EPS
+end
 
 local function createGui()
 	if gui then
@@ -60,6 +78,18 @@ local function isTouchInRightJoystickZone(posX, posY)
 		and posY >= pos.Y - margin and posY <= pos.Y + size.Y + margin
 end
 
+local function screenPointInGuiObject(screenPoint, guiObject)
+	if not guiObject or not guiObject.Parent then
+		return false
+	end
+	local ap = guiObject.AbsolutePosition
+	local sz = guiObject.AbsoluteSize
+	return screenPoint.X >= ap.X
+		and screenPoint.X <= ap.X + sz.X
+		and screenPoint.Y >= ap.Y
+		and screenPoint.Y <= ap.Y + sz.Y
+end
+
 local function updateThumbPosition(direction)
 	if not thumbstick or not backgroundFrame then
 		return
@@ -92,6 +122,7 @@ local function onInputChanged(input)
 	local center = Vector2.new(centerX, centerY)
 	currentDirection = clampToCircle(center, touchPos, joystickRadiusPx)
 	updateThumbPosition(currentDirection)
+	refreshCancelFireVisibility()
 end
 
 local function snapToCenter()
@@ -100,6 +131,7 @@ local function snapToCenter()
 	lastProcessedTouchPos = nil
 	currentDirection = Vector2.zero
 	updateThumbPosition(currentDirection)
+	refreshCancelFireVisibility()
 end
 
 local function onInputEnded(input)
@@ -117,8 +149,12 @@ local function onInputEnded(input)
 	-- (Throw direction = last joystick direction before finger lift)
 	if currentDirection.Magnitude > 0.01 then
 		local worldDir = Vector3.new(-currentDirection.Y, 0, currentDirection.X).Unit
+		local releasePos = Vector2.new(input.Position.X, input.Position.Y)
+		local inCancel = cancelFireZoneActive
+			and cancelFireFrame
+			and screenPointInGuiObject(releasePos, cancelFireFrame)
 		for _, cb in ipairs(onReleaseCallbacks) do
-			task.defer(cb, worldDir)
+			task.defer(cb, worldDir, inCancel)
 		end
 	end
 	snapToCenter()
@@ -182,6 +218,31 @@ local function initJoystick(parent)
 	thumbCorner.CornerRadius = UDim.new(0.5, 0)
 	thumbCorner.Parent = thumbstick
 
+	-- Visual only; touch stays bound to the joystick that received InputBegan.
+	cancelFireFrame = Instance.new("Frame")
+	cancelFireFrame.Name = "CancelFireZone"
+	cancelFireFrame.AnchorPoint = Vector2.new(1, 1)
+	cancelFireFrame.Size = UDim2.fromOffset(116, 42)
+	cancelFireFrame.Position = UDim2.new(1, 0, 1, -232)
+	cancelFireFrame.BackgroundTransparency = 1
+	cancelFireFrame.BorderSizePixel = 0
+	cancelFireFrame.Visible = false
+	cancelFireFrame.Active = false
+	cancelFireFrame.ZIndex = 2
+	cancelFireFrame.Parent = parent
+
+	local cancelIcon = Instance.new("ImageLabel")
+	cancelIcon.Name = "Decal"
+	cancelIcon.BackgroundTransparency = 1
+	cancelIcon.Size = UDim2.fromScale(1, 1)
+	cancelIcon.Image = CANCEL_FIRE_DECAL_TEXTURE
+	cancelIcon.ScaleType = Enum.ScaleType.Fit
+	cancelIcon.Parent = cancelFireFrame
+
+	local iconCorner = Instance.new("UICorner")
+	iconCorner.CornerRadius = UDim.new(0, 10)
+	iconCorner.Parent = cancelIcon
+
 	-- Touch: start drag on background or thumb
 	local function onBackgroundInputBegan(input)
 		if input.UserInputType ~= Enum.UserInputType.Touch then
@@ -196,6 +257,7 @@ local function initJoystick(parent)
 		thumbStartPos = Vector2.new(cx, cy)
 		currentDirection = clampToCircle(thumbStartPos, touchStartPos, joystickRadiusPx)
 		updateThumbPosition(currentDirection)
+		refreshCancelFireVisibility()
 	end
 
 	backgroundFrame.InputBegan:Connect(onBackgroundInputBegan)
@@ -242,8 +304,13 @@ return {
 		return currentDirection
 	end,
 	GetWorldDirectionXZ = getWorldDirectionXZ,
-	-- Called when joystick returns to center (finger lifted). Receives world direction Vector3.
+	-- Called when joystick returns to center (finger lifted). Args: worldDir, releaseInsideCancelZone
 	SubscribeOnRelease = function(callback)
 		table.insert(onReleaseCallbacks, callback)
+	end,
+	-- When true, enables cancel-on-release (strip visible only while aim is off-axis).
+	SetCancelFireZoneActive = function(active)
+		cancelFireZoneActive = active == true
+		refreshCancelFireVisibility()
 	end,
 }

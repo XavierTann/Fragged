@@ -7,7 +7,8 @@
 	bounds, inventory, equipped tool, ammo, cooldown, and reload; on reject it may fire FireGunRejected
 	(resetClientFireRate) and AmmoState to resync.
 	Mobile: Pistol/Rifle fire while aim joystick is off-axis; Shotgun matches Grenade/Rocket
-	(fire on joystick release with last aim direction).
+	(fire on joystick release with last aim direction). Releasing inside the cancel zone
+	skips the shot for those weapons only.
 	Desktop: Pistol/Rifle on LMB; Shotgun matches Grenade/Rocket (G key + mouse aim, no LMB).
 	Respects ammo and reload state from server to prevent spamming.
 ]]
@@ -670,6 +671,20 @@ local function requestReload()
 	RequestReloadRE:FireServer(currentWeapon)
 end
 
+local function isReleaseToFireWeapon(weaponId)
+	return weaponId == "Grenade" or weaponId == "RocketLauncher" or weaponId == "Shotgun"
+end
+
+local function syncRotationJoystickCancelZone()
+	if not UserInputService.TouchEnabled then
+		return
+	end
+	local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
+	if RotationJoystickGUI.SetCancelFireZoneActive then
+		RotationJoystickGUI.SetCancelFireZoneActive(shootingEnabled and isReleaseToFireWeapon(currentWeapon))
+	end
+end
+
 local function setShootingEnabled(enabled)
 	shootingEnabled = enabled
 	lastFiredAt = 0
@@ -688,6 +703,7 @@ local function setShootingEnabled(enabled)
 			inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
 		end
 	end
+	syncRotationJoystickCancelZone()
 end
 
 local function equipCurrentWeapon()
@@ -762,7 +778,10 @@ end
 		-- Mobile: grenade/rocket/shotgun fire when right joystick released (last direction before lift)
 		if UserInputService.TouchEnabled then
 			local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
-			RotationJoystickGUI.SubscribeOnRelease(function(worldDir)
+			RotationJoystickGUI.SubscribeOnRelease(function(worldDir, releaseInsideCancelZone)
+				if releaseInsideCancelZone then
+					return
+				end
 				if currentWeapon == "Grenade" then
 					throwGrenade(worldDir)
 				elseif currentWeapon == "RocketLauncher" then
@@ -771,6 +790,7 @@ end
 					fireInDirection(worldDir)
 				end
 			end)
+			task.defer(syncRotationJoystickCancelZone)
 		end
 		AmmoStateRE.OnClientEvent:Connect(function(gunId, ammoCount, isReloading)
 			ammoState[gunId] = ammoState[gunId] or {}
@@ -814,6 +834,7 @@ end
 					task.defer(cb)
 				end
 			end
+			syncRotationJoystickCancelZone()
 			for _, cb in ipairs(weaponInventorySubscribers) do
 				task.defer(cb)
 			end
@@ -856,6 +877,7 @@ end
 				end
 			end)
 		end
+		syncRotationJoystickCancelZone()
 		for _, cb in ipairs(weaponChangedSubscribers) do
 			task.defer(cb)
 		end

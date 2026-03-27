@@ -41,22 +41,47 @@ local function getDropsFolder()
 	return folder
 end
 
-local function getRandomDropType()
-	local totalWeight = 0
-	for _, drop in pairs(DropConfig.DROPS) do
-		totalWeight = totalWeight + (drop.weight or 1)
-	end
-	if totalWeight <= 0 then
-		return "RocketLauncher"
-	end
-	local r = math.random() * totalWeight
-	for dropId, drop in pairs(DropConfig.DROPS) do
-		r = r - (drop.weight or 1)
-		if r <= 0 then
-			return dropId
+local function countActiveOfType(dropTypeId)
+	local n = 0
+	for _, drop in ipairs(activeDrops) do
+		if drop.Parent and drop:GetAttribute("DropType") == dropTypeId then
+			n = n + 1
 		end
 	end
-	return "RocketLauncher"
+	return n
+end
+
+local function getCapForDropType(dropCfg)
+	local cap = dropCfg.maxActive
+	if cap == nil then
+		cap = DropConfig.MAX_ACTIVE_PER_TYPE
+	end
+	return cap
+end
+
+-- Picks among types that are under their per-type cap; nil if every type is at cap.
+local function getRandomDropType()
+	local candidates = {}
+	local totalWeight = 0
+	for dropId, drop in pairs(DropConfig.DROPS) do
+		local cap = getCapForDropType(drop)
+		if not cap or countActiveOfType(dropId) < cap then
+			local w = drop.weight or 1
+			totalWeight = totalWeight + w
+			table.insert(candidates, { id = dropId, weight = w })
+		end
+	end
+	if totalWeight <= 0 or #candidates == 0 then
+		return nil
+	end
+	local r = math.random() * totalWeight
+	for _, entry in ipairs(candidates) do
+		r = r - entry.weight
+		if r <= 0 then
+			return entry.id
+		end
+	end
+	return candidates[#candidates].id
 end
 
 local function isPositionValid(pos, excludeDrop)
@@ -142,16 +167,25 @@ local function configurePickupPart(part)
 	part.CanTouch = true
 end
 
+local function cleanupDestroyedDrops()
+	for i = #activeDrops, 1, -1 do
+		if not activeDrops[i].Parent then
+			table.remove(activeDrops, i)
+		end
+	end
+end
+
 local function spawnDrop()
 	local spawnArea = getSpawnArea()
 	if not spawnArea then
 		return nil
 	end
-	if #activeDrops >= DropConfig.MAX_ACTIVE_DROPS then
-		return nil
-	end
+	cleanupDestroyedDrops()
 
 	local dropType = getRandomDropType()
+	if not dropType then
+		return nil
+	end
 	local cfg = DropConfig.DROPS[dropType]
 	if not cfg then
 		return nil
@@ -162,6 +196,7 @@ local function spawnDrop()
 		return nil
 	end
 	local gx, gz, groundY = spot.gx, spot.gz, spot.groundY
+	local placeY = groundY + (DropConfig.SPAWN_GROUND_EXTRA_HEIGHT or 0)
 
 	local drop
 	local imports = ReplicatedStorage:FindFirstChild("Imports")
@@ -184,21 +219,23 @@ local function spawnDrop()
 		drop.Parent = getDropsFolder()
 
 		if dropType == "RocketLauncher" then
-			local pos = Vector3.new(gx, groundY + 0.5, gz)
-			local orient = CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0)
+			local rotX90 = CFrame.Angles(math.rad(90), 0, 0)
 			if drop:IsA("Model") then
-				drop:PivotTo(orient)
+				drop:PivotTo(CFrame.new(gx, placeY + 2, gz) * rotX90)
+				snapModelBoundingBoxBottomToGround(drop, placeY, cfg.groundClearanceStuds)
 			else
-				drop.CFrame = orient
+				local clearance = cfg.groundClearanceStuds or 1.25
+				local halfExtent = math.max(drop.Size.X, drop.Size.Y, drop.Size.Z) * 0.5
+				drop.CFrame = CFrame.new(gx, placeY + clearance + halfExtent + 0.5, gz) * rotX90
 			end
 		else
 			if drop:IsA("Model") and not drop.PrimaryPart then
 				drop.PrimaryPart = drop:FindFirstChildWhichIsA("BasePart", true)
 			end
 			local rot = placementRotationFromConfig(cfg)
-			local pivotPos = Vector3.new(gx, groundY, gz)
+			local pivotPos = Vector3.new(gx, placeY, gz)
 			drop:PivotTo(CFrame.new(pivotPos) * rot)
-			snapModelBoundingBoxBottomToGround(drop, groundY, cfg.groundClearanceStuds)
+			snapModelBoundingBoxBottomToGround(drop, placeY, cfg.groundClearanceStuds)
 		end
 	else
 		drop = Instance.new("Part")
@@ -209,7 +246,7 @@ local function spawnDrop()
 		drop.Material = cfg.material or Enum.Material.SmoothPlastic
 		drop.Anchored = cfg.anchored == true
 		configurePickupPart(drop)
-		local centerY = groundY + sizeVec.Y * 0.5 + 0.02
+		local centerY = placeY + sizeVec.Y * 0.5 + 0.08
 		drop.CFrame = CFrame.new(gx, centerY, gz)
 		if not drop.Anchored then
 			drop.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, 0.5, 1, 1)
@@ -277,14 +314,6 @@ local function startSpawnLoop()
 			spawnDrop()
 		end
 	end)
-end
-
-local function cleanupDestroyedDrops()
-	for i = #activeDrops, 1, -1 do
-		if not activeDrops[i].Parent then
-			table.remove(activeDrops, i)
-		end
-	end
 end
 
 return {

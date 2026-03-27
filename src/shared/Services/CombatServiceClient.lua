@@ -26,6 +26,7 @@ local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local GrenadeAngularResistance = require(ReplicatedStorage.Shared.Modules.GrenadeAngularResistance)
 
 local FireGunRE = nil
+local RequestReloadRE = nil
 local AmmoStateRE = nil
 local ThrowGrenadeRE = nil
 local ThrowRocketRE = nil
@@ -659,6 +660,16 @@ local function onInputBegan(input, gameProcessed)
 	end
 end
 
+local function requestReload()
+	if not shootingEnabled or not RequestReloadRE then
+		return
+	end
+	if not GunsConfig[currentWeapon] then
+		return
+	end
+	RequestReloadRE:FireServer(currentWeapon)
+end
+
 local function setShootingEnabled(enabled)
 	shootingEnabled = enabled
 	lastFiredAt = 0
@@ -697,6 +708,7 @@ end
 		wireHideOwnReplicatedGrenades()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
+		RequestReloadRE = folder:WaitForChild(CombatConfig.REMOTES.REQUEST_RELOAD)
 		local fireGunRejectedRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
 		ThrowGrenadeRE = folder:WaitForChild(CombatConfig.REMOTES.THROW_GRENADE)
@@ -833,6 +845,7 @@ end
 
 	FireNow = fireInDirection,
 	ThrowGrenade = throwGrenade,
+	RequestReload = requestReload,
 
 	SetCurrentWeapon = function(gunId)
 		currentWeapon = gunId or "Pistol"

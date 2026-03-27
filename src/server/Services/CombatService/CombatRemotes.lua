@@ -33,6 +33,7 @@ local function ensureRemotes(state)
 		return r
 	end
 	state.fireGunRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN)
+	state.requestReloadRE = getOrCreate(CombatConfig.REMOTES.REQUEST_RELOAD)
 	state.ammoStateRE = getOrCreate(CombatConfig.REMOTES.AMMO_STATE)
 	state.throwGrenadeRE = getOrCreate(CombatConfig.REMOTES.THROW_GRENADE)
 	state.matchEndedRE = getOrCreate(CombatConfig.REMOTES.MATCH_ENDED)

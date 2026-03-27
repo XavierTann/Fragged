@@ -271,6 +271,51 @@ local function bindHandlers()
 		end
 	end)
 
+	state.requestReloadRE.OnServerEvent:Connect(function(player, gunId)
+		if state.matchEnded then
+			return
+		end
+		if not playerInActiveRound(player) then
+			return
+		end
+		if typeof(gunId) ~= "string" then
+			return
+		end
+		local gun = GunsConfig[gunId]
+		if not gun then
+			return
+		end
+		if not playerOwnsGun(player, gunId) then
+			return
+		end
+		local character = player.Character
+		if not character or not characterHasGunEquipped(character, gunId) then
+			return
+		end
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then
+			return
+		end
+		local uid = player.UserId
+		local now = os.clock()
+		state.ammoInMagazine[uid] = state.ammoInMagazine[uid] or {}
+		state.reloadEndAt[uid] = state.reloadEndAt[uid] or {}
+		local ammo = state.ammoInMagazine[uid][gunId]
+		if ammo == nil then
+			ammo = gun.magazineSize or 6
+			state.ammoInMagazine[uid][gunId] = ammo
+		end
+		local maxMag = gun.magazineSize or 6
+		if ammo >= maxMag then
+			return
+		end
+		if state.reloadEndAt[uid][gunId] and now < state.reloadEndAt[uid][gunId] then
+			return
+		end
+		state.reloadEndAt[uid][gunId] = now + (gun.reloadTime or 1.5)
+		CombatRemotes.sendAmmoState(state, player, gunId, ammo, true)
+	end)
+
 	state.throwGrenadeRE.OnServerEvent:Connect(function(player, aimDirection)
 		if state.matchEnded then
 			return

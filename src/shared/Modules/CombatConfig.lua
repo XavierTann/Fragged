@@ -13,6 +13,7 @@ return {
 		-- after the client may have shown predicted feedback; resetClientFireRate clears local fire-rate gate.
 		FIRE_GUN = "FireGun",
 		FIRE_GUN_REJECTED = "FireGunRejected",
+		REQUEST_RELOAD = "RequestReload", -- Client -> Server: manual magazine reload (gunId string)
 		AMMO_STATE = "AmmoState", -- Server -> Client: ammo count, isReloading, gunId
 		THROW_GRENADE = "ThrowGrenade",
 		THROW_ROCKET = "ThrowRocket",

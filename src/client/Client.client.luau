@@ -40,6 +40,9 @@ WeaponSelectGUI.Init()
 local ReloadBarGUI = require(Shared.UI.ReloadBarGUI)
 ReloadBarGUI.Init()
 
+local ManualReloadGUI = require(Shared.UI.ManualReloadGUI)
+ManualReloadGUI.Init()
+
 local LeaderboardGUI = require(Shared.UI.LeaderboardGUI)
 LeaderboardGUI.Init()
 
@@ -69,6 +72,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	if inArena and not postMatchLeaderboard then
 		WeaponSelectGUI.Show()
 		ReloadBarGUI.Show()
+		ManualReloadGUI.Show()
 		TDMScoreGUI.Show()
 		HealthGUI.Show()
 		TeamIndicatorGUI.Show()
@@ -76,6 +80,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	elseif not inArena then
 		WeaponSelectGUI.Hide()
 		ReloadBarGUI.Hide()
+		ManualReloadGUI.Hide()
 		TDMScoreGUI.Hide()
 		HealthGUI.Hide()
 		RespawnTimerGUI.Hide()
@@ -88,6 +93,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	postMatchLeaderboard = true
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
+	ManualReloadGUI.Hide()
 	TDMScoreGUI.Hide()
 	HealthGUI.Hide()
 	RespawnTimerGUI.Hide()

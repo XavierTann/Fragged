@@ -3,6 +3,7 @@
 	Remote creation and client communication (ammo, team score).
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
@@ -46,6 +47,7 @@ local function ensureRemotes(state)
 	state.teamAssignmentRE = getOrCreate(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
 	state.fireGunRejectedRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
 	state.getLiveLeaderboardRF = getOrCreateRemoteFunction(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
+	state.damageNumberRE = getOrCreate(CombatConfig.REMOTES.DAMAGE_NUMBER)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
@@ -86,6 +88,35 @@ local function sendTeamAssignment(state, player, myTeam, playerTeams)
 	end
 end
 
+local function worldPositionAboveHead(character)
+	if not character then
+		return nil
+	end
+	local head = character:FindFirstChild("Head")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	local base = head and head.Position or (root and root.Position)
+	if not base then
+		return nil
+	end
+	return base + Vector3.new(0, 0.75, 0)
+end
+
+-- Floating damage numbers for the attacker only (exact damage dealt).
+local function notifyAttackerDamage(state, attackerUserId, victimCharacter, damage)
+	if damage <= 0 or not attackerUserId then
+		return
+	end
+	local attacker = Players:GetPlayerByUserId(attackerUserId)
+	if not attacker or not attacker.Parent or not state.damageNumberRE then
+		return
+	end
+	local pos = worldPositionAboveHead(victimCharacter)
+	if not pos then
+		return
+	end
+	state.damageNumberRE:FireClient(attacker, damage, pos)
+end
+
 local function broadcastTeamScore(state)
 	if not state.teamScoreUpdateRE then
 		return
@@ -108,4 +139,5 @@ return {
 	broadcastTeamScore = broadcastTeamScore,
 	firePlayerDied = firePlayerDied,
 	sendTeamAssignment = sendTeamAssignment,
+	notifyAttackerDamage = notifyAttackerDamage,
 }

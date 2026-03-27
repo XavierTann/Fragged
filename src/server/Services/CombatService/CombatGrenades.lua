@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local GrenadeAngularResistance = require(ReplicatedStorage.Shared.Modules.GrenadeAngularResistance)
+local CombatRemotes = require(script.Parent.CombatRemotes)
 
 local GRENADES_FOLDER_NAME = "CombatGrenades"
 local COLLISION_GROUP_GRENADES = "Grenades"
@@ -53,6 +54,7 @@ local function doExplosionDamage(state, center, radius, damage, throwerUserId)
 						if dmg > 0 then
 							humanoid:SetAttribute("LastDamagerUserId", throwerUserId or 0)
 							humanoid:TakeDamage(dmg)
+							CombatRemotes.notifyAttackerDamage(state, throwerUserId, p.Character, dmg)
 						end
 					end
 				end

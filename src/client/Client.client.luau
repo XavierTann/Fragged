@@ -58,6 +58,9 @@ RespawnTimerGUI.Init()
 local OverheadHealthBarGUI = require(Shared.UI.OverheadHealthBarGUI)
 OverheadHealthBarGUI.Init()
 
+local FloatingDamageNumbers = require(Shared.UI.FloatingDamageNumbers)
+FloatingDamageNumbers.Init()
+
 local TeamIndicatorGUI = require(Shared.UI.TeamIndicatorGUI)
 TeamIndicatorGUI.Init()
 

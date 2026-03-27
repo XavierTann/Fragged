@@ -26,5 +26,7 @@ return {
 		WEAPON_INVENTORY = "WeaponInventory", -- Server -> Client: { "Pistol", "Rifle", ... }
 		PLAYER_DIED = "PlayerDied", -- Server -> Client: respawnDelaySeconds (local player died in TDM)
 		TEAM_ASSIGNMENT = "TeamAssignment", -- Server -> Client: myTeam, playerTeams table
+		-- Server -> attacking client only: damage dealt (number), worldPosition (Vector3 above head)
+		DAMAGE_NUMBER = "DamageNumber",
 	},
 }

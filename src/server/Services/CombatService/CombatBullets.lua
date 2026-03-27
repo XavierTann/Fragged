@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
+local CombatRemotes = require(script.Parent.CombatRemotes)
 
 local BULLETS_FOLDER_NAME = "CombatBullets"
 
@@ -90,6 +91,7 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 						conn:Disconnect()
 						humanoid:SetAttribute("LastDamagerUserId", shooterUserId)
 						humanoid:TakeDamage(gun.damage)
+						CombatRemotes.notifyAttackerDamage(state, shooterUserId, model, gun.damage)
 						bullet:Destroy()
 						return
 					end

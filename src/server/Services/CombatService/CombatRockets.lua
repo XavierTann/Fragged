@@ -9,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
 local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
+local CombatRemotes = require(script.Parent.CombatRemotes)
 
 local ROCKETS_FOLDER_NAME = "CombatRockets"
 local PROJECTILE_TEMPLATE_NAME = "RocketLauncherProjectile"
@@ -52,6 +53,7 @@ local function doExplosionDamage(state, center, radius, damage, throwerUserId)
 						if dmg > 0 then
 							humanoid:SetAttribute("LastDamagerUserId", throwerUserId or 0)
 							humanoid:TakeDamage(dmg)
+							CombatRemotes.notifyAttackerDamage(state, throwerUserId, p.Character, dmg)
 						end
 					end
 				end

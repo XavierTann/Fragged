@@ -61,6 +61,9 @@ OverheadHealthBarGUI.Init()
 local FloatingDamageNumbers = require(Shared.UI.FloatingDamageNumbers)
 FloatingDamageNumbers.Init()
 
+local KillNotificationGUI = require(Shared.UI.KillNotificationGUI)
+KillNotificationGUI.Init()
+
 local TeamIndicatorGUI = require(Shared.UI.TeamIndicatorGUI)
 TeamIndicatorGUI.Init()
 

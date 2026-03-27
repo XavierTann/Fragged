@@ -28,5 +28,7 @@ return {
 		TEAM_ASSIGNMENT = "TeamAssignment", -- Server -> Client: myTeam, playerTeams table
 		-- Server -> attacking client only: damage dealt (number), worldPosition (Vector3 above head)
 		DAMAGE_NUMBER = "DamageNumber",
+		-- Server -> killer client only: victim display name (string) for center-screen elimination toast
+		KILL_NOTIFICATION = "KillNotification",
 	},
 }

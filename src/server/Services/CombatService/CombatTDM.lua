@@ -121,6 +121,7 @@ local function onPlayerDied(state, deadPlayer)
 		if killerTeam and deadTeam and killerTeam ~= deadTeam then
 			state.playerKills[killerUserId] = (state.playerKills[killerUserId] or 0) + 1
 			state.teamKills[killerTeam] = (state.teamKills[killerTeam] or 0) + 1
+			CombatRemotes.sendEliminationNotice(state, killerUserId, deadPlayer)
 			CombatRemotes.broadcastTeamScore(state)
 			if state.teamKills[killerTeam] >= TDMConfig.KILL_LIMIT then
 				endMatch(state, killerTeam)

@@ -48,6 +48,7 @@ local function ensureRemotes(state)
 	state.fireGunRejectedRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
 	state.getLiveLeaderboardRF = getOrCreateRemoteFunction(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
 	state.damageNumberRE = getOrCreate(CombatConfig.REMOTES.DAMAGE_NUMBER)
+	state.killNotificationRE = getOrCreate(CombatConfig.REMOTES.KILL_NOTIFICATION)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
@@ -117,6 +118,21 @@ local function notifyAttackerDamage(state, attackerUserId, victimCharacter, dama
 	state.damageNumberRE:FireClient(attacker, damage, pos)
 end
 
+local function sendEliminationNotice(state, killerUserId, victimPlayer)
+	if not killerUserId or not victimPlayer or not victimPlayer.Parent then
+		return
+	end
+	local killer = Players:GetPlayerByUserId(killerUserId)
+	if not killer or not killer.Parent or not state.killNotificationRE then
+		return
+	end
+	local name = victimPlayer.DisplayName
+	if name == "" then
+		name = victimPlayer.Name
+	end
+	state.killNotificationRE:FireClient(killer, name)
+end
+
 local function broadcastTeamScore(state)
 	if not state.teamScoreUpdateRE then
 		return
@@ -140,4 +156,5 @@ return {
 	firePlayerDied = firePlayerDied,
 	sendTeamAssignment = sendTeamAssignment,
 	notifyAttackerDamage = notifyAttackerDamage,
+	sendEliminationNotice = sendEliminationNotice,
 }

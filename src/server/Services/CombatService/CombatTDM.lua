@@ -5,6 +5,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
+local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUtils)
 local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 local TDMSpawnStrategy = require(script.Parent.TDMSpawnStrategy)
 local CombatRemotes = require(script.Parent.CombatRemotes)
@@ -51,7 +52,7 @@ local function endMatch(state, winningTeam)
 		return
 	end
 	state.matchEnded = true
-	print("[Combat] TDM match ended. Winning team: " .. tostring(winningTeam))
+	print("[Combat] TDM match ended. Winning team: " .. TeamDisplayUtils.displayName(winningTeam))
 	for _, conn in pairs(state.diedConnections) do
 		if conn and conn.Disconnect then
 			conn:Disconnect()

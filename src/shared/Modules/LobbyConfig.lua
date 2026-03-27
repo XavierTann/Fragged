@@ -36,7 +36,7 @@ return {
 		ARENA = "Arena",
 	},
 
-	-- Workspace folder: SpawnLocations (contains ShopSpawnLocation, LobbySpawnLocation, RedTeamSpawnLocation, BlueTeamSpawnLocation)
+	-- Workspace folder: SpawnLocations (ShopSpawnLocation, LobbySpawnLocation, BlueTeamSpawnLocation, RedTeamSpawnLocation for orange team)
 	SPAWNS_FOLDER_NAME = "SpawnLocations",
 	SPAWN_NAMES = {
 		SHOP = "ShopSpawnLocation",

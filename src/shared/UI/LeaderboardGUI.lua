@@ -1,6 +1,7 @@
 --[[
 	LeaderboardGUI
-	Uses the StarterGui template: ScreenGui > Leaderboard > LeaderboardBG > BlueTeam / RedTeam
+	Uses the StarterGui template: ScreenGui > Leaderboard > LeaderboardBG > BlueTeam / OrangeTeam
+	(OrangeTeam preferred; RedTeam is still found for older templates.)
 	Each team may include a Title header Frame (left untouched), UIListLayout, and Player1..PlayerN row Frames
 	(cloned from one kept template; interior Name, Kills, Deaths, Assists on text controls).
 	Optional CloseButton (GuiButton, e.g. ImageButton) under Leaderboard closes the overlay.
@@ -8,6 +9,9 @@
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUtils)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -33,7 +37,7 @@ local function findLeaderboardRefs()
 				local bg = root:FindFirstChild("LeaderboardBG")
 				if bg then
 					local blue = bg:FindFirstChild("BlueTeam")
-					local red = bg:FindFirstChild("RedTeam")
+					local red = bg:FindFirstChild("OrangeTeam") or bg:FindFirstChild("RedTeam")
 					if blue and red then
 						screenGui = sg
 						leaderboardFrame = root
@@ -56,7 +60,7 @@ local function waitForLeaderboardRefs()
 		end
 		task.wait(0.25)
 	end
-	warn("[LeaderboardGUI] No leaderboard found under PlayerGui (ScreenGui > Leaderboard > LeaderboardBG > BlueTeam / RedTeam).")
+	warn("[LeaderboardGUI] No leaderboard found under PlayerGui (ScreenGui > Leaderboard > LeaderboardBG > BlueTeam / OrangeTeam or RedTeam).")
 	return false
 end
 
@@ -248,7 +252,7 @@ local function applyOptionalTitleAndWinner(payload)
 		return
 	end
 	local isLive = payload.isLiveLeaderboard == true
-	-- Direct child only: avoid picking up BlueTeam/RedTeam "Title" header frames.
+	-- Direct child only: avoid picking up BlueTeam/OrangeTeam "Title" header frames.
 	local titleInst = leaderboardFrame:FindFirstChild("Title")
 	if titleInst and titleInst:IsA("TextLabel") then
 		titleInst.Text = isLive and "Leaderboard" or "Match Results"
@@ -258,7 +262,7 @@ local function applyOptionalTitleAndWinner(payload)
 		local wt = payload.winningTeam
 		if wt and not isLive then
 			winnerInst.Visible = true
-			winnerInst.Text = wt .. " Team Victory!"
+			winnerInst.Text = TeamDisplayUtils.teamVictoryPhrase(wt)
 		else
 			winnerInst.Visible = false
 			winnerInst.Text = ""
@@ -272,7 +276,7 @@ local function showLeaderboard(payload)
 	end
 	ensurePlayerRowTemplate()
 	if not playerRowTemplate then
-		warn("[LeaderboardGUI] No Player1..PlayerN row template under BlueTeam or RedTeam.")
+		warn("[LeaderboardGUI] No Player1..PlayerN row template under BlueTeam or OrangeTeam/RedTeam.")
 		return
 	end
 

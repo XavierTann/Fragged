@@ -4,6 +4,7 @@
 
 return {
 	KILL_LIMIT = 10,
+	-- Internal keys; UI shows "Orange" for "Red".
 	TEAMS = { "Blue", "Red" },
 	RESPAWN_DELAY = 2,
 	LEADERBOARD_DURATION = 8,

@@ -1,7 +1,7 @@
 --[[
 	TeamIndicatorGUI
 	HUD label at the top of the screen showing the local player's current team.
-	"You are on the Blue Team" / "You are on the Red Team" in matching team color.
+	"You are on the Blue Team" / "You are on the Orange Team" in matching team color.
 	Only visible during arena phase.
 ]]
 
@@ -9,11 +9,12 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
+local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUtils)
 
 local LocalPlayer = Players.LocalPlayer
 
-local COLOR_BLUE    = Color3.fromRGB(100, 170, 255)
-local COLOR_RED     = Color3.fromRGB(255, 100, 100)
+local COLOR_BLUE   = Color3.fromRGB(100, 170, 255)
+local COLOR_ORANGE = Color3.fromRGB(255, 145, 55)
 local COLOR_DEFAULT = Color3.fromRGB(220, 220, 220)
 
 local gui   = nil
@@ -64,11 +65,11 @@ local function updateLabel(myTeam)
 		return
 	end
 	if myTeam == "Blue" then
-		label.Text       = "You are on the Blue Team"
+		label.Text       = TeamDisplayUtils.youAreOnTeamPhrase("Blue")
 		label.TextColor3 = COLOR_BLUE
 	elseif myTeam == "Red" then
-		label.Text       = "You are on the Red Team"
-		label.TextColor3 = COLOR_RED
+		label.Text       = TeamDisplayUtils.youAreOnTeamPhrase("Red")
+		label.TextColor3 = COLOR_ORANGE
 	else
 		label.Text       = ""
 		label.TextColor3 = COLOR_DEFAULT

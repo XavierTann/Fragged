@@ -1,8 +1,10 @@
 --[[
 	OverheadHealthBarGUI
 	Creates and manages BillboardGui overhead health bars above every other player's head
-	in the arena. Green for teammates, red for opponents. Colors refresh when team
-	assignments change. Only visible while the arena phase is active.
+	in the arena. Green for teammates; opponents use that player's team color (blue vs
+	orange; server internal key for orange side is still "Red"). Orange avoids looking like a
+	"low health" red bar. Colors refresh when team assignments change. Only visible while the arena
+	phase is active.
 ]]
 
 local Players = game:GetService("Players")
@@ -20,7 +22,10 @@ local BILLBOARD_MAX_DIST   = 60
 local BAR_BG_COLOR         = Color3.fromRGB(22, 22, 22)
 local BAR_BG_TRANSPARENCY  = 0.3
 local COLOR_FRIENDLY       = Color3.fromRGB(80, 200, 100)
-local COLOR_ENEMY          = Color3.fromRGB(220, 70, 70)
+-- Opponent bar: match their team (server still uses "Blue" / "Red" keys).
+local COLOR_TEAM_BLUE      = Color3.fromRGB(70, 150, 255)
+local COLOR_TEAM_ORANGE    = Color3.fromRGB(255, 145, 55)
+local COLOR_UNKNOWN_TEAM   = Color3.fromRGB(160, 160, 160)
 
 -- [userId] -> "Blue" | "Red"
 local playerTeams = {}
@@ -31,13 +36,19 @@ local playerConnections = {}
 
 local function getBarColor(userId)
 	local theirTeam = playerTeams[userId]
-	
-	
 	if not theirTeam or not myTeam then
-		return COLOR_ENEMY
+		return COLOR_UNKNOWN_TEAM
 	end
-	
-	return (theirTeam == myTeam) and COLOR_FRIENDLY or COLOR_ENEMY
+	if theirTeam == myTeam then
+		return COLOR_FRIENDLY
+	end
+	if theirTeam == "Blue" then
+		return COLOR_TEAM_BLUE
+	end
+	if theirTeam == "Red" then
+		return COLOR_TEAM_ORANGE
+	end
+	return COLOR_UNKNOWN_TEAM
 end
 
 local function findOrCreateBillboard(head)

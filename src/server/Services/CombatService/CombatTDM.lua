@@ -17,6 +17,35 @@ local function getTDMContext(state)
 	}
 end
 
+-- Roblox adds ForceField on spawn (SpawnLocation.Duration / default respawn protection).
+-- TakeDamage is blocked while it exists — strip it in TDM so combat works immediately.
+local SPAWN_FF_STRIP_SECONDS = 5
+
+local function stripRobloxSpawnForceFields(character)
+	if not character then
+		return
+	end
+	local function removeForceFields()
+		for _, child in ipairs(character:GetChildren()) do
+			if child:IsA("ForceField") then
+				child:Destroy()
+			end
+		end
+	end
+	removeForceFields()
+	local conn
+	conn = character.ChildAdded:Connect(function(child)
+		if child:IsA("ForceField") then
+			child:Destroy()
+		end
+	end)
+	task.delay(SPAWN_FF_STRIP_SECONDS, function()
+		if conn then
+			conn:Disconnect()
+		end
+	end)
+end
+
 local function buildLeaderboardData(state)
 	local bluePlayers = {}
 	local redPlayers = {}
@@ -92,6 +121,7 @@ local function respawnPlayer(state, onPlayerDiedFn, player)
 	task.defer(function()
 		local char = player.Character
 		if char and char:FindFirstChild("HumanoidRootPart") then
+			stripRobloxSpawnForceFields(char)
 			local cf = TDMSpawnStrategy.getSpawnCFrame(player, getTDMContext(state))
 			char.HumanoidRootPart.CFrame = cf
 			local humanoid = char:FindFirstChildOfClass("Humanoid")
@@ -152,4 +182,5 @@ return {
 	endMatch = endMatch,
 	respawnPlayer = respawnPlayer,
 	onPlayerDied = onPlayerDied,
+	stripRobloxSpawnForceFields = stripRobloxSpawnForceFields,
 }

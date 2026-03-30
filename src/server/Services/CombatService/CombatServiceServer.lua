@@ -449,6 +449,7 @@ return {
 			local cf = TDMSpawnStrategy.getSpawnCFrame(p, CombatTDM.getTDMContext(state))
 			local character = p.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then
+				CombatTDM.stripRobloxSpawnForceFields(character)
 				character.HumanoidRootPart.CFrame = cf
 			end
 			if character then
@@ -461,7 +462,10 @@ return {
 					end)
 				end
 			end
-			local conn = p.CharacterAdded:Connect(function()
+			local conn = p.CharacterAdded:Connect(function(newCharacter)
+				task.defer(function()
+					CombatTDM.stripRobloxSpawnForceFields(newCharacter)
+				end)
 				local inv = WeaponInventoryServer.getWeapons(p)
 				for _, w in ipairs(inv) do
 					if w == "RocketLauncher" then

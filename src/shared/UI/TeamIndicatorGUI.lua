@@ -80,7 +80,7 @@ local function ensureGui()
 	topBarFrame = Instance.new("Frame")
 	topBarFrame.Name = "TopBar"
 	topBarFrame.Size = UDim2.fromOffset(260, 34)
-	topBarFrame.Position = UDim2.new(0.5, 0, 0, 8)
+	topBarFrame.Position = UDim2.new(0.5, 0, 0, 52)
 	topBarFrame.AnchorPoint = Vector2.new(0.5, 0)
 	topBarFrame.BackgroundColor3 = Color3.fromRGB(18, 22, 34)
 	topBarFrame.BackgroundTransparency = 0.4

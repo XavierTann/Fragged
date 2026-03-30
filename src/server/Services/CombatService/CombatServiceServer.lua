@@ -265,6 +265,8 @@ local function bindHandlers()
 			CombatBullets.spawnBullet(state, player, startPos, dir, gunId)
 		end
 
+		CombatRemotes.broadcastGunshotSpatial(state, uid, gunId)
+
 		if newAmmo <= 0 then
 			state.reloadEndAt[uid][gunId] = now + (gun.reloadTime or 1.5)
 			CombatRemotes.sendAmmoState(state, player, gunId, 0, true)

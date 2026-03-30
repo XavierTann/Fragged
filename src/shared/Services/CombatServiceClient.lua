@@ -6,6 +6,7 @@
 	sends shotOrigin, aim direction, and gunId. The server is authoritative: validates origin/direction
 	bounds, inventory, equipped tool, ammo, cooldown, and reload; on reject it may fire FireGunRejected
 	(resetClientFireRate) and AmmoState to resync.
+	Gunshots: local predicted sound + GunshotSpatial to other round players; all use 3D Sound on HRP or tool Handle.
 	Mobile: Pistol/Rifle fire while aim joystick is off-axis; Shotgun matches Grenade/Rocket
 	(fire on joystick release with last aim direction). Releasing inside the cancel zone
 	skips the shot for those weapons only.
@@ -113,26 +114,56 @@ local function canFireByRate()
 	return (os.clock() - lastFiredAt) >= fireRate
 end
 
-local function playGunshotSound(gunId)
+-- 3D world audio: parent must be a BasePart on the character (replicated for other players’ shots).
+local GUNSHOT_ROLLOFF_MIN = 6
+local GUNSHOT_ROLLOFF_MAX = 150
+local GUNSHOT_EMITTER_SIZE = 3
+
+local function getGunshotAttachPart(character, gunId)
+	if not character then
+		return nil
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if gunId then
+		local tool = character:FindFirstChild(gunId)
+		local handle = tool and tool:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			return handle
+		end
+	end
+	return root
+end
+
+local function playSpatialGunshotOnPart(parentPart, gunId)
+	if not parentPart or not parentPart:IsA("BasePart") then
+		return
+	end
 	local gun = GunsConfig[gunId] or GunsConfig.Pistol
 	local soundId = gun.gunshotSoundId
 	if not soundId then
 		return
 	end
-	local character = Players.LocalPlayer.Character
-	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-	local parent = rootPart or Workspace
 	local sound = Instance.new("Sound")
+	sound.Name = "Gunshot3D"
 	sound.SoundId = soundId
-	sound.Volume = 1
-	sound.RollOffMode = Enum.RollOffMode.Inverse
-	sound.RollOffMaxDistance = 200
-	sound.RollOffMinDistance = 10
-	sound.Parent = parent
+	sound.Volume = 0.92
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = GUNSHOT_ROLLOFF_MIN
+	sound.RollOffMaxDistance = GUNSHOT_ROLLOFF_MAX
+	sound.EmitterSize = GUNSHOT_EMITTER_SIZE
+	sound.Parent = parentPart
 	sound:Play()
 	sound.Ended:Connect(function()
 		sound:Destroy()
 	end)
+end
+
+local function playGunshotSound(gunId)
+	local character = Players.LocalPlayer.Character
+	local part = getGunshotAttachPart(character, gunId)
+	if part then
+		playSpatialGunshotOnPart(part, gunId)
+	end
 end
 
 local function playReloadSound(gunId)
@@ -736,6 +767,25 @@ end
 		local weaponInventoryRE = folder:WaitForChild(CombatConfig.REMOTES.WEAPON_INVENTORY)
 		local teamAssignmentRE = folder:WaitForChild(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
 		GetLiveLeaderboardRF = folder:WaitForChild(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
+		local gunshotSpatialRE = folder:WaitForChild(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
+
+		gunshotSpatialRE.OnClientEvent:Connect(function(shooterUserId, gunId)
+			if typeof(shooterUserId) ~= "number" or typeof(gunId) ~= "string" then
+				return
+			end
+			if shooterUserId == Players.LocalPlayer.UserId then
+				return
+			end
+			local shooter = Players:GetPlayerByUserId(shooterUserId)
+			local character = shooter and shooter.Character
+			if not character then
+				return
+			end
+			local part = getGunshotAttachPart(character, gunId)
+			if part then
+				playSpatialGunshotOnPart(part, gunId)
+			end
+		end)
 
 		fireGunRejectedRE.OnClientEvent:Connect(function(_reason, _gunId, resetClientFireRate)
 			if resetClientFireRate then

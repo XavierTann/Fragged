@@ -49,6 +49,7 @@ local function ensureRemotes(state)
 	state.getLiveLeaderboardRF = getOrCreateRemoteFunction(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
 	state.damageNumberRE = getOrCreate(CombatConfig.REMOTES.DAMAGE_NUMBER)
 	state.killNotificationRE = getOrCreate(CombatConfig.REMOTES.KILL_NOTIFICATION)
+	state.gunshotSpatialRE = getOrCreate(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
@@ -146,6 +147,18 @@ local function broadcastTeamScore(state)
 	end
 end
 
+-- Other clients play spatial gunshot on the shooter's character; shooter already hears predicted local sound.
+local function broadcastGunshotSpatial(state, shooterUserId, gunId)
+	if not state.gunshotSpatialRE or not shooterUserId or typeof(gunId) ~= "string" then
+		return
+	end
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p and p.Parent and p.UserId ~= shooterUserId then
+			state.gunshotSpatialRE:FireClient(p, shooterUserId, gunId)
+		end
+	end
+end
+
 return {
 	ensureRemotes = ensureRemotes,
 	sendAmmoState = sendAmmoState,
@@ -157,4 +170,5 @@ return {
 	sendTeamAssignment = sendTeamAssignment,
 	notifyAttackerDamage = notifyAttackerDamage,
 	sendEliminationNotice = sendEliminationNotice,
+	broadcastGunshotSpatial = broadcastGunshotSpatial,
 }

@@ -1,7 +1,7 @@
 --[[
 	OverheadHealthBarGUI
-	Creates and manages BillboardGui overhead health bars above every other player's head
-	in the arena. Green for teammates; opponents use that player's team color (blue vs
+	Creates and manages BillboardGui overhead health bars above each player's head
+	(including the local player) in the arena. Fill color matches that player's team (blue vs
 	orange; server internal key for orange side is still "Red"). Orange avoids looking like a
 	"low health" red bar. Colors refresh when team assignments change. Only visible while the arena
 	phase is active.
@@ -12,8 +12,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
 
-local LocalPlayer = Players.LocalPlayer
-
 local BILLBOARD_NAME       = "OverheadHealthBar"
 local BILLBOARD_SIZE       = UDim2.fromOffset(72, 7)
 local BILLBOARD_OFFSET     = Vector3.new(0, 2.4, 0)
@@ -21,31 +19,22 @@ local BILLBOARD_MAX_DIST   = 60
 
 local BAR_BG_COLOR         = Color3.fromRGB(22, 22, 22)
 local BAR_BG_TRANSPARENCY  = 0.3
-local COLOR_FRIENDLY       = Color3.fromRGB(80, 200, 100)
--- Opponent bar: match their team (server still uses "Blue" / "Red" keys).
 local COLOR_TEAM_BLUE      = Color3.fromRGB(70, 150, 255)
 local COLOR_TEAM_ORANGE    = Color3.fromRGB(255, 145, 55)
 local COLOR_UNKNOWN_TEAM   = Color3.fromRGB(160, 160, 160)
 
 -- [userId] -> "Blue" | "Red"
 local playerTeams = {}
-local myTeam      = nil
 
 -- [userId] -> { characterAdded, health, maxHealth, died }
 local playerConnections = {}
 
 local function getBarColor(userId)
-	local theirTeam = playerTeams[userId]
-	if not theirTeam or not myTeam then
-		return COLOR_UNKNOWN_TEAM
-	end
-	if theirTeam == myTeam then
-		return COLOR_FRIENDLY
-	end
-	if theirTeam == "Blue" then
+	local team = playerTeams[userId]
+	if team == "Blue" then
 		return COLOR_TEAM_BLUE
 	end
-	if theirTeam == "Red" then
+	if team == "Red" then
 		return COLOR_TEAM_ORANGE
 	end
 	return COLOR_UNKNOWN_TEAM
@@ -81,7 +70,7 @@ local function findOrCreateBillboard(head)
 	local fill = Instance.new("Frame")
 	fill.Name                   = "Fill"
 	fill.Size                   = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3       = COLOR_FRIENDLY
+	fill.BackgroundColor3       = COLOR_TEAM_BLUE
 	fill.BackgroundTransparency = 0
 	fill.BorderSizePixel        = 0
 	fill.Parent                 = bg
@@ -194,16 +183,14 @@ end
 
 local function refreshAllBars()
 	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
-			local character = player.Character
-			if character then
-				local head      = character:FindFirstChild("Head")
-				local billboard = head and head:FindFirstChild(BILLBOARD_NAME)
-				if billboard then
-					local humanoid = character:FindFirstChildOfClass("Humanoid")
-					if humanoid then
-						updateBar(billboard, humanoid, player.UserId)
-					end
+		local character = player.Character
+		if character then
+			local head = character:FindFirstChild("Head")
+			local billboard = head and head:FindFirstChild(BILLBOARD_NAME)
+			if billboard then
+				local humanoid = character:FindFirstChildOfClass("Humanoid")
+				if humanoid then
+					updateBar(billboard, humanoid, player.UserId)
 				end
 			end
 		end
@@ -218,36 +205,23 @@ return {
 		initialized = true
 
 		CombatServiceClient.SubscribeTeamAssignment(function(assignment)
-			myTeam      = assignment.myTeam
 			playerTeams = assignment.playerTeams or {}
-			-- Call setupPlayer for every current player so that bars which were
-			-- withheld (because myTeam was nil) are created now with correct colors,
+			-- Call setupPlayer for every current player (including local) so that bars which were
+			-- withheld (because team data was nil) are created now with correct colors,
 			-- and any already-existing bars are recolored to match the new assignment.
-	
-
-				for _, player in ipairs(Players:GetPlayers()) do
-					if player ~= LocalPlayer then
-						setupPlayer(player)
-					end
-				end
-
+			for _, player in ipairs(Players:GetPlayers()) do
+				setupPlayer(player)
+			end
 		end)
 
 		Players.PlayerAdded:Connect(function(player)
-			if player ~= LocalPlayer then
-				setupPlayer(player)
-			end
+			setupPlayer(player)
 		end)
 
 		Players.PlayerRemoving:Connect(function(player)
 			teardownPlayer(player.UserId)
 		end)
 
-		-- for _, player in ipairs(Players:GetPlayers()) do
-		-- 	if player ~= LocalPlayer then
-		-- 		setupPlayer(player)
-		-- 	end
-		-- end
 	end,
 
 	
@@ -256,7 +230,6 @@ return {
 		-- active = false
 		-- Clear team state so stale assignments from this round never influence
 		-- bar colors at the start of the next round before TEAM_ASSIGNMENT arrives.
-		myTeam      = nil
 		playerTeams = {}
 		for _, player in ipairs(Players:GetPlayers()) do
 			destroyPlayerBillboard(player)

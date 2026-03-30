@@ -10,9 +10,7 @@ return {
 	MAX_PLAYERS = 8,
 
 	-- Countdown (seconds) in waiting lobby before teleporting to arena
-	-- ARENA_COUNTDOWN_SECONDS = 5,
-	-- DEBUG
-	ARENA_COUNTDOWN_SECONDS = 1,
+	ARENA_COUNTDOWN_SECONDS = 3,
 
 	-- Seconds to ignore portal/join after leaving waiting lobby (prevents instant re-enter when teleporting to shop)
 	LEAVE_WAITING_COOLDOWN_SECONDS = 2,

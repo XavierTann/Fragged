@@ -212,13 +212,14 @@ local function notifyAmmoSubscribers()
 	end
 end
 
--- Matches server muzzle offset (HumanoidRootPart + aim * 2).
+-- Matches server shot origin (HumanoidRootPart + aim * CombatConfig.SHOT_ORIGIN_FORWARD_STUDS).
 local function getShotOriginForDirection(character, dir)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if not root or not dir or dir.Magnitude < 0.01 then
 		return nil
 	end
-	return root.Position + dir.Unit * 2
+	local forward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+	return root.Position + dir.Unit * forward
 end
 
 local PREDICTED_TRACER_TRAIL = 4

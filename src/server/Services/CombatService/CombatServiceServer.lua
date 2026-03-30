@@ -2,7 +2,7 @@
 	CombatService (server)
 	Shooting (visible bullets), health, round end. Server-authoritative.
 	FireGun: validate round membership, weapon inventory, equipped Tool, ammo/cooldown/reload,
-	client shot origin vs HRP+aim*2, then spawn bullets at authoritative muzzle (HRP + aim * 2).
+	client shot origin vs HRP+aim*forward (CombatConfig.SHOT_ORIGIN_FORWARD_STUDS), then spawn bullets there.
 	Init() sets up remotes and handlers. StartRound(players, onRoundEnd) is called when arena round starts.
 ]]
 
@@ -27,7 +27,7 @@ local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
 
--- Client-reported muzzle must be near server-expected point (root + aim * 2).
+-- Client-reported origin must be near server-expected point (root + aim * SHOT_ORIGIN_FORWARD_STUDS).
 local FIRE_ORIGIN_MAX_ERROR_STUDS = 6
 local FIRE_ORIGIN_MAX_DISTANCE_FROM_ROOT_STUDS = 14
 -- Aim must be a valid horizontal-ish world direction (matches client XZ aim, blocks degenerate axes).
@@ -78,7 +78,8 @@ local function validateClientShotOrigin(rootPos, shotOrigin, aimUnit)
 	if (shotOrigin - rootPos).Magnitude > FIRE_ORIGIN_MAX_DISTANCE_FROM_ROOT_STUDS then
 		return false
 	end
-	local expected = rootPos + aimUnit * 2
+	local forward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+	local expected = rootPos + aimUnit * forward
 	return (shotOrigin - expected).Magnitude <= FIRE_ORIGIN_MAX_ERROR_STUDS
 end
 
@@ -248,7 +249,8 @@ local function bindHandlers()
 		state.ammoInMagazine[uid][gunId] = ammo - 1
 		local newAmmo = state.ammoInMagazine[uid][gunId]
 
-		local startPos = root.Position + aimUnit * 2
+		local originForward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+		local startPos = root.Position + aimUnit * originForward
 		local pelletCount = gun.pelletCount or 1
 		local spreadDeg = gun.spreadDegrees or 0
 		for _ = 1, pelletCount do
@@ -346,7 +348,8 @@ local function bindHandlers()
 		table.insert(regenTimes, os.clock() + (GrenadeConfig.regenerationTime or 5))
 		table.sort(regenTimes)
 		CombatRemotes.sendGrenadeState(state, player, state.grenadeCount[uid])
-		local startPos = root.Position + aimDirection.Unit * 2
+		local originForward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+		local startPos = root.Position + aimDirection.Unit * originForward
 		CombatGrenades.spawnGrenade(state, player, startPos, aimDirection)
 	end)
 
@@ -387,7 +390,8 @@ local function bindHandlers()
 				end
 			end
 		end
-		local startPos = root.Position + aimDirection.Unit * 2
+		local originForward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+		local startPos = root.Position + aimDirection.Unit * originForward
 		CombatRockets.spawnRocket(state, player, startPos, aimDirection)
 	end)
 

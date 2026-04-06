@@ -17,6 +17,13 @@ local activeDrops = {}
 local spawnConnection = nil
 local onPickupCallback = nil
 
+local function shuffleInPlace(t)
+	for i = #t, 2, -1 do
+		local j = math.random(i)
+		t[i], t[j] = t[j], t[i]
+	end
+end
+
 local function getSpawnArea()
 	local tagged = CollectionService:GetTagged(DropConfig.DROP_SPAWN_TAG)
 	if #tagged > 0 then
@@ -61,6 +68,7 @@ local function getCapForDropType(dropCfg)
 end
 
 -- Picks among types that are under their per-type cap; nil if every type is at cap.
+-- Candidates are shuffled each roll so spawn order is not tied to table / pairs iteration order.
 local function getRandomDropType()
 	local candidates = {}
 	local totalWeight = 0
@@ -75,6 +83,7 @@ local function getRandomDropType()
 	if totalWeight <= 0 or #candidates == 0 then
 		return nil
 	end
+	shuffleInPlace(candidates)
 	local r = math.random() * totalWeight
 	for _, entry in ipairs(candidates) do
 		r = r - entry.weight
@@ -127,11 +136,24 @@ local function getTdmSpawnMarkers()
 	return markers
 end
 
--- Random TDM spawn; retries for MIN_DROP_SPACING. Returns gx, gz, groundY (surface to place on).
+-- TDM spawn markers: try every marker once in random order (avoids hammering occupied slots),
+-- then random retries for MIN_DROP_SPACING. Returns gx, gz, groundY (surface to place on).
 local function findGroundPositionAtTdmSpawn()
 	local markers = getTdmSpawnMarkers()
 	if #markers == 0 then
 		return nil
+	end
+	local order = table.clone(markers)
+	shuffleInPlace(order)
+	for _, part in ipairs(order) do
+		if part.Parent then
+			local gx, gz = part.Position.X, part.Position.Z
+			local groundY = basePartTopY(part)
+			local samplePos = Vector3.new(gx, groundY + 0.5, gz)
+			if isPositionValid(samplePos, nil) then
+				return { gx = gx, gz = gz, groundY = groundY }
+			end
+		end
 	end
 	for _ = 1, 24 do
 		local part = markers[math.random(1, #markers)]

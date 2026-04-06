@@ -75,6 +75,7 @@ local wasInArena = false
 
 local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	CombatServiceClient.SetShootingEnabled(inArena and not postMatchLeaderboard)
+	TopDownCameraService.SetEnabled(inArena and not postMatchLeaderboard)
 	if hideLeaderboardOverlay then
 		LeaderboardGUI.Hide()
 	end
@@ -102,6 +103,7 @@ end
 
 CombatServiceClient.SubscribeMatchEnded(function(payload)
 	postMatchLeaderboard = true
+	TopDownCameraService.SetEnabled(false)
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	ManualReloadGUI.Hide()

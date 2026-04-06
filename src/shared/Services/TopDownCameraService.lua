@@ -15,6 +15,8 @@ local ANGLE_FROM_VERTICAL = 0 -- 0 = straight down; increase for slight tilt
 local camera = Workspace.CurrentCamera
 local localPlayer = Players.LocalPlayer
 local connection = nil
+local characterAddedConnection = nil
+local topDownEnabled = false
 
 local function updateCamera()
 	local character = localPlayer.Character
@@ -34,22 +36,63 @@ local function updateCamera()
 	camera.CFrame = CFrame.lookAt(camPos, lookAt)
 end
 
+local function applyDefaultCamera()
+	camera.CameraType = Enum.CameraType.Custom
+	local character = localPlayer.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			camera.CameraSubject = humanoid
+		end
+	end
+end
+
+local function onCharacterAdded()
+	if topDownEnabled then
+		task.defer(updateCamera)
+	end
+end
+
 return {
+	-- Wires CharacterAdded only; lobby uses default camera until SetEnabled(true) (arena / active round).
 	Init = function()
 		if connection then
 			connection:Disconnect()
 			connection = nil
 		end
-		camera.CameraType = Enum.CameraType.Scriptable
-		connection = RunService.RenderStepped:Connect(updateCamera)
-		-- Initial position when character exists
-		local function onCharacterAdded()
-			task.defer(updateCamera)
+		topDownEnabled = false
+		if characterAddedConnection then
+			characterAddedConnection:Disconnect()
+			characterAddedConnection = nil
 		end
-		if localPlayer.Character then
-			onCharacterAdded()
+		characterAddedConnection = localPlayer.CharacterAdded:Connect(onCharacterAdded)
+	end,
+
+	SetEnabled = function(enabled)
+		enabled = enabled == true
+		if enabled == topDownEnabled then
+			if enabled then
+				task.defer(updateCamera)
+			end
+			return
 		end
-		localPlayer.CharacterAdded:Connect(onCharacterAdded)
+		topDownEnabled = enabled
+		if enabled then
+			camera.CameraType = Enum.CameraType.Scriptable
+			if connection then
+				connection:Disconnect()
+			end
+			connection = RunService.RenderStepped:Connect(updateCamera)
+			if localPlayer.Character then
+				task.defer(updateCamera)
+			end
+		else
+			if connection then
+				connection:Disconnect()
+				connection = nil
+			end
+			applyDefaultCamera()
+		end
 	end,
 
 	-- Optional: set height at runtime (studs above character)

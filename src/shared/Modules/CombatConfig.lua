@@ -36,5 +36,7 @@ return {
 		KILL_NOTIFICATION = "KillNotification",
 		-- Server -> other clients in round: (shooterUserId: number, gunId: string) for 3D gunshot at shooter
 		GUNSHOT_SPATIAL = "GunshotSpatial",
+		-- Server -> clients in round: cosmetic grenade burst at authoritative explosion position.
+		GRENADE_EXPLOSION_FX = "GrenadeExplosionFX",
 	},
 }

@@ -50,6 +50,7 @@ local function ensureRemotes(state)
 	state.damageNumberRE = getOrCreate(CombatConfig.REMOTES.DAMAGE_NUMBER)
 	state.killNotificationRE = getOrCreate(CombatConfig.REMOTES.KILL_NOTIFICATION)
 	state.gunshotSpatialRE = getOrCreate(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
+	state.grenadeExplosionFXRE = getOrCreate(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
 end
 
 local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
@@ -159,6 +160,20 @@ local function broadcastGunshotSpatial(state, shooterUserId, gunId)
 	end
 end
 
+local function broadcastGrenadeExplosionFX(state, worldPosition, radius, explosionSoundId, throwerUserId)
+	if not state.grenadeExplosionFXRE then
+		return
+	end
+	if typeof(worldPosition) ~= "Vector3" or typeof(radius) ~= "number" then
+		return
+	end
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p and p.Parent then
+			state.grenadeExplosionFXRE:FireClient(p, worldPosition, radius, explosionSoundId, throwerUserId)
+		end
+	end
+end
+
 return {
 	ensureRemotes = ensureRemotes,
 	sendAmmoState = sendAmmoState,
@@ -171,4 +186,5 @@ return {
 	notifyAttackerDamage = notifyAttackerDamage,
 	sendEliminationNotice = sendEliminationNotice,
 	broadcastGunshotSpatial = broadcastGunshotSpatial,
+	broadcastGrenadeExplosionFX = broadcastGrenadeExplosionFX,
 }

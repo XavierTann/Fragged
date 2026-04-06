@@ -1,7 +1,8 @@
 --[[
 	CombatServiceClient
 	Firing input and FireGun remote. Only active when in arena (enabled by startup).
-	Grenade: immediate throw sound + local clone with same root setup as CombatGrenades (physics); server grenade hidden for thrower.
+	Grenade: throw sound + FireServer; in-flight mesh is server-replicated (CombatGrenades) so it matches physics.
+	GrenadeExplosionFX plays burst at server position for all clients (including thrower).
 	Predicted feedback (muzzle flash, recoil, sound, local-only tracers) runs immediately, then FireGun
 	sends shotOrigin, aim direction, and gunId. The server is authoritative: validates origin/direction
 	bounds, inventory, equipped tool, ammo, cooldown, and reload; on reject it may fire FireGunRejected
@@ -25,7 +26,6 @@ local Debris = game:GetService("Debris")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
-local GrenadeAngularResistance = require(ReplicatedStorage.Shared.Modules.GrenadeAngularResistance)
 
 local FireGunRE = nil
 local RequestReloadRE = nil
@@ -343,131 +343,45 @@ local function wireHideOwnReplicatedBullets()
 	end
 end
 
-local GRENADES_FOLDER_NAME = "CombatGrenades"
-
-local function hideOwnServerGrenadeReplica(inst)
-	if inst:GetAttribute("ThrowerUserId") ~= Players.LocalPlayer.UserId then
-		return
+local function playLocalGrenadeExplosionVFX(worldPosition, radius, explosionSoundId)
+	local explosionPart = Instance.new("Part")
+	explosionPart.Name = "LocalGrenadeExplosionFX"
+	explosionPart.Shape = Enum.PartType.Ball
+	explosionPart.Size = Vector3.new(1, 1, 1)
+	explosionPart.Anchored = true
+	explosionPart.CanCollide = false
+	explosionPart.CanQuery = false
+	explosionPart.Material = Enum.Material.Neon
+	explosionPart.Color = Color3.fromRGB(255, 120, 40)
+	explosionPart.CFrame = CFrame.new(worldPosition)
+	explosionPart.Transparency = 0.3
+	explosionPart.Parent = Workspace
+	local startSize = 1
+	local endSize = radius * 2
+	local duration = 0.2
+	local elapsed = 0
+	if typeof(explosionSoundId) == "string" and explosionSoundId ~= "" then
+		local sound = Instance.new("Sound")
+		sound.SoundId = explosionSoundId
+		sound.Volume = 1
+		sound.RollOffMode = Enum.RollOffMode.Inverse
+		sound.RollOffMaxDistance = 300
+		sound.RollOffMinDistance = 10
+		sound.Parent = explosionPart
+		sound:Play()
 	end
-	local function touchVisual(d)
-		if d:IsA("BasePart") then
-			d.LocalTransparencyModifier = 1
-		elseif d:IsA("Beam") or d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Fire") then
-			d.Enabled = false
+	local conn
+	conn = RunService.Heartbeat:Connect(function(dt)
+		elapsed = elapsed + dt
+		if elapsed >= duration then
+			conn:Disconnect()
+			explosionPart:Destroy()
+			return
 		end
-	end
-	touchVisual(inst)
-	for _, d in ipairs(inst:GetDescendants()) do
-		touchVisual(d)
-	end
-end
-
-local function wireHideOwnReplicatedGrenades()
-	local function bind(folder)
-		for _, c in ipairs(folder:GetChildren()) do
-			hideOwnServerGrenadeReplica(c)
-		end
-		folder.ChildAdded:Connect(hideOwnServerGrenadeReplica)
-	end
-	local folder = Workspace:FindFirstChild(GRENADES_FOLDER_NAME)
-	if folder then
-		bind(folder)
-	else
-		Workspace.ChildAdded:Connect(function(child)
-			if child.Name == GRENADES_FOLDER_NAME then
-				bind(child)
-			end
-		end)
-	end
-end
-
-local GRENADE_VISUAL_TEMPLATE_NAME = "GrenadeVisual"
-local COLLISION_GROUP_GRENADES = "Grenades"
-
-local function getGrenadeVisualTemplate()
-	local imports = ReplicatedStorage:FindFirstChild("Imports")
-	local models3D = imports and imports:FindFirstChild("3DModels")
-	return models3D and models3D:FindFirstChild(GRENADE_VISUAL_TEMPLATE_NAME)
-end
-
--- Same root resolution as CombatGrenades.getGrenadeRootPart.
-local function getGrenadeRootPart(instance)
-	if instance:IsA("Tool") then
-		return instance:FindFirstChild("Handle") or instance:FindFirstChildWhichIsA("BasePart")
-	elseif instance:IsA("Model") then
-		return instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart")
-	elseif instance:IsA("BasePart") then
-		return instance
-	end
-	return nil
-end
-
--- Matches CombatGrenades.spawnGrenade velocity (throwDir * throwSpeed).
-local function getGrenadeThrowVelocity(aimDirection)
-	local cfg = GrenadeConfig
-	local d = aimDirection.Unit
-	local throwDir = (Vector3.new(d.X, 0, d.Z) * (1 - cfg.throwArcUp) + Vector3.new(0, cfg.throwArcUp, 0)).Unit
-	return throwDir * cfg.throwSpeed
-end
-
--- Same root configuration as CombatGrenades.spawnGrenade (template path).
-local function configurePredictedGrenadeRootLikeServer(rootPart, startPos, velocity, cfg)
-	rootPart.CFrame = CFrame.new(startPos)
-	rootPart.AssemblyLinearVelocity = velocity
-	rootPart.Anchored = false
-	rootPart.CanCollide = true
-	rootPart.CollisionGroup = COLLISION_GROUP_GRENADES
-	rootPart.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
-end
-
--- Local physics clone: identical setup to server grenade; destroyed at fuseTime (no local explosion).
-local function spawnPredictedGrenade(startPos, aimDirection)
-	local cfg = GrenadeConfig
-	local velocity = getGrenadeThrowVelocity(aimDirection)
-	local template = getGrenadeVisualTemplate()
-	local grenade
-	local rootPart
-
-	if template then
-		grenade = template:Clone()
-		grenade.Name = "PredictedGrenade"
-		rootPart = getGrenadeRootPart(grenade)
-		if rootPart then
-			if grenade:IsA("Model") and not grenade.PrimaryPart then
-				grenade.PrimaryPart = rootPart
-			end
-			grenade.Parent = getPredictedShotsFolder()
-			configurePredictedGrenadeRootLikeServer(rootPart, startPos, velocity, cfg)
-			GrenadeAngularResistance.attach(rootPart, cfg)
-		else
-			grenade:Destroy()
-			grenade = nil
-		end
-	end
-
-	if not grenade or not rootPart then
-		rootPart = Instance.new("Part")
-		rootPart.Name = "PredictedGrenade"
-		rootPart.Size = cfg.size
-		rootPart.Color = cfg.color
-		rootPart.Material = cfg.material
-		rootPart.Shape = Enum.PartType.Ball
-		rootPart.Anchored = false
-		rootPart.CanCollide = true
-		rootPart.CFrame = CFrame.new(startPos)
-		rootPart.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, cfg.restitution, 1, 1)
-		rootPart.AssemblyLinearVelocity = velocity
-		rootPart.CollisionGroup = COLLISION_GROUP_GRENADES
-		rootPart.Parent = getPredictedShotsFolder()
-		grenade = rootPart
-		GrenadeAngularResistance.attach(rootPart, cfg)
-	end
-
-	local fuseTime = cfg.fuseTime
-	task.delay(fuseTime, function()
-		if grenade and grenade.Parent then
-			grenade:Destroy()
-		end
+		local t = elapsed / duration
+		local s = startSize + (endSize - startSize) * t
+		explosionPart.Size = Vector3.new(s, s, s)
+		explosionPart.Transparency = 0.3 + 0.6 * t
 	end)
 end
 
@@ -649,7 +563,6 @@ local function throwGrenade(dir)
 		return
 	end
 	playGrenadeThrowSound()
-	spawnPredictedGrenade(startPos, dir)
 	ThrowGrenadeRE:FireServer(dir)
 end
 
@@ -756,7 +669,6 @@ end
 	return {
 	Init = function()
 		wireHideOwnReplicatedBullets()
-		wireHideOwnReplicatedGrenades()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
 		RequestReloadRE = folder:WaitForChild(CombatConfig.REMOTES.REQUEST_RELOAD)
@@ -771,6 +683,14 @@ end
 		local teamAssignmentRE = folder:WaitForChild(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
 		GetLiveLeaderboardRF = folder:WaitForChild(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
 		local gunshotSpatialRE = folder:WaitForChild(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
+		local grenadeExplosionFXRE = folder:WaitForChild(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
+
+		grenadeExplosionFXRE.OnClientEvent:Connect(function(serverCenter, radius, explosionSoundId, _throwerUserId)
+			if typeof(serverCenter) ~= "Vector3" or typeof(radius) ~= "number" then
+				return
+			end
+			playLocalGrenadeExplosionVFX(serverCenter, radius, explosionSoundId)
+		end)
 
 		gunshotSpatialRE.OnClientEvent:Connect(function(shooterUserId, gunId)
 			if typeof(shooterUserId) ~= "number" or typeof(gunId) ~= "string" then

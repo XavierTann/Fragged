@@ -5,7 +5,6 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local GrenadeAngularResistance = require(ReplicatedStorage.Shared.Modules.GrenadeAngularResistance)
@@ -120,59 +119,16 @@ local function spawnGrenade(state, thrower, startPos, direction)
 		if not grenade or not grenade.Parent then
 			return
 		end
-		local center = rootPart.Position
+		local center = grenade:IsA("Model") and grenade:GetPivot().Position or rootPart.Position
 		grenade:Destroy()
 
-		if cfg.explosionSoundId then
-			local soundAnchor = Instance.new("Part")
-			soundAnchor.Name = "ExplosionSoundAnchor"
-			soundAnchor.Size = Vector3.new(0.1, 0.1, 0.1)
-			soundAnchor.Transparency = 1
-			soundAnchor.CanCollide = false
-			soundAnchor.Anchored = true
-			soundAnchor.CFrame = CFrame.new(center)
-			soundAnchor.Parent = getGrenadesFolder()
-			local sound = Instance.new("Sound")
-			sound.SoundId = cfg.explosionSoundId
-			sound.Volume = 1
-			sound.RollOffMode = Enum.RollOffMode.Inverse
-			sound.RollOffMaxDistance = 300
-			sound.RollOffMinDistance = 10
-			sound.Parent = soundAnchor
-			sound:Play()
-			sound.Ended:Connect(function()
-				soundAnchor:Destroy()
-			end)
-		end
-
-		local explosionPart = Instance.new("Part")
-		explosionPart.Name = "Explosion"
-		explosionPart.Shape = Enum.PartType.Ball
-		explosionPart.Size = Vector3.new(1, 1, 1)
-		explosionPart.Anchored = true
-		explosionPart.CanCollide = false
-		explosionPart.Material = Enum.Material.Neon
-		explosionPart.Color = Color3.fromRGB(255, 120, 40)
-		explosionPart.CFrame = CFrame.new(center)
-		explosionPart.Transparency = 0.3
-		explosionPart.Parent = getGrenadesFolder()
-		local startSize = 1
-		local endSize = cfg.radius * 2
-		local duration = 0.2
-		local elapsed = 0
-		local conn
-		conn = RunService.Heartbeat:Connect(function(dt)
-			elapsed = elapsed + dt
-			if elapsed >= duration then
-				conn:Disconnect()
-				explosionPart:Destroy()
-				return
-			end
-			local t = elapsed / duration
-			local s = startSize + (endSize - startSize) * t
-			explosionPart.Size = Vector3.new(s, s, s)
-			explosionPart.Transparency = 0.3 + 0.6 * t
-		end)
+		CombatRemotes.broadcastGrenadeExplosionFX(
+			state,
+			center,
+			cfg.radius,
+			cfg.explosionSoundId,
+			thrower and thrower.UserId or nil
+		)
 
 		doExplosionDamage(state, center, cfg.radius, cfg.damage, thrower and thrower.UserId or nil)
 	end)

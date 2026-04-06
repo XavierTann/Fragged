@@ -2,7 +2,7 @@
 	CombatService (server)
 	Shooting (visible bullets), health, round end. Server-authoritative.
 	FireGun: validate round membership, weapon inventory, equipped Tool, ammo/cooldown/reload,
-	client shot origin vs HRP+aim*forward (CombatConfig.SHOT_ORIGIN_FORWARD_STUDS), then spawn bullets there.
+	client shot origin vs HRP+aim*forward (SHOT_ORIGIN_FORWARD_STUDS for guns; grenades use GRENADE_SHOT_ORIGIN_FORWARD_STUDS), then spawn.
 	Init() sets up remotes and handlers. StartRound(players, onRoundEnd) is called when arena round starts.
 ]]
 
@@ -350,7 +350,7 @@ local function bindHandlers()
 		table.insert(regenTimes, os.clock() + (GrenadeConfig.regenerationTime or 5))
 		table.sort(regenTimes)
 		CombatRemotes.sendGrenadeState(state, player, state.grenadeCount[uid])
-		local originForward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+		local originForward = CombatConfig.GRENADE_SHOT_ORIGIN_FORWARD_STUDS or 0
 		local startPos = root.Position + aimDirection.Unit * originForward
 		CombatGrenades.spawnGrenade(state, player, startPos, aimDirection)
 	end)

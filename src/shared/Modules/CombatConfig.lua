@@ -5,9 +5,10 @@
 
 return {
 	BULLET_BLOCKER_TAG = "BulletBlocker",
-	-- Studs along aim from HumanoidRootPart for bullets, predicted tracers, grenades, rockets.
-	-- Use 0 to spawn at the root (no forward offset). Increase for a muzzle-in-front feel.
+	-- Studs along aim from HumanoidRootPart for guns, predicted tracers, rockets (0 = at root).
 	SHOT_ORIGIN_FORWARD_STUDS = 0,
+	-- Grenades only: spawn slightly in front of the player along aim.
+	GRENADE_SHOT_ORIGIN_FORWARD_STUDS = 5,
 	DEFAULT_HEALTH = 100,
 	REMOTE_FOLDER_NAME = "CombatRemotes",
 	REMOTES = {

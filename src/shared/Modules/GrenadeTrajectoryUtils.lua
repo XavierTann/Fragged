@@ -56,7 +56,8 @@ local function computeSimplifiedGrenadePath(character, aimDirection)
 	if not root then
 		return { beforeBounce = beforeBounce, reboundEnd = reboundEnd }
 	end
-	local startPos = root.Position + dir * 2
+	local originForward = CombatConfig.GRENADE_SHOT_ORIGIN_FORWARD_STUDS or 0
+	local startPos = root.Position + dir * originForward
 
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude

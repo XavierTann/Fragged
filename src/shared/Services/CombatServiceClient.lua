@@ -243,13 +243,16 @@ local function notifyAmmoSubscribers()
 	end
 end
 
--- Matches server shot origin (HumanoidRootPart + aim * CombatConfig.SHOT_ORIGIN_FORWARD_STUDS).
-local function getShotOriginForDirection(character, dir)
+-- Matches server: HumanoidRootPart + aim * forwardStuds (guns use SHOT_ORIGIN_FORWARD_STUDS; grenades override).
+local function getShotOriginForDirection(character, dir, forwardStudsOverride)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if not root or not dir or dir.Magnitude < 0.01 then
 		return nil
 	end
-	local forward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+	local forward = forwardStudsOverride
+	if forward == nil then
+		forward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
+	end
 	return root.Position + dir.Unit * forward
 end
 
@@ -641,7 +644,7 @@ local function throwGrenade(dir)
 		return
 	end
 	local character = Players.LocalPlayer.Character
-	local startPos = getShotOriginForDirection(character, dir)
+	local startPos = getShotOriginForDirection(character, dir, CombatConfig.GRENADE_SHOT_ORIGIN_FORWARD_STUDS or 0)
 	if not startPos then
 		return
 	end

@@ -1,6 +1,6 @@
 --[[
 	LobbyGUI
-	One panel for the whole lobby: queue counts / status and match countdown.
+	One panel for the whole lobby: queue counts / status (countdown uses CenterScreenToast).
 	Visible for both ShopLobby and WaitingLobby server phases; hidden in Arena.
 ]]
 
@@ -47,7 +47,6 @@ end
 local LocalPlayer = Players.LocalPlayer
 local gui = nil
 local mainFrame = nil
-local countdownConnection = nil
 
 local function createGui()
 	if gui then
@@ -101,18 +100,6 @@ local function createLobbyPanel(parent)
 	countLabel.TextYAlignment = Enum.TextYAlignment.Top
 	countLabel.Parent = frame
 
-	local countdownLabel = Instance.new("TextLabel")
-	countdownLabel.Name = "Countdown"
-	countdownLabel.Size = UDim2.new(1, -16, 0, 16)
-	countdownLabel.Position = UDim2.fromOffset(8, 136)
-	countdownLabel.BackgroundTransparency = 1
-	countdownLabel.Text = ""
-	countdownLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
-	countdownLabel.TextSize = 12
-	countdownLabel.Font = Enum.Font.GothamBold
-	countdownLabel.Visible = false
-	countdownLabel.Parent = frame
-
 	return frame
 end
 
@@ -144,19 +131,6 @@ local function updateUI(state)
 	local youSuffix = (team == "Blue" or team == "Red") and string.format(T.LOBBY_QUEUE_YOU_SUFFIX, team) or ""
 	local needLine = buildQueueStatusLines(b, r, minP)
 	panel.Count.Text = string.format(T.LOBBY_QUEUE_HEADER, count, b, r) .. needLine .. youSuffix
-
-	local cdl = panel:FindFirstChild("Countdown")
-	if cdl and state.matchStarting then
-		cdl.Visible = true
-		local sec = state.secondsRemaining
-		cdl.Text = (sec ~= nil and sec > 0) and string.format(T.MATCH_STARTING_IN, sec) or T.MATCH_STARTING
-	elseif cdl then
-		cdl.Visible = false
-		if countdownConnection then
-			task.cancel(countdownConnection)
-			countdownConnection = nil
-		end
-	end
 end
 
 local function init()

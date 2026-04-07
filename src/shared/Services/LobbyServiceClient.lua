@@ -6,6 +6,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
+local LobbyMatchStartToastClient = require(ReplicatedStorage.Shared.Services.LobbyMatchStartToastClient)
 
 -- State and refs (remotes set in Init)
 local currentState = nil
@@ -26,12 +27,19 @@ return {
 		LeaveWaitingRE = folder:WaitForChild(LobbyConfig.REMOTES.LEAVE_WAITING_LOBBY)
 		GetStateRF = folder:WaitForChild(LobbyConfig.REMOTES.GET_LOBBY_STATE)
 		LobbyStateRE = folder:WaitForChild(LobbyConfig.REMOTES.LOBBY_STATE)
+		local lobbyMatchCountdownRE = folder:WaitForChild(LobbyConfig.REMOTES.LOBBY_MATCH_COUNTDOWN)
+		if lobbyMatchCountdownRE:IsA("RemoteEvent") then
+			lobbyMatchCountdownRE.OnClientEvent:Connect(function(sec)
+				LobbyMatchStartToastClient.OnMatchCountdown(sec)
+			end)
+		end
 		TeleportToWaitingRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_WAITING)
 		TeleportToArenaRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_ARENA)
 		TeleportToShopRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_SHOP)
 
 		LobbyStateRE.OnClientEvent:Connect(function(state)
 			currentState = state
+			LobbyMatchStartToastClient.ApplyLobbyState(state)
 			for _, cb in ipairs(callbacks) do
 				task.spawn(cb, state)
 			end

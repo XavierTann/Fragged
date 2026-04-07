@@ -27,6 +27,9 @@ CenterScreenToast.Init()
 local LobbyQueueBalanceToastClient = require(Shared.Services.LobbyQueueBalanceToastClient)
 LobbyQueueBalanceToastClient.Init()
 
+local LobbyMatchStartToastClient = require(Shared.Services.LobbyMatchStartToastClient)
+LobbyMatchStartToastClient.Init()
+
 local LobbyPadLightBeamPulse = require(Shared.Services.LobbyPadLightBeamPulse)
 LobbyPadLightBeamPulse.Init()
 

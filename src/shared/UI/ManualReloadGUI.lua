@@ -20,7 +20,7 @@ local reloadBtn = nil
 -- Match HealthGUI outer frame: BAR_HEIGHT 14 + vertical padding 16
 local HEALTH_STRIP_HEIGHT = 30
 local GAP = 8
-local BUTTON_SIZE = 48
+local BUTTON_SIZE = 68
 
 local function updateButtonVisual()
 	if not reloadBtn then

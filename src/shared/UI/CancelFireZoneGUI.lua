@@ -41,7 +41,7 @@ local function mount(parent)
 	rootFrame = Instance.new("Frame")
 	rootFrame.Name = "CancelFireZone"
 	rootFrame.AnchorPoint = Vector2.new(1, 1)
-	rootFrame.Size = UDim2.fromOffset(116, 42)
+	rootFrame.Size = UDim2.fromOffset(156, 56)
 	rootFrame.Position = UDim2.new(1, -44, 1, -300)
 	rootFrame.BackgroundTransparency = 1
 	rootFrame.BorderSizePixel = 0

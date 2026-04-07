@@ -36,7 +36,7 @@ local function ensureGui()
 	screenGui.ResetOnSpawn = false
 	screenGui.IgnoreGuiInset = true
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.DisplayOrder = 12
+	screenGui.DisplayOrder = 100
 	screenGui.Enabled = true
 	screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -44,7 +44,7 @@ local function ensureGui()
 	toastContainer.Name = "Toast"
 	toastContainer.AnchorPoint = Vector2.new(0.5, 0.5)
 	toastContainer.Position = UDim2.fromScale(0.5, 0.5)
-	toastContainer.Size = UDim2.fromOffset(600, 80)
+	toastContainer.Size = UDim2.fromOffset(640, 96)
 	toastContainer.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
 	toastContainer.BackgroundTransparency = 1
 	toastContainer.BorderSizePixel = 0
@@ -111,8 +111,8 @@ return {
 		toastLabel.Text = text
 		toastLabel.TextColor3 = color
 		toastLabel.TextSize = textSize
-		toastContainer.BackgroundTransparency = 0.62
-		toastLabel.TextTransparency = 0.06
+		toastContainer.BackgroundTransparency = 0.35
+		toastLabel.TextTransparency = 0
 		toastStroke.Transparency = 0.35
 		toastContainer.Visible = true
 

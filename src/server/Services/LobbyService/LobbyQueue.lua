@@ -68,17 +68,22 @@ end
 
 local function broadcastStateToWaiting(state, remotes)
 	local seen = {}
-	for _, p in ipairs(state.waitingQueueBlue) do
-		if p and p.Parent and not seen[p] then
-			seen[p] = true
-			remotes.LobbyState:FireClient(p, buildStateForPlayer(state, remotes, p))
+	local function sendToQueuedPlayer(p)
+		if not p or not p.Parent or seen[p] then
+			return
+		end
+		seen[p] = true
+		remotes.LobbyState:FireClient(p, buildStateForPlayer(state, remotes, p))
+		if state.matchStartingAt and state.countdownEndTime and remotes.LobbyMatchCountdown then
+			local sec = math.max(0, math.ceil(state.countdownEndTime - os.clock()))
+			remotes.LobbyMatchCountdown:FireClient(p, sec)
 		end
 	end
+	for _, p in ipairs(state.waitingQueueBlue) do
+		sendToQueuedPlayer(p)
+	end
 	for _, p in ipairs(state.waitingQueueRed) do
-		if p and p.Parent and not seen[p] then
-			seen[p] = true
-			remotes.LobbyState:FireClient(p, buildStateForPlayer(state, remotes, p))
-		end
+		sendToQueuedPlayer(p)
 	end
 end
 

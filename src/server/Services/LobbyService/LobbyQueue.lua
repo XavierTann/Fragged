@@ -3,6 +3,7 @@
 	Blue/red waiting queues, countdown, arena send with team assignments.
 ]]
 
+local Players = game:GetService("Players")
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 
 local function totalWaiting(state)
@@ -66,24 +67,30 @@ local function buildStateForPlayer(state, _remotes, player)
 	return result
 end
 
+--[[
+	Push LobbyState to every player in shop or waiting lobby (not arena).
+	Queue counts / "players needed" must stay in sync for shoppers on pads and off.
+	LobbyMatchCountdown only goes to players actually in a queue (toast + teleport flow).
+]]
 local function broadcastStateToWaiting(state, remotes)
 	local seen = {}
-	local function sendToQueuedPlayer(p)
+	local function sendToLobbyClient(p)
 		if not p or not p.Parent or seen[p] then
+			return
+		end
+		local phase = state.playerPhase[p.UserId]
+		if phase == LobbyConfig.PHASE.ARENA then
 			return
 		end
 		seen[p] = true
 		remotes.LobbyState:FireClient(p, buildStateForPlayer(state, remotes, p))
-		if state.matchStartingAt and state.countdownEndTime and remotes.LobbyMatchCountdown then
+		if state.matchStartingAt and state.countdownEndTime and remotes.LobbyMatchCountdown and playerQueuedTeam(state, p) then
 			local sec = math.max(0, math.ceil(state.countdownEndTime - os.clock()))
 			remotes.LobbyMatchCountdown:FireClient(p, sec)
 		end
 	end
-	for _, p in ipairs(state.waitingQueueBlue) do
-		sendToQueuedPlayer(p)
-	end
-	for _, p in ipairs(state.waitingQueueRed) do
-		sendToQueuedPlayer(p)
+	for _, p in ipairs(Players:GetPlayers()) do
+		sendToLobbyClient(p)
 	end
 end
 

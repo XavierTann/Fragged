@@ -1,14 +1,14 @@
 --[[
 	TeamDisplayUtils
-	Server and networking still use internal team keys "Blue" and "Red".
-	Player-facing copy uses "Orange" instead of "Red" for clarity.
+	Server and networking use internal team keys "Blue" and "Red".
+	Player-facing labels use the same display names.
 ]]
 
 local TeamDisplayUtils = {}
 
 function TeamDisplayUtils.displayName(internalTeam)
 	if internalTeam == "Red" then
-		return "Orange"
+		return "Red"
 	end
 	if internalTeam == "Blue" then
 		return "Blue"

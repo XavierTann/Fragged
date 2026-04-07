@@ -1,6 +1,6 @@
 --[[
 	TeamIndicatorGUI
-	- Persistent top bar: "You are on the Blue/Orange Team" (server key Red → Orange in UI) while in arena.
+	- Persistent top bar: "You are on the Blue/Red Team" while in arena.
 	- Center toast on arena entry / team assignment via CenterScreenToast.
 ]]
 
@@ -14,7 +14,7 @@ local CenterScreenToast = require(ReplicatedStorage.Shared.UI.CenterScreenToast)
 local LocalPlayer = Players.LocalPlayer
 
 local COLOR_BLUE = Color3.fromRGB(100, 170, 255)
-local COLOR_ORANGE = Color3.fromRGB(255, 145, 55)
+local COLOR_RED = Color3.fromRGB(255, 80, 90)
 
 local HOLD_SECONDS = 2.85
 local FADE_SECONDS = 0.55
@@ -29,7 +29,7 @@ local function teamBarPhrase(myTeam)
 	if myTeam == "Blue" then
 		return "You are on the Blue Team", COLOR_BLUE
 	elseif myTeam == "Red" then
-		return TeamDisplayUtils.youAreOnTeamPhrase("Red"), COLOR_ORANGE
+		return TeamDisplayUtils.youAreOnTeamPhrase("Red"), COLOR_RED
 	end
 	return nil, nil
 end

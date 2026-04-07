@@ -5,11 +5,10 @@
 
 return {
 	-- Waiting lobby: min total queued players before countdown; max sent to one arena match
-	-- TODO(testing): restore MIN_PLAYERS = 2 and REQUIRE_BOTH_TEAMS_TO_START = true for real matches
-	MIN_PLAYERS = 1,
+	MIN_PLAYERS = 2,
 	MAX_PLAYERS = 8,
 	-- True = need at least one on blue pads and one on red pads before countdown (TDM).
-	REQUIRE_BOTH_TEAMS_TO_START = false,
+	REQUIRE_BOTH_TEAMS_TO_START = true,
 	-- Max players per team in the waiting queues (matches 6 blue + 6 red pads).
 	MAX_PLAYERS_PER_TEAM = 6,
 
@@ -44,7 +43,7 @@ return {
 		ARENA = "Arena",
 	},
 
-	-- Workspace folder: SpawnLocations (ShopSpawnLocation, LobbySpawnLocation, BlueTeamSpawnLocation, RedTeamSpawnLocation for orange team)
+	-- Workspace folder: SpawnLocations (ShopSpawnLocation, LobbySpawnLocation, BlueTeamSpawnLocation, RedTeamSpawnLocation)
 	SPAWNS_FOLDER_NAME = "SpawnLocations",
 	SPAWN_NAMES = {
 		SHOP = "ShopSpawnLocation",

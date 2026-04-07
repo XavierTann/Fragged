@@ -1,7 +1,7 @@
 --[[
 	TDMScoreGUI
 	Drives the Studio-built TDM score UI: PlayerGui.ScreenGui.TDMScore with
-	BlueTeamScore and OrangeTeamScore (TextLabels; RedTeamScore still supported).
+	BlueTeamScore and RedTeamScore (TextLabels; OrangeTeamScore still supported for older UI).
 	Updates when TeamScoreUpdate fires.
 	Clicks on the ImageButton child "Background" open the live K/D leaderboard.
 ]]
@@ -72,8 +72,8 @@ local function bindRefs()
 	configureTdmScreenGui(screenGui)
 	tdmScoreFrame = screenGui:WaitForChild("TDMScore")
 	blueScoreLabel = tdmScoreFrame:WaitForChild("BlueTeamScore")
-	local orangeScore = tdmScoreFrame:FindFirstChild("OrangeTeamScore")
-	redScoreLabel = orangeScore or tdmScoreFrame:WaitForChild("RedTeamScore")
+	local redScore = tdmScoreFrame:FindFirstChild("RedTeamScore")
+	redScoreLabel = redScore or tdmScoreFrame:WaitForChild("OrangeTeamScore")
 	wireBackgroundButton()
 end
 
@@ -97,7 +97,7 @@ local function ensureRefs()
 		return false
 	end
 	local blue = frame:FindFirstChild("BlueTeamScore")
-	local red = frame:FindFirstChild("OrangeTeamScore") or frame:FindFirstChild("RedTeamScore")
+	local red = frame:FindFirstChild("RedTeamScore") or frame:FindFirstChild("OrangeTeamScore")
 	if not (blue and red) then
 		return false
 	end

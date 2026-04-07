@@ -1,10 +1,8 @@
 --[[
 	OverheadHealthBarGUI
 	Creates and manages BillboardGui overhead health bars above each player's head
-	(including the local player) in the arena. Fill color matches that player's team (blue vs
-	orange; server internal key for orange side is still "Red"). Orange avoids looking like a
-	"low health" red bar. Colors refresh when team assignments change. Only visible while the arena
-	phase is active.
+	(including the local player) in the arena. Fill color matches that player's team (blue vs red).
+	Colors refresh when team assignments change. Only visible while the arena phase is active.
 
 	On damage, a short white segment appears over the lost portion of the bar, then shrinks and
 	fades so the bar readout matches the new health — clear hit feedback for shooters and spectators.
@@ -24,7 +22,7 @@ local BILLBOARD_MAX_DIST   = 60
 local BAR_BG_COLOR         = Color3.fromRGB(22, 22, 22)
 local BAR_BG_TRANSPARENCY  = 0.3
 local COLOR_TEAM_BLUE      = Color3.fromRGB(70, 150, 255)
-local COLOR_TEAM_ORANGE    = Color3.fromRGB(255, 145, 55)
+local COLOR_TEAM_RED       = Color3.fromRGB(235, 55, 65)
 local COLOR_UNKNOWN_TEAM   = Color3.fromRGB(160, 160, 160)
 local COLOR_DAMAGE_FLASH   = Color3.fromRGB(255, 255, 255)
 
@@ -48,7 +46,7 @@ local function getBarColor(userId)
 		return COLOR_TEAM_BLUE
 	end
 	if team == "Red" then
-		return COLOR_TEAM_ORANGE
+		return COLOR_TEAM_RED
 	end
 	return COLOR_UNKNOWN_TEAM
 end

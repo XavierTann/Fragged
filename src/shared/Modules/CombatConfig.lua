@@ -21,7 +21,7 @@ return {
 		AMMO_STATE = "AmmoState", -- Server -> Client: ammo count, isReloading, gunId
 		THROW_GRENADE = "ThrowGrenade",
 		THROW_ROCKET = "ThrowRocket",
-		MATCH_ENDED = "MatchEnded", -- Server -> Client: { winningTeam, bluePlayers, redPlayers } (redPlayers = Orange team, internal key Red)
+		MATCH_ENDED = "MatchEnded", -- Server -> Client: { winningTeam, bluePlayers, redPlayers } (internal keys Blue / Red)
 		-- Client -> Server Invoke: live K/D table during an active TDM round only; returns nil if not in round
 		GET_LIVE_LEADERBOARD = "GetLiveLeaderboard",
 		TEAM_SCORE_UPDATE = "TeamScoreUpdate", -- Server -> Client: blueKills, redKills (real-time)

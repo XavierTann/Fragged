@@ -12,7 +12,7 @@ local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUti
 
 local T = LobbyConfig.TEXT
 
--- When total < MIN_PLAYERS, name the team with fewer queued players (ties: "Blue team or Orange team").
+-- When total < MIN_PLAYERS, name the team with fewer queued players (ties: "Blue team or Red team").
 local function lackingTeamPhraseForMoreTotal(blueCount, redCount)
 	if blueCount < redCount then
 		return TeamDisplayUtils.displayName("Blue") .. " team"

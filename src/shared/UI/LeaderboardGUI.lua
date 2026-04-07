@@ -24,6 +24,8 @@ local closeLiveButton = nil
 local templateCloseBoundFrame = nil
 
 local BACKGROUND_TRANSPARENCY = 0.45
+local WINNER_BLUE = Color3.fromRGB(80, 180, 255)
+local WINNER_RED = Color3.fromRGB(255, 85, 95)
 
 local function findLeaderboardRefs()
 	local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -247,6 +249,35 @@ local function bindTemplateCloseButton()
 	closeBtn.Activated:Connect(hideLeaderboard)
 end
 
+local function findWinningTeamTextControl()
+	if not leaderboardFrame then
+		return nil, nil
+	end
+	local bg = leaderboardFrame:FindFirstChild("LeaderboardBG")
+	local winningTeam = bg and bg:FindFirstChild("WinningTeam")
+	if not winningTeam then
+		return nil, nil
+	end
+	if
+		winningTeam:IsA("TextLabel")
+		or winningTeam:IsA("TextBox")
+		or winningTeam:IsA("TextButton")
+	then
+		return winningTeam, winningTeam
+	end
+	for _, c in ipairs(winningTeam:GetChildren()) do
+		if c:IsA("TextLabel") or c:IsA("TextBox") or c:IsA("TextButton") then
+			return c, winningTeam
+		end
+	end
+	for _, d in ipairs(winningTeam:GetDescendants()) do
+		if d:IsA("TextLabel") or d:IsA("TextBox") or d:IsA("TextButton") then
+			return d, winningTeam
+		end
+	end
+	return nil, winningTeam
+end
+
 local function applyOptionalTitleAndWinner(payload)
 	if not leaderboardFrame then
 		return
@@ -257,15 +288,45 @@ local function applyOptionalTitleAndWinner(payload)
 	if titleInst and titleInst:IsA("TextLabel") then
 		titleInst.Text = isLive and "Leaderboard" or "Match Results"
 	end
-	local winnerInst = leaderboardFrame:FindFirstChild("WinnerText", true)
-	if winnerInst and winnerInst:IsA("TextLabel") then
-		local wt = payload.winningTeam
-		if wt and not isLive then
-			winnerInst.Visible = true
-			winnerInst.Text = TeamDisplayUtils.teamVictoryPhrase(wt)
+
+	local wt = payload.winningTeam
+	local showWinner = wt and not isLive
+
+	local function applyToTextInst(inst)
+		if not inst then
+			return
+		end
+		if showWinner then
+			inst.Visible = true
+			if wt == "Blue" then
+				inst.Text = "Blue team won!"
+				inst.TextColor3 = WINNER_BLUE
+			elseif wt == "Red" then
+				inst.Text = "Orange team won!"
+				inst.TextColor3 = WINNER_RED
+			else
+				inst.Text = TeamDisplayUtils.teamVictoryPhrase(wt)
+				inst.TextColor3 = Color3.fromRGB(255, 255, 255)
+			end
 		else
-			winnerInst.Visible = false
-			winnerInst.Text = ""
+			inst.Visible = false
+			inst.Text = ""
+		end
+	end
+
+	local textInst, winningTeamContainer = findWinningTeamTextControl()
+	if textInst then
+		applyToTextInst(textInst)
+	end
+	if winningTeamContainer and winningTeamContainer:IsA("GuiObject") then
+		winningTeamContainer.Visible = showWinner
+	end
+
+	-- Legacy: WinnerText anywhere under Leaderboard (template without WinningTeam)
+	if not textInst then
+		local winnerInst = leaderboardFrame:FindFirstChild("WinnerText", true)
+		if winnerInst and (winnerInst:IsA("TextLabel") or winnerInst:IsA("TextBox") or winnerInst:IsA("TextButton")) then
+			applyToTextInst(winnerInst)
 		end
 	end
 end

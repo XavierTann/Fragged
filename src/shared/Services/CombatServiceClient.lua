@@ -633,6 +633,14 @@ local function syncRotationJoystickCancelZone()
 	end
 end
 
+local function unequipCombatTools()
+	local character = Players.LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid:UnequipTools()
+	end
+end
+
 local function setShootingEnabled(enabled)
 	shootingEnabled = enabled
 	lastFiredAt = 0
@@ -650,6 +658,8 @@ local function setShootingEnabled(enabled)
 		if not UserInputService.TouchEnabled then
 			inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
 		end
+	else
+		unequipCombatTools()
 	end
 	syncRotationJoystickCancelZone()
 end
@@ -666,7 +676,7 @@ local function equipCurrentWeapon()
 	return false
 end
 
-	return {
+return {
 	Init = function()
 		wireHideOwnReplicatedBullets()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
@@ -803,7 +813,9 @@ end
 						break
 					end
 				end
-				equipCurrentWeapon()
+				if shootingEnabled then
+					equipCurrentWeapon()
+				end
 				for _, cb in ipairs(weaponChangedSubscribers) do
 					task.defer(cb)
 				end

@@ -251,6 +251,7 @@ return {
 		if gui then
 			gui.Enabled = false
 		end
+		snapToCenter()
 	end,
 	-- For external use: current joystick direction (unit Vector2, or zero)
 	GetDirection = function()

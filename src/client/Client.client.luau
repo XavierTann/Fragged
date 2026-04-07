@@ -93,6 +93,11 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	if hideLeaderboardOverlay then
 		LeaderboardGUI.Hide()
 	end
+	if combatHud then
+		RotationJoystickGUI.Show()
+	else
+		RotationJoystickGUI.Hide()
+	end
 	if inArena and not postMatchLeaderboard then
 		WeaponSelectGUI.Show()
 		ReloadBarGUI.Show()
@@ -119,6 +124,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	postMatchLeaderboard = true
 	TopDownCameraService.SetEnabled(false)
 	DirectionIndicatorClient.SetEnabled(false)
+	RotationJoystickGUI.Hide()
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	ManualReloadGUI.Hide()
@@ -131,6 +137,13 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	if payload then
 		LeaderboardGUI.Show(payload)
 	end
+end)
+
+LobbyServiceClient.OnTeleportToShop(function()
+	postMatchLeaderboard = false
+	LeaderboardGUI.Hide()
+	RotationJoystickGUI.Hide()
+	CombatServiceClient.SetShootingEnabled(false)
 end)
 
 -- Enable shooting and weapon select only in arena

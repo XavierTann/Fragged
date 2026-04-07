@@ -21,6 +21,9 @@ DirectionIndicatorClient.Init()
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 
+local LobbyPadLightBeamPulse = require(Shared.Services.LobbyPadLightBeamPulse)
+LobbyPadLightBeamPulse.Init()
+
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 CombatServiceClient.Init()
 

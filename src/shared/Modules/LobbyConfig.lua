@@ -50,6 +50,11 @@ return {
 	LOBBY_PADS_FOLDER_PATH = { "Lobby", "SpawnPads" },
 	LOBBY_BLUE_PAD_MODEL_NAME = "BluePad",
 	LOBBY_RED_PAD_MODEL_NAME = "RedPad",
+	LOBBY_LIGHTBEAM_PART_NAME = "LightBeam",
+	-- Client-only pulse on LightBeam transparency under each pad model
+	LOBBY_LIGHTBEAM_PULSE_SPEED = 1.5,
+	LOBBY_LIGHTBEAM_TRANSPARENCY_MIN = 0.4,
+	LOBBY_LIGHTBEAM_TRANSPARENCY_MAX = 0.88,
 	-- How often to test HRP vs pad model bounds (seconds)
 	LOBBY_PAD_POLL_INTERVAL = 0.2,
 }

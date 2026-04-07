@@ -29,11 +29,7 @@ return {
 				end
 				local otherName = TeamDisplayUtils.displayName(otherTeam)
 				local fullerName = TeamDisplayUtils.displayName(fullerTeam)
-				local text = string.format(
-					"Please join the %s Team. The %s Team has too many players.",
-					otherName,
-					fullerName
-				)
+				local text = string.format(LobbyConfig.TEXT.QUEUE_BALANCE_TOAST, otherName, fullerName)
 				CenterScreenToast.Show({
 					text = text,
 					textColor = COLOR_NEUTRAL,
@@ -48,7 +44,7 @@ return {
 		if padRe and padRe:IsA("RemoteEvent") then
 			padRe.OnClientEvent:Connect(function()
 				CenterScreenToast.Show({
-					text = "This pad is already occupied. Please use another pad.",
+					text = LobbyConfig.TEXT.PAD_OCCUPIED_TOAST,
 					textColor = COLOR_NEUTRAL,
 					holdSeconds = 3.2,
 					fadeSeconds = 0.55,

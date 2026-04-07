@@ -63,7 +63,7 @@ return {
 
 	JoinWaitingLobby = function()
 		if not JoinWaitingRF then
-			return { success = false, error = "Not initialized" }
+			return { success = false, error = LobbyConfig.TEXT.CLIENT_LOBBY_NOT_INITIALIZED }
 		end
 		return JoinWaitingRF:InvokeServer()
 	end,

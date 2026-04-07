@@ -1,12 +1,48 @@
 --[[
 	LobbyGUI
-	Shop lobby: hint to stand on team pads.
-	Waiting lobby: queue counts, Leave button, countdown when match starting.
+	One panel for the whole lobby: pad hint, live queue counts / status, and match countdown.
+	Visible for both ShopLobby and WaitingLobby server phases; hidden in Arena.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
 local LobbyServiceClient = require(ReplicatedStorage.Shared.Services.LobbyServiceClient)
+local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUtils)
+
+local T = LobbyConfig.TEXT
+
+-- When total < MIN_PLAYERS, name the team with fewer queued players (ties: "Blue team or Orange team").
+local function lackingTeamPhraseForMoreTotal(blueCount, redCount)
+	if blueCount < redCount then
+		return TeamDisplayUtils.displayName("Blue") .. " team"
+	end
+	if redCount < blueCount then
+		return TeamDisplayUtils.displayName("Red") .. " team"
+	end
+	return TeamDisplayUtils.displayName("Blue") .. " team or " .. TeamDisplayUtils.displayName("Red") .. " team"
+end
+
+local function buildQueueStatusLines(blueCount, redCount, minPlayers)
+	local total = blueCount + redCount
+	if total < minPlayers then
+		local need = minPlayers - total
+		local teamPhrase = lackingTeamPhraseForMoreTotal(blueCount, redCount)
+		if need == 1 then
+			return string.format(T.LOBBY_QUEUE_STATUS_NEED_MORE_TOTAL_ONE, teamPhrase)
+		end
+		return string.format(T.LOBBY_QUEUE_STATUS_NEED_MORE_TOTAL_MANY, need, teamPhrase)
+	end
+	if LobbyConfig.REQUIRE_BOTH_TEAMS_TO_START then
+		if blueCount < 1 then
+			return string.format(T.LOBBY_QUEUE_STATUS_NEED_ON_TEAM, TeamDisplayUtils.displayName("Blue"))
+		end
+		if redCount < 1 then
+			return string.format(T.LOBBY_QUEUE_STATUS_NEED_ON_TEAM, TeamDisplayUtils.displayName("Red"))
+		end
+	end
+	return ""
+end
 
 local LocalPlayer = Players.LocalPlayer
 local gui = nil
@@ -25,53 +61,15 @@ local function createGui()
 	return gui
 end
 
-local function createShopView(parent)
+local function createLobbyPanel(parent)
 	local frame = Instance.new("Frame")
-	frame.Name = "ShopView"
-	frame.Size = UDim2.fromScale(0.32, 0.1)
+	frame.Name = "LobbyPanel"
+	frame.Size = UDim2.fromScale(0.4, 0.4)
 	frame.Position = UDim2.fromScale(0.5, 0)
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	frame.BorderSizePixel = 0
-	frame.Parent = parent
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = frame
-
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, 0, 0, 18)
-	title.Position = UDim2.fromOffset(0, 4)
-	title.BackgroundTransparency = 1
-	title.Text = "Shop Lobby"
-	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.TextSize = 14
-	title.Font = Enum.Font.GothamBold
-	title.Parent = frame
-
-	local hint = Instance.new("TextLabel")
-	hint.Size = UDim2.new(1, -16, 0, 14)
-	hint.Position = UDim2.fromOffset(8, 24)
-	hint.BackgroundTransparency = 1
-	hint.Text = "Stand on a BluePad or RedPad model in Lobby → SpawnPads to queue for that team."
-	hint.TextColor3 = Color3.fromRGB(200, 200, 200)
-	hint.TextSize = 10
-	hint.Font = Enum.Font.Gotham
-	hint.TextWrapped = true
-	hint.TextXAlignment = Enum.TextXAlignment.Left
-	hint.Parent = frame
-
-	return frame
-end
-
-local function createWaitingView(parent)
-	local frame = Instance.new("Frame")
-	frame.Name = "WaitingView"
-	frame.Size = UDim2.fromScale(0.3, 0.14)
-	frame.Position = UDim2.fromScale(0.5, 0)
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
-	frame.BorderSizePixel = 0
-	frame.Visible = false
+	frame.Visible = true
 	frame.Parent = parent
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
@@ -79,30 +77,47 @@ local function createWaitingView(parent)
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, 0, 0, 18)
-	title.Position = UDim2.fromOffset(0, 4)
+	title.Size = UDim2.new(1, 0, 0, 20)
+	title.Position = UDim2.fromOffset(0, 8)
 	title.BackgroundTransparency = 1
-	title.Text = "Waiting Lobby"
+	title.Text = T.LOBBY_PANEL_TITLE
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
 	title.TextSize = 14
 	title.Font = Enum.Font.GothamBold
 	title.Parent = frame
 
+	local hint = Instance.new("TextLabel")
+	hint.Name = "PadHint"
+	hint.Size = UDim2.new(1, -16, 0, 36)
+	hint.Position = UDim2.fromOffset(8, 30)
+	hint.BackgroundTransparency = 1
+	hint.Text = T.LOBBY_PAD_HINT
+	hint.TextColor3 = Color3.fromRGB(200, 200, 200)
+	hint.TextSize = 11
+	hint.Font = Enum.Font.Gotham
+	hint.TextWrapped = true
+	hint.TextXAlignment = Enum.TextXAlignment.Left
+	hint.TextYAlignment = Enum.TextYAlignment.Top
+	hint.Parent = frame
+
 	local countLabel = Instance.new("TextLabel")
 	countLabel.Name = "Count"
-	countLabel.Size = UDim2.new(1, 0, 0, 16)
-	countLabel.Position = UDim2.fromOffset(0, 24)
+	countLabel.Size = UDim2.new(1, -16, 0, 140)
+	countLabel.Position = UDim2.fromOffset(8, 72)
 	countLabel.BackgroundTransparency = 1
-	countLabel.Text = "Players: 0 / 2"
+	countLabel.Text = string.format(T.LOBBY_QUEUE_COUNT_INITIAL, 0, LobbyConfig.MIN_PLAYERS)
 	countLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
 	countLabel.TextSize = 12
 	countLabel.Font = Enum.Font.GothamMedium
+	countLabel.TextWrapped = true
+	countLabel.TextXAlignment = Enum.TextXAlignment.Left
+	countLabel.TextYAlignment = Enum.TextYAlignment.Top
 	countLabel.Parent = frame
 
 	local countdownLabel = Instance.new("TextLabel")
 	countdownLabel.Name = "Countdown"
-	countdownLabel.Size = UDim2.new(1, 0, 0, 16)
-	countdownLabel.Position = UDim2.fromOffset(0, 42)
+	countdownLabel.Size = UDim2.new(1, -16, 0, 16)
+	countdownLabel.Position = UDim2.fromOffset(8, 216)
 	countdownLabel.BackgroundTransparency = 1
 	countdownLabel.Text = ""
 	countdownLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
@@ -110,24 +125,6 @@ local function createWaitingView(parent)
 	countdownLabel.Font = Enum.Font.GothamBold
 	countdownLabel.Visible = false
 	countdownLabel.Parent = frame
-
-	local leaveBtn = Instance.new("TextButton")
-	leaveBtn.Name = "Leave"
-	leaveBtn.Size = UDim2.new(1, -16, 0, 24)
-	leaveBtn.Position = UDim2.fromOffset(8, 62)
-	leaveBtn.BackgroundColor3 = Color3.fromRGB(120, 50, 50)
-	leaveBtn.Text = "Leave waiting lobby"
-	leaveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	leaveBtn.TextSize = 11
-	leaveBtn.Font = Enum.Font.GothamMedium
-	leaveBtn.Parent = frame
-	local leaveCorner = Instance.new("UICorner")
-	leaveCorner.CornerRadius = UDim.new(0, 6)
-	leaveCorner.Parent = leaveBtn
-
-	leaveBtn.MouseButton1Click:Connect(function()
-		LobbyServiceClient.LeaveWaitingLobby()
-	end)
 
 	return frame
 end
@@ -139,45 +136,39 @@ local function updateUI(state)
 	if not mainFrame then
 		return
 	end
-	local shopView = mainFrame:FindFirstChild("ShopView")
-	local waitingView = mainFrame:FindFirstChild("WaitingView")
-	if not shopView or not waitingView then
+	local panel = mainFrame:FindFirstChild("LobbyPanel")
+	if not panel then
 		return
 	end
+
 	local phase = state and state.phase or LobbyServiceClient.PHASE.SHOP_LOBBY
-	shopView.Visible = (phase == LobbyServiceClient.PHASE.SHOP_LOBBY)
-	waitingView.Visible = (phase == LobbyServiceClient.PHASE.WAITING_LOBBY)
-	if phase == LobbyServiceClient.PHASE.WAITING_LOBBY then
-		local count = state.waitingCount or 0
-		local minP = state.minPlayers or LobbyServiceClient.MIN_PLAYERS
-		local b = state.waitingCountBlue or 0
-		local r = state.waitingCountRed or 0
-		local team = state.queuedTeam
-		waitingView.Count.Text = string.format(
-			"Queued: %d (Blue %d · Red %d). Min %d.%s",
-			count,
-			b,
-			r,
-			minP,
-			(team == "Blue" or team == "Red") and (" You: " .. team .. ".") or ""
-		)
-		local cdl = waitingView:FindFirstChild("Countdown")
-		if cdl and state.matchStarting then
-			cdl.Visible = true
-			-- Server sends secondsRemaining every second; no client-side timer needed
-			local sec = state.secondsRemaining
-			cdl.Text = (sec ~= nil and sec > 0) and ("Match starting in " .. tostring(sec) .. "...") or "Match starting..."
-		elseif cdl then
-			cdl.Visible = false
-			if countdownConnection then
-				task.cancel(countdownConnection)
-				countdownConnection = nil
-			end
-		end
+	local inLobby = phase == LobbyServiceClient.PHASE.SHOP_LOBBY or phase == LobbyServiceClient.PHASE.WAITING_LOBBY
+	panel.Visible = inLobby
+
+	if not inLobby then
+		return
 	end
-	if phase == LobbyServiceClient.PHASE.ARENA then
-		shopView.Visible = false
-		waitingView.Visible = false
+
+	local count = state.waitingCount or 0
+	local minP = state.minPlayers or LobbyServiceClient.MIN_PLAYERS
+	local b = state.waitingCountBlue or 0
+	local r = state.waitingCountRed or 0
+	local team = state.queuedTeam
+	local youSuffix = (team == "Blue" or team == "Red") and string.format(T.LOBBY_QUEUE_YOU_SUFFIX, team) or ""
+	local needLine = buildQueueStatusLines(b, r, minP)
+	panel.Count.Text = string.format(T.LOBBY_QUEUE_HEADER, count, b, r) .. needLine .. youSuffix
+
+	local cdl = panel:FindFirstChild("Countdown")
+	if cdl and state.matchStarting then
+		cdl.Visible = true
+		local sec = state.secondsRemaining
+		cdl.Text = (sec ~= nil and sec > 0) and string.format(T.MATCH_STARTING_IN, sec) or T.MATCH_STARTING
+	elseif cdl then
+		cdl.Visible = false
+		if countdownConnection then
+			task.cancel(countdownConnection)
+			countdownConnection = nil
+		end
 	end
 end
 
@@ -189,8 +180,7 @@ local function init()
 	mainFrame.Position = UDim2.fromScale(0, 0)
 	mainFrame.BackgroundTransparency = 1
 	mainFrame.Parent = gui
-	createShopView(mainFrame)
-	createWaitingView(mainFrame)
+	createLobbyPanel(mainFrame)
 	LobbyServiceClient.Subscribe(updateUI)
 	updateUI(LobbyServiceClient.GetState())
 end

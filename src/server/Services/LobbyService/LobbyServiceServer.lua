@@ -20,7 +20,7 @@ local function bindRemoteHandlers()
 	remotes.JoinWaitingLobby.OnServerInvoke = function(player)
 		return {
 			success = false,
-			error = "Stand on a blue or red pad in the lobby to join the match queue.",
+			error = LobbyConfig.TEXT.JOIN_WAITING_STAND_ON_PAD_ERROR,
 			state = LobbyQueue.buildStateForPlayer(state, remotes, player),
 		}
 	end

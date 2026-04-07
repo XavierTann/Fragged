@@ -1,7 +1,7 @@
 --[[
 	LobbyGUI
-	Shop lobby: "Find match" button.
-	Waiting lobby: "Waiting for players (X/Y)", Leave button, countdown when match starting.
+	Shop lobby: hint to stand on team pads.
+	Waiting lobby: queue counts, Leave button, countdown when match starting.
 ]]
 
 local Players = game:GetService("Players")
@@ -28,7 +28,7 @@ end
 local function createShopView(parent)
 	local frame = Instance.new("Frame")
 	frame.Name = "ShopView"
-	frame.Size = UDim2.fromScale(0.28, 0.12)
+	frame.Size = UDim2.fromScale(0.32, 0.1)
 	frame.Position = UDim2.fromScale(0.5, 0)
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
@@ -52,36 +52,13 @@ local function createShopView(parent)
 	hint.Size = UDim2.new(1, -16, 0, 14)
 	hint.Position = UDim2.fromOffset(8, 24)
 	hint.BackgroundTransparency = 1
-	hint.Text = "Join the waiting lobby to find a match."
+	hint.Text = "Stand on a BluePad or RedPad model in Lobby → SpawnPads to queue for that team."
 	hint.TextColor3 = Color3.fromRGB(200, 200, 200)
 	hint.TextSize = 10
 	hint.Font = Enum.Font.Gotham
 	hint.TextWrapped = true
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.Parent = frame
-
-	local findMatchBtn = Instance.new("TextButton")
-	findMatchBtn.Name = "FindMatch"
-	findMatchBtn.Size = UDim2.new(1, -16, 0, 24)
-	findMatchBtn.Position = UDim2.fromOffset(8, 44)
-	findMatchBtn.BackgroundColor3 = Color3.fromRGB(56, 142, 60)
-	findMatchBtn.Text = "Find match"
-	findMatchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	findMatchBtn.TextSize = 11
-	findMatchBtn.Font = Enum.Font.GothamMedium
-	findMatchBtn.Parent = frame
-	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 6)
-	btnCorner.Parent = findMatchBtn
-
-	findMatchBtn.MouseButton1Click:Connect(function()
-		local result = LobbyServiceClient.JoinWaitingLobby()
-		if result and result.success then
-			-- State update will switch to waiting view via LobbyState event
-			return
-		end
-		-- Could show result.error in UI
-	end)
 
 	return frame
 end
@@ -173,7 +150,17 @@ local function updateUI(state)
 	if phase == LobbyServiceClient.PHASE.WAITING_LOBBY then
 		local count = state.waitingCount or 0
 		local minP = state.minPlayers or LobbyServiceClient.MIN_PLAYERS
-		waitingView.Count.Text = string.format("Players: %d / %d", count, minP)
+		local b = state.waitingCountBlue or 0
+		local r = state.waitingCountRed or 0
+		local team = state.queuedTeam
+		waitingView.Count.Text = string.format(
+			"Queued: %d (Blue %d · Red %d). Min %d.%s",
+			count,
+			b,
+			r,
+			minP,
+			(team == "Blue" or team == "Red") and (" You: " .. team .. ".") or ""
+		)
 		local cdl = waitingView:FindFirstChild("Countdown")
 		if cdl and state.matchStarting then
 			cdl.Visible = true

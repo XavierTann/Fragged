@@ -5,9 +5,11 @@
 
 return function()
 	return {
-		waitingQueue = {},
+		waitingQueueBlue = {},
+		waitingQueueRed = {},
 		playerPhase = {},
 		lastLeftWaitingAt = {},
+		joinQueueBlockedUntil = {}, -- after LeaveWaitingLobby: block pad re-queue briefly
 		matchStartingAt = nil,
 		countdownEndTime = nil,
 		countdownTickConnection = nil,

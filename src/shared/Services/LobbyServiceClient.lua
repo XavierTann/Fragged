@@ -1,6 +1,6 @@
 --[[
 	LobbyServiceClient
-	Flow: Shop Lobby -> (Find match) -> Waiting Lobby -> Arena -> Shop Lobby.
+	Flow: Shop Lobby -> stand on team pad -> Waiting Lobby -> Arena -> Shop Lobby.
 	Module returns a table with Init and public API. Remote bindings run in Init().
 ]]
 

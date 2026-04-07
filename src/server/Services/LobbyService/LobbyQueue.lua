@@ -1,19 +1,59 @@
 --[[
 	LobbyQueue
-	Queue operations, countdown, and state building for the lobby.
+	Blue/red waiting queues, countdown, arena send with team assignments.
 ]]
-
-local Players = game:GetService("Players")
 
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 
-local function buildStateForPlayer(state, remotes, player)
+local function totalWaiting(state)
+	return #state.waitingQueueBlue + #state.waitingQueueRed
+end
+
+local function requiresBothTeamsForStart()
+	if LobbyConfig.REQUIRE_BOTH_TEAMS_TO_START == false then
+		return false
+	end
+	return true
+end
+
+local function canStartCountdown(state)
+	local b, r = #state.waitingQueueBlue, #state.waitingQueueRed
+	local t = b + r
+	if t < (LobbyConfig.MIN_PLAYERS or 2) then
+		return false
+	end
+	if requiresBothTeamsForStart() then
+		if b < 1 or r < 1 then
+			return false
+		end
+	end
+	return true
+end
+
+local function playerQueuedTeam(state, player)
+	for _, p in ipairs(state.waitingQueueBlue) do
+		if p == player then
+			return "Blue"
+		end
+	end
+	for _, p in ipairs(state.waitingQueueRed) do
+		if p == player then
+			return "Red"
+		end
+	end
+	return nil
+end
+
+local function buildStateForPlayer(state, _remotes, player)
 	local userId = player.UserId
 	local phase = state.playerPhase[userId] or LobbyConfig.PHASE.SHOP_LOBBY
-	local waitingCount = #state.waitingQueue
+	local b, r = #state.waitingQueueBlue, #state.waitingQueueRed
 	local result = {
 		phase = phase,
-		waitingCount = waitingCount,
+		waitingCount = b + r,
+		waitingCountBlue = b,
+		waitingCountRed = r,
+		queuedTeam = playerQueuedTeam(state, player),
 		minPlayers = LobbyConfig.MIN_PLAYERS,
 		maxPlayers = LobbyConfig.MAX_PLAYERS,
 		matchStarting = state.matchStartingAt ~= nil,
@@ -27,30 +67,31 @@ local function buildStateForPlayer(state, remotes, player)
 end
 
 local function broadcastStateToWaiting(state, remotes)
-	local payload = {
-		phase = LobbyConfig.PHASE.WAITING_LOBBY,
-		waitingCount = #state.waitingQueue,
-		minPlayers = LobbyConfig.MIN_PLAYERS,
-		maxPlayers = LobbyConfig.MAX_PLAYERS,
-		matchStarting = state.matchStartingAt ~= nil,
-		countdownEndTime = state.countdownEndTime,
-		secondsRemaining = nil,
-	}
-	if state.countdownEndTime then
-		payload.secondsRemaining = math.max(0, math.ceil(state.countdownEndTime - os.clock()))
+	local seen = {}
+	for _, p in ipairs(state.waitingQueueBlue) do
+		if p and p.Parent and not seen[p] then
+			seen[p] = true
+			remotes.LobbyState:FireClient(p, buildStateForPlayer(state, remotes, p))
+		end
 	end
-	for i = 1, #state.waitingQueue do
-		local p = state.waitingQueue[i]
-		if p and p.Parent then
-			remotes.LobbyState:FireClient(p, payload)
+	for _, p in ipairs(state.waitingQueueRed) do
+		if p and p.Parent and not seen[p] then
+			seen[p] = true
+			remotes.LobbyState:FireClient(p, buildStateForPlayer(state, remotes, p))
 		end
 	end
 end
 
 local function removeFromWaitingQueue(state, player)
-	for i = #state.waitingQueue, 1, -1 do
-		if state.waitingQueue[i] == player then
-			table.remove(state.waitingQueue, i)
+	for i = #state.waitingQueueBlue, 1, -1 do
+		if state.waitingQueueBlue[i] == player then
+			table.remove(state.waitingQueueBlue, i)
+			break
+		end
+	end
+	for i = #state.waitingQueueRed, 1, -1 do
+		if state.waitingQueueRed[i] == player then
+			table.remove(state.waitingQueueRed, i)
 			break
 		end
 	end
@@ -95,8 +136,45 @@ local function isInLeaveCooldown(state, userId)
 	return false
 end
 
+-- Pop up to MAX_PLAYERS alternating blue/red; drain remainder from whichever queue has players.
+local function takePlayersForArena(state)
+	local players = {}
+	local teamByUserId = {}
+	local preferBlue = true
+	local maxP = LobbyConfig.MAX_PLAYERS or 8
+
+	local function popNext()
+		if preferBlue and #state.waitingQueueBlue > 0 then
+			return table.remove(state.waitingQueueBlue, 1), "Blue"
+		end
+		if not preferBlue and #state.waitingQueueRed > 0 then
+			return table.remove(state.waitingQueueRed, 1), "Red"
+		end
+		if #state.waitingQueueBlue > 0 then
+			return table.remove(state.waitingQueueBlue, 1), "Blue"
+		end
+		if #state.waitingQueueRed > 0 then
+			return table.remove(state.waitingQueueRed, 1), "Red"
+		end
+		return nil, nil
+	end
+
+	while #players < maxP do
+		local p, team = popNext()
+		if not p then
+			break
+		end
+		if p.Parent then
+			players[#players + 1] = p
+			teamByUserId[p.UserId] = team
+		end
+		preferBlue = not preferBlue
+	end
+	return players, teamByUserId
+end
+
 local function sendToArena(state, remotes, teleportPlayerTo)
-	if #state.waitingQueue < LobbyConfig.MIN_PLAYERS then
+	if not canStartCountdown(state) then
 		cancelCountdown(state, remotes)
 		return
 	end
@@ -107,17 +185,19 @@ local function sendToArena(state, remotes, teleportPlayerTo)
 		end)
 		return
 	end
-	local toSend = math.min(#state.waitingQueue, LobbyConfig.MAX_PLAYERS)
-	local players = {}
-	for i = 1, toSend do
-		players[i] = state.waitingQueue[1]
-		table.remove(state.waitingQueue, 1)
+	local players, teamByUserId = takePlayersForArena(state)
+	if #players == 0 then
+		cancelCountdown(state, remotes)
+		return
 	end
 	for _, p in ipairs(players) do
 		state.playerPhase[p.UserId] = LobbyConfig.PHASE.ARENA
 		remotes.LobbyState:FireClient(p, {
 			phase = LobbyConfig.PHASE.ARENA,
 			waitingCount = 0,
+			waitingCountBlue = 0,
+			waitingCountRed = 0,
+			queuedTeam = nil,
 			minPlayers = LobbyConfig.MIN_PLAYERS,
 			maxPlayers = LobbyConfig.MAX_PLAYERS,
 			matchStarting = false,
@@ -129,38 +209,80 @@ local function sendToArena(state, remotes, teleportPlayerTo)
 	state.countdownEndTime = nil
 	broadcastStateToWaiting(state, remotes)
 	if state.onArenaRoundStarted then
-		state.onArenaRoundStarted(players)
+		state.onArenaRoundStarted(players, teamByUserId)
 	end
 end
 
-local function addPlayerToWaitingLobby(state, remotes, teleportPlayerTo, player)
+local function tryBeginCountdown(state, remotes)
+	if state.matchStartingAt then
+		return
+	end
+	if not canStartCountdown(state) then
+		return
+	end
+	state.matchStartingAt = os.clock()
+	state.countdownEndTime = os.clock() + LobbyConfig.ARENA_COUNTDOWN_SECONDS
+	broadcastStateToWaiting(state, remotes)
+	startCountdownTick(state, remotes)
+	task.delay(LobbyConfig.ARENA_COUNTDOWN_SECONDS, function()
+		sendToArena(state, remotes, state.teleportPlayerToForArena)
+	end)
+end
+
+local function maybeCancelCountdown(state, remotes)
+	if state.matchStartingAt and not canStartCountdown(state) then
+		cancelCountdown(state, remotes)
+	end
+end
+
+--[[
+	Add player to blue or red queue. skipTeleport: do not move character (pad join).
+]]
+local function addPlayerToTeamQueue(state, remotes, teleportPlayerTo, player, team, skipTeleport)
 	local userId = player.UserId
+	local blockUntil = state.joinQueueBlockedUntil[userId]
+	if blockUntil and os.clock() < blockUntil then
+		return false
+	end
 	if isInLeaveCooldown(state, userId) then
 		return false
 	end
 	local phase = state.playerPhase[userId]
-	if phase == LobbyConfig.PHASE.WAITING_LOBBY then
-		return true
-	end
 	if phase == LobbyConfig.PHASE.ARENA then
 		return false
 	end
-	state.waitingQueue[#state.waitingQueue + 1] = player
+	if team ~= "Blue" and team ~= "Red" then
+		return false
+	end
+	local cap = LobbyConfig.MAX_PLAYERS_PER_TEAM or 6
+	local onBlue = playerQueuedTeam(state, player) == "Blue"
+	local onRed = playerQueuedTeam(state, player) == "Red"
+	if onBlue or onRed then
+		if (team == "Blue" and onBlue) or (team == "Red" and onRed) then
+			return true
+		end
+		removeFromWaitingQueue(state, player)
+	end
+	local q = team == "Blue" and state.waitingQueueBlue or state.waitingQueueRed
+	if #q >= cap then
+		return false
+	end
+	q[#q + 1] = player
 	state.playerPhase[userId] = LobbyConfig.PHASE.WAITING_LOBBY
-	remotes.TeleportToWaiting:FireClient(player)
-	teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+	if not skipTeleport then
+		remotes.TeleportToWaiting:FireClient(player)
+		if teleportPlayerTo then
+			teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+		end
+	end
 	remotes.LobbyState:FireClient(player, buildStateForPlayer(state, remotes, player))
 	broadcastStateToWaiting(state, remotes)
-	if not state.matchStartingAt and #state.waitingQueue >= LobbyConfig.MIN_PLAYERS then
-		state.matchStartingAt = os.clock()
-		state.countdownEndTime = os.clock() + LobbyConfig.ARENA_COUNTDOWN_SECONDS
-		broadcastStateToWaiting(state, remotes)
-		startCountdownTick(state, remotes)
-		task.delay(LobbyConfig.ARENA_COUNTDOWN_SECONDS, function()
-			sendToArena(state, remotes, teleportPlayerTo)
-		end)
-	end
+	tryBeginCountdown(state, remotes)
 	return true
+end
+
+local function addPlayerToWaitingLobby(state, remotes, teleportPlayerTo, player)
+	return addPlayerToTeamQueue(state, remotes, teleportPlayerTo, player, "Blue", false)
 end
 
 return {
@@ -172,4 +294,10 @@ return {
 	isInLeaveCooldown = isInLeaveCooldown,
 	sendToArena = sendToArena,
 	addPlayerToWaitingLobby = addPlayerToWaitingLobby,
+	addPlayerToTeamQueue = addPlayerToTeamQueue,
+	playerQueuedTeam = playerQueuedTeam,
+	totalWaiting = totalWaiting,
+	canStartCountdown = canStartCountdown,
+	maybeCancelCountdown = maybeCancelCountdown,
+	tryBeginCountdown = tryBeginCountdown,
 }

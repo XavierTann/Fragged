@@ -47,12 +47,12 @@ DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 end)
 DropServiceModule.Init()
 
-LobbyServiceModule.Init(function(players)
+LobbyServiceModule.Init(function(players, playerTeamsMap)
 	CombatServiceModule.StartRound(players, function()
 		for _, p in ipairs(players) do
 			LobbyServiceModule.ReturnPlayerToShop(p)
 		end
-	end)
+	end, playerTeamsMap)
 end)
 
 print("Server startup complete.")

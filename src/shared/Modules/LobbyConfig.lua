@@ -1,13 +1,16 @@
 --[[
-	Lobby configuration: Shop Lobby -> (portal) -> Waiting Lobby -> (enough players) -> Arena.
+	Lobby configuration: Shop Lobby -> stand on team pad in Lobby -> Waiting -> Arena.
+	Workspace.Lobby.SpawnPads: Models named BluePad (x6) and RedPad (x6).
 ]]
 
 return {
-	-- Waiting lobby: min players before match can start, max per match
-	-- MIN_PLAYERS = 2,
-	-- DEBUG
-	MIN_PLAYERS = 1,
+	-- Waiting lobby: min total queued players before countdown; max sent to one arena match
+	MIN_PLAYERS = 2,
 	MAX_PLAYERS = 8,
+	-- True = need at least one on blue pads and one on red pads before countdown (TDM).
+	REQUIRE_BOTH_TEAMS_TO_START = true,
+	-- Max players per team in the waiting queues (matches 6 blue + 6 red pads).
+	MAX_PLAYERS_PER_TEAM = 6,
 
 	-- Countdown (seconds) in waiting lobby before teleporting to arena
 	ARENA_COUNTDOWN_SECONDS = 3,
@@ -42,4 +45,11 @@ return {
 		RED_TEAM = "RedTeamSpawnLocation",
 		BLUE_TEAM = "BlueTeamSpawnLocation",
 	},
+
+	-- Workspace/Lobby/SpawnPads — direct child Models with these exact names
+	LOBBY_PADS_FOLDER_PATH = { "Lobby", "SpawnPads" },
+	LOBBY_BLUE_PAD_MODEL_NAME = "BluePad",
+	LOBBY_RED_PAD_MODEL_NAME = "RedPad",
+	-- How often to test HRP vs pad model bounds (seconds)
+	LOBBY_PAD_POLL_INTERVAL = 0.2,
 }

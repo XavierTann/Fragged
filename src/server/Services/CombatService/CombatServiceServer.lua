@@ -420,7 +420,7 @@ return {
 		CombatAmmo.startReloadLoop(state)
 	end,
 
-	StartRound = function(players, onRoundEnd)
+	StartRound = function(players, onRoundEnd, playerTeamsMap)
 		state.onRoundEndCallback = onRoundEnd
 		state.matchEnded = false
 		state.currentRoundPlayers = {}
@@ -431,7 +431,11 @@ return {
 		state.playerAssists = {}
 		for i, p in ipairs(players) do
 			state.currentRoundPlayers[#state.currentRoundPlayers + 1] = p
-			state.playerTeams[p.UserId] = (i % 2 == 1) and "Blue" or "Red"
+			local assigned = playerTeamsMap and playerTeamsMap[p.UserId]
+			if assigned ~= "Blue" and assigned ~= "Red" then
+				assigned = (i % 2 == 1) and "Blue" or "Red"
+			end
+			state.playerTeams[p.UserId] = assigned
 			state.playerKills[p.UserId] = 0
 			state.playerDeaths[p.UserId] = 0
 			state.playerAssists[p.UserId] = 0

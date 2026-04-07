@@ -80,7 +80,6 @@ return {
 
 		-- Single lobby UI (shop + queue share one panel; server still uses SHOP_LOBBY / WAITING_LOBBY phases).
 		LOBBY_PANEL_TITLE = "Lobby",
-		LOBBY_PAD_HINT = "Stand on the blue or red pad to join a team!",
 		-- string.format(count, minPlayers) — queue block placeholder before first refresh
 		LOBBY_QUEUE_COUNT_INITIAL = "Players: %d / %d\n",
 		-- string.format(total, blue, red) — then status lines + LOBBY_QUEUE_YOU_SUFFIX

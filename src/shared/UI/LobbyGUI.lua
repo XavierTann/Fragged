@@ -1,6 +1,6 @@
 --[[
 	LobbyGUI
-	One panel for the whole lobby: pad hint, live queue counts / status, and match countdown.
+	One panel for the whole lobby: queue counts / status and match countdown.
 	Visible for both ShopLobby and WaitingLobby server phases; hidden in Arena.
 ]]
 
@@ -57,6 +57,7 @@ local function createGui()
 	gui.Name = "LobbyGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.IgnoreGuiInset = true
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	return gui
 end
@@ -64,8 +65,8 @@ end
 local function createLobbyPanel(parent)
 	local frame = Instance.new("Frame")
 	frame.Name = "LobbyPanel"
-	frame.Size = UDim2.fromScale(0.4, 0.4)
-	frame.Position = UDim2.fromScale(0.5, 0)
+	frame.Size = UDim2.fromScale(0.34, 0.25)
+	frame.Position = UDim2.new(0.5, 0, 0, 32)
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	frame.BorderSizePixel = 0
@@ -86,24 +87,10 @@ local function createLobbyPanel(parent)
 	title.Font = Enum.Font.GothamBold
 	title.Parent = frame
 
-	local hint = Instance.new("TextLabel")
-	hint.Name = "PadHint"
-	hint.Size = UDim2.new(1, -16, 0, 36)
-	hint.Position = UDim2.fromOffset(8, 30)
-	hint.BackgroundTransparency = 1
-	hint.Text = T.LOBBY_PAD_HINT
-	hint.TextColor3 = Color3.fromRGB(200, 200, 200)
-	hint.TextSize = 11
-	hint.Font = Enum.Font.Gotham
-	hint.TextWrapped = true
-	hint.TextXAlignment = Enum.TextXAlignment.Left
-	hint.TextYAlignment = Enum.TextYAlignment.Top
-	hint.Parent = frame
-
 	local countLabel = Instance.new("TextLabel")
 	countLabel.Name = "Count"
-	countLabel.Size = UDim2.new(1, -16, 0, 140)
-	countLabel.Position = UDim2.fromOffset(8, 72)
+	countLabel.Size = UDim2.new(1, -16, 0, 100)
+	countLabel.Position = UDim2.fromOffset(8, 32)
 	countLabel.BackgroundTransparency = 1
 	countLabel.Text = string.format(T.LOBBY_QUEUE_COUNT_INITIAL, 0, LobbyConfig.MIN_PLAYERS)
 	countLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
@@ -117,7 +104,7 @@ local function createLobbyPanel(parent)
 	local countdownLabel = Instance.new("TextLabel")
 	countdownLabel.Name = "Countdown"
 	countdownLabel.Size = UDim2.new(1, -16, 0, 16)
-	countdownLabel.Position = UDim2.fromOffset(8, 216)
+	countdownLabel.Position = UDim2.fromOffset(8, 136)
 	countdownLabel.BackgroundTransparency = 1
 	countdownLabel.Text = ""
 	countdownLabel.TextColor3 = Color3.fromRGB(255, 220, 100)

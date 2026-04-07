@@ -19,8 +19,17 @@ local LocalPlayer = Players.LocalPlayer
 local renderConnection = nil
 local smoothedAimOffsetXZ = Vector3.zero
 local cachedWeapon = "Pistol"
+-- Movement dot + aim beam are arena-only; lobby / shop keep these off.
+local indicatorsEnabled = false
 
 local function onRenderStep(dt)
+	if not indicatorsEnabled then
+		MovementDot.destroy()
+		WeaponAimOverlays.destroyAll()
+		smoothedAimOffsetXZ = Vector3.zero
+		return
+	end
+
 	local character = LocalPlayer.Character
 	if not character or not character.Parent then
 		MovementDot.destroy()
@@ -92,5 +101,15 @@ return {
 		end)
 
 		renderConnection = RunService.RenderStepped:Connect(onRenderStep)
+	end,
+
+	SetEnabled = function(enabled)
+		indicatorsEnabled = enabled == true
+		if not indicatorsEnabled then
+			MovementDot.destroy()
+			WeaponAimOverlays.destroyAll()
+			smoothedAimOffsetXZ = Vector3.zero
+			MovementDot.resetSmoothed()
+		end
 	end,
 }

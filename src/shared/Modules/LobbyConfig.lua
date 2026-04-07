@@ -28,6 +28,10 @@ return {
 		TELEPORT_TO_WAITING = "TeleportToWaiting",
 		TELEPORT_TO_ARENA = "TeleportToArena",
 		TELEPORT_TO_SHOP = "TeleportToShop",
+		-- Server -> client: fullerTeam ("Blue"|"Red"), otherTeam — show queue balance toast
+		QUEUE_BALANCE_TOAST = "QueueBalanceToast",
+		-- Server -> client: this pad is already taken; use another pad
+		PAD_OCCUPIED_TOAST = "PadOccupiedToast",
 	},
 
 	-- Phases for UI/state
@@ -51,10 +55,19 @@ return {
 	LOBBY_BLUE_PAD_MODEL_NAME = "BluePad",
 	LOBBY_RED_PAD_MODEL_NAME = "RedPad",
 	LOBBY_LIGHTBEAM_PART_NAME = "LightBeam",
+	-- Server sets true on fuller-team unoccupied pads when queues are unbalanced; client dims LightBeam.
+	LOBBY_PAD_SUPPRESSED_ATTRIBUTE = "LobbyPadSuppressed",
+	-- Server sets to queued player's UserId while they hold this pad (one player per pad).
+	LOBBY_PAD_OCCUPANT_USER_ID_ATTRIBUTE = "LobbyPadOccupantUserId",
+	LOBBY_LIGHTBEAM_SUPPRESSED_TRANSPARENCY = 1,
 	-- Client-only pulse on LightBeam transparency under each pad model
 	LOBBY_LIGHTBEAM_PULSE_SPEED = 1.5,
 	LOBBY_LIGHTBEAM_TRANSPARENCY_MIN = 0.4,
 	LOBBY_LIGHTBEAM_TRANSPARENCY_MAX = 0.88,
 	-- How often to test HRP vs pad model bounds (seconds)
 	LOBBY_PAD_POLL_INTERVAL = 0.2,
+	-- Min seconds between queue-balance toasts per player (standing on fuller team's closed pads)
+	LOBBY_QUEUE_BALANCE_TOAST_COOLDOWN = 5,
+	-- Min seconds between "pad already occupied" toasts per player
+	LOBBY_PAD_OCCUPIED_TOAST_COOLDOWN = 4,
 }

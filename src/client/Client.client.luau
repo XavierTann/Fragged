@@ -21,6 +21,12 @@ DirectionIndicatorClient.Init()
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 
+local CenterScreenToast = require(Shared.UI.CenterScreenToast)
+CenterScreenToast.Init()
+
+local LobbyQueueBalanceToastClient = require(Shared.Services.LobbyQueueBalanceToastClient)
+LobbyQueueBalanceToastClient.Init()
+
 local LobbyPadLightBeamPulse = require(Shared.Services.LobbyPadLightBeamPulse)
 LobbyPadLightBeamPulse.Init()
 

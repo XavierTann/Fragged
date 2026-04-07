@@ -32,6 +32,7 @@ local function bindRemoteHandlers()
 		state.lastLeftWaitingAt[player.UserId] = os.clock()
 		state.joinQueueBlockedUntil[player.UserId] = os.clock() + (LobbyConfig.LEAVE_WAITING_COOLDOWN_SECONDS or 2)
 		LobbyQueue.removeFromWaitingQueue(state, player)
+		LobbyPadZones.clearPadOccupantForUser(player.UserId)
 		LobbyQueue.maybeCancelCountdown(state, remotes)
 		remotes.TeleportToShop:FireClient(player)
 		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
@@ -45,8 +46,11 @@ local function bindRemoteHandlers()
 
 	Players.PlayerRemoving:Connect(function(player)
 		LobbyQueue.removeFromWaitingQueue(state, player)
+		LobbyPadZones.clearPadOccupantForUser(player.UserId)
 		state.playerPhase[player.UserId] = nil
 		state.joinQueueBlockedUntil[player.UserId] = nil
+		state.balanceToastCooldown[player.UserId] = nil
+		state.padOccupiedToastCooldown[player.UserId] = nil
 		LobbyQueue.maybeCancelCountdown(state, remotes)
 		LobbyQueue.broadcastStateToWaiting(state, remotes)
 	end)

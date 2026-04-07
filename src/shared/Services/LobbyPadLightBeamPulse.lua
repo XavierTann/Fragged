@@ -1,6 +1,8 @@
 --[[
 	LobbyPadLightBeamPulse (client)
 	Pulses Transparency on every part named LightBeam under BluePad/RedPad models in Lobby/SpawnPads.
+	Pads with LobbyPadOccupantUserId set (another player holds the pad) use full transparency.
+	Pads with server attribute LobbyPadSuppressed == true use fixed high transparency (beam off).
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -9,6 +11,10 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
 
+local SUP_ATTR = LobbyConfig.LOBBY_PAD_SUPPRESSED_ATTRIBUTE or "LobbyPadSuppressed"
+local OCC_ATTR = LobbyConfig.LOBBY_PAD_OCCUPANT_USER_ID_ATTRIBUTE or "LobbyPadOccupantUserId"
+
+-- { part = BasePart, pad = Model }
 local beams = {}
 local folderConn = {}
 local renderConn = nil
@@ -40,7 +46,7 @@ local function rebuildBeamList()
 		if isPadModel(child) then
 			for _, d in ipairs(child:GetDescendants()) do
 				if d.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME and d:IsA("BasePart") then
-					beams[#beams + 1] = d
+					beams[#beams + 1] = { part = d, pad = child }
 				end
 			end
 		end
@@ -95,14 +101,24 @@ local function onRenderStepped()
 	local speed = LobbyConfig.LOBBY_LIGHTBEAM_PULSE_SPEED or 2.8
 	local tMin = LobbyConfig.LOBBY_LIGHTBEAM_TRANSPARENCY_MIN or 0.12
 	local tMax = LobbyConfig.LOBBY_LIGHTBEAM_TRANSPARENCY_MAX or 0.88
+	local suppressedTr = LobbyConfig.LOBBY_LIGHTBEAM_SUPPRESSED_TRANSPARENCY or 1
 	local phase = 0.5 + 0.5 * math.sin(os.clock() * speed)
 	local tr = tMin + (tMax - tMin) * phase
 	for i = #beams, 1, -1 do
-		local part = beams[i]
-		if part.Parent then
-			part.Transparency = tr
-		else
+		local entry = beams[i]
+		local part = entry.part
+		local pad = entry.pad
+		if not part.Parent or not pad.Parent then
 			table.remove(beams, i)
+		else
+			local occ = pad:GetAttribute(OCC_ATTR)
+			local occupied = typeof(occ) == "number" and occ > 0
+			local suppressed = pad:GetAttribute(SUP_ATTR) == true
+			if occupied or suppressed then
+				part.Transparency = suppressedTr
+			else
+				part.Transparency = tr
+			end
 		end
 	end
 end

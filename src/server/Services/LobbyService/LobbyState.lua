@@ -10,6 +10,8 @@ return function()
 		playerPhase = {},
 		lastLeftWaitingAt = {},
 		joinQueueBlockedUntil = {}, -- after LeaveWaitingLobby: block pad re-queue briefly
+		balanceToastCooldown = {}, -- uid -> os.clock() when next queue-balance toast allowed
+		padOccupiedToastCooldown = {}, -- uid -> os.clock() when next pad-occupied toast allowed
 		matchStartingAt = nil,
 		countdownEndTime = nil,
 		countdownTickConnection = nil,

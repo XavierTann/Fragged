@@ -31,6 +31,8 @@ local function ensureRemotes()
 		TeleportToWaiting = remote(LobbyConfig.REMOTES.TELEPORT_TO_WAITING, "RemoteEvent"),
 		TeleportToArena = remote(LobbyConfig.REMOTES.TELEPORT_TO_ARENA, "RemoteEvent"),
 		TeleportToShop = remote(LobbyConfig.REMOTES.TELEPORT_TO_SHOP, "RemoteEvent"),
+		QueueBalanceToast = remote(LobbyConfig.REMOTES.QUEUE_BALANCE_TOAST, "RemoteEvent"),
+		PadOccupiedToast = remote(LobbyConfig.REMOTES.PAD_OCCUPIED_TOAST, "RemoteEvent"),
 	}
 end
 

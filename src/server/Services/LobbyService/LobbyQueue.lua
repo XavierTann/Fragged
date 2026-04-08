@@ -45,23 +45,15 @@ local function totalWaiting(state)
 	return #state.waitingQueueBlue + #state.waitingQueueRed
 end
 
-local function requiresBothTeamsForStart()
-	if LobbyConfig.REQUIRE_BOTH_TEAMS_TO_START == false then
-		return false
-	end
-	return true
-end
-
 local function canStartCountdown(state)
 	local b, r = #state.waitingQueueBlue, #state.waitingQueueRed
-	local t = b + r
-	if t < (LobbyConfig.MIN_PLAYERS or 2) then
+	local minTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM or 2
+	if b < minTeam or r < minTeam then
 		return false
 	end
-	if requiresBothTeamsForStart() then
-		if b < 1 or r < 1 then
-			return false
-		end
+	-- Match starts only when teams are equal (e.g. 2v2, 3v3); imbalance blocks countdown until the smaller team catches up.
+	if b ~= r then
+		return false
 	end
 	return true
 end
@@ -125,6 +117,7 @@ local function buildStateForPlayer(state, _remotes, player)
 		waitingCountRed = r,
 		queuedTeam = playerQueuedTeam(state, player),
 		minPlayers = LobbyConfig.MIN_PLAYERS,
+		minPlayersPerTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM,
 		maxPlayers = LobbyConfig.MAX_PLAYERS,
 		matchStarting = state.matchStartingAt ~= nil,
 		countdownEndTime = state.countdownEndTime,
@@ -280,6 +273,7 @@ local function sendToArena(state, remotes, teleportPlayerTo)
 			waitingCountRed = 0,
 			queuedTeam = nil,
 			minPlayers = LobbyConfig.MIN_PLAYERS,
+			minPlayersPerTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM,
 			maxPlayers = LobbyConfig.MAX_PLAYERS,
 			matchStarting = false,
 			countdownEndTime = nil,

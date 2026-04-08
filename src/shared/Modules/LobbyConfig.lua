@@ -4,11 +4,11 @@
 ]]
 
 return {
-	-- Waiting lobby: min total queued players before countdown; max sent to one arena match
+	-- Minimum total queued when match can start (e.g. 1v1 = 2); countdown requires equal team sizes and each team ≥ MIN_PLAYERS_PER_TEAM.
 	MIN_PLAYERS = 2,
+	-- Each team must have at least this many queued before a match can start (in addition to equal counts).
+	MIN_PLAYERS_PER_TEAM = 1,
 	MAX_PLAYERS = 8,
-	-- True = need at least one on blue pads and one on red pads before countdown (TDM).
-	REQUIRE_BOTH_TEAMS_TO_START = true,
 	-- Max players per team in the waiting queues (not tied to number of physical pads).
 	MAX_PLAYERS_PER_TEAM = 6,
 	-- One pad per team: many players can stand on the same pad to queue; no per-pad "slot" occupancy.
@@ -67,6 +67,12 @@ return {
 	LOBBY_LIGHTBEAM_TRANSPARENCY_MAX = 0.88,
 	-- How often to test HRP vs pad model bounds (seconds)
 	LOBBY_PAD_POLL_INTERVAL = 0.2,
+	-- Workspace/Lobby/SpawnPads — 3D SurfaceGui hosts (siblings of BluePad/RedPad models)
+	LOBBY_BLUE_PAD_SCREEN_NAME = "BluePadScreen",
+	LOBBY_RED_PAD_SCREEN_NAME = "RedPadScreen",
+	LOBBY_PAD_SCREEN_FRAME_SEGMENTS = { "Glass", "SurfaceGui", "Frame" },
+	LOBBY_PAD_SCREEN_PLAYER_COUNT_NAME = "PlayerCount",
+	LOBBY_PAD_SCREEN_ALERT_NAME = "Alert",
 	-- Min seconds between team-queue balance toasts per player (fuller-team pad)
 	LOBBY_TEAM_QUEUE_BALANCE_TOAST_COOLDOWN = 5,
 
@@ -77,25 +83,20 @@ return {
 		-- LobbyServiceClient when remotes are not ready
 		CLIENT_LOBBY_NOT_INITIALIZED = "Not initialized",
 
-		-- Single lobby UI (shop + queue share one panel; server still uses SHOP_LOBBY / WAITING_LOBBY phases).
-		LOBBY_PANEL_TITLE = "Lobby",
-		-- string.format(count, minPlayers) — queue block placeholder before first refresh
-		LOBBY_QUEUE_COUNT_INITIAL = "Players: %d / %d\n",
-		-- string.format(total, blue, red) — then status lines + LOBBY_QUEUE_YOU_SUFFIX
-		LOBBY_QUEUE_HEADER = "Queued: %d (Blue %d · Red %d).\n",
-		-- Below MIN_PLAYERS total in queue — %s = team phrase from LobbyGUI (smaller queue, or both if tied)
-		LOBBY_QUEUE_STATUS_NEED_MORE_TOTAL_ONE = "1 more player needs to join the %s before the round can start!\n",
-		LOBBY_QUEUE_STATUS_NEED_MORE_TOTAL_MANY = "%d more players need to join the %s before the round can start!\n",
-		-- REQUIRE_BOTH_TEAMS_TO_START (string.format with TeamDisplayUtils.displayName)
-		LOBBY_QUEUE_STATUS_NEED_ON_TEAM = "At least one player needs to join the %s team!\n",
-		-- string.format(teamId) — teamId is "Blue" or "Red"
-		LOBBY_QUEUE_YOU_SUFFIX = "You are on the %s team.\n",
-
 		-- string.format(seconds)
 		MATCH_STARTING_IN = "Match starting in %d...",
 		MATCH_STARTING = "Match starting...",
 
 		-- string.format(otherTeamDisplayName) — fuller pad is over capacity vs other team
 		TEAM_QUEUE_BALANCE_TOAST = "One player needs to join the %s team before more can queue here.",
+
+		-- Pad SurfaceGui PlayerCount (RichText: <b> wraps count). string.format(count, teamLower)
+		PAD_SCREEN_PLAYER_COUNT_ONE = "<b>%d</b> player in %s",
+		PAD_SCREEN_PLAYER_COUNT_MANY = "<b>%d</b> players in %s",
+		-- Per-team pad Alert (RichText). string.format(TeamDisplayUtils.displayName(team))
+		PAD_SCREEN_TEAM_HAS_ENOUGH = "%s has enough players",
+		-- string.format(teamDisplayName) — count 1 uses "player", many uses "players"; number is <u> underlined
+		PAD_SCREEN_TEAM_NEED_MORE_ONE = "Need <u>1</u> more player on %s",
+		PAD_SCREEN_TEAM_NEED_MORE_MANY = "Need <u>%d</u> more players on %s",
 	},
 }

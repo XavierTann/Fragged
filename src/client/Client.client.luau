@@ -55,10 +55,6 @@ CombatServiceClient.Init()
 local TopDownCameraService = require(Shared.Services.TopDownCameraService)
 TopDownCameraService.Init()
 
-local LobbyGUI = require(Shared.UI.LobbyGUI)
-LobbyGUI.Init()
-LobbyGUI.Show()
-
 local RotationJoystickGUI = require(Shared.UI.RotationJoystickGUI)
 RotationJoystickGUI.Init()
 

@@ -14,6 +14,7 @@ local Players = game:GetService("Players")
 
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 local LobbyQueue = require(script.Parent.LobbyQueue)
+local LobbyPadScreens = require(script.Parent.LobbyPadScreens)
 
 local OCC_ATTR = LobbyConfig.LOBBY_PAD_OCCUPANT_USER_ID_ATTRIBUTE or "LobbyPadOccupantUserId"
 local SHARED_PADS = LobbyConfig.LOBBY_SHARED_TEAM_PADS == true
@@ -303,6 +304,7 @@ local function init(state, remotes, teleportPlayerTo)
 
 		reconcilePadOccupancyWithQueues(state)
 		tryFireTeamQueueBalanceToasts(state, remotes)
+		LobbyPadScreens.sync(state)
 	end)
 end
 

@@ -5,7 +5,23 @@
 
 print("Client starting.")
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Enable template ScreenGui at runtime (often disabled in Studio); keep ResetOnSpawn off so HUD is not re-cloned each life.
+task.spawn(function()
+	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local function enableMainTemplate(inst)
+		if inst and inst:IsA("ScreenGui") and inst.Name == "ScreenGui" then
+			inst.ResetOnSpawn = false
+			inst.Enabled = true
+		end
+	end
+	pg.ChildAdded:Connect(enableMainTemplate)
+	local sg = pg:FindFirstChild("ScreenGui") or pg:WaitForChild("ScreenGui")
+	enableMainTemplate(sg)
+end)
+
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local LobbyConfig = require(Shared.Modules.LobbyConfig)

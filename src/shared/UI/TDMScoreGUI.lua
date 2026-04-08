@@ -28,6 +28,7 @@ local wiredBackgroundButton = nil
 local function configureTdmScreenGui(sg)
 	if sg and sg:IsA("ScreenGui") then
 		sg.IgnoreGuiInset = true
+		sg.ResetOnSpawn = false
 	end
 end
 
@@ -77,7 +78,7 @@ local function bindRefs()
 	wireBackgroundButton()
 end
 
--- After respawn, ScreenGui may be re-cloned if ResetOnSpawn is true; recover labels.
+-- Recover refs if the TDM tree was re-parented or replaced.
 local function ensureRefs()
 	if tdmScoreFrame and tdmScoreFrame.Parent and blueScoreLabel and blueScoreLabel.Parent and redScoreLabel and redScoreLabel.Parent then
 		wireBackgroundButton()

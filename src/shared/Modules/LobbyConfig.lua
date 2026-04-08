@@ -5,10 +5,10 @@
 
 return {
 	-- Waiting lobby: min total queued players before countdown; max sent to one arena match
-	MIN_PLAYERS = 2,
+	MIN_PLAYERS = 1,
 	MAX_PLAYERS = 8,
 	-- True = need at least one on blue pads and one on red pads before countdown (TDM).
-	REQUIRE_BOTH_TEAMS_TO_START = true,
+	REQUIRE_BOTH_TEAMS_TO_START = false,
 	-- Max players per team in the waiting queues (matches 6 blue + 6 red pads).
 	MAX_PLAYERS_PER_TEAM = 6,
 

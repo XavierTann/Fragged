@@ -1,16 +1,20 @@
 --[[
 	Lobby configuration: Shop Lobby -> stand on team pad in Lobby -> Waiting -> Arena.
-	Workspace.Lobby.SpawnPads: Models named BluePad (x6) and RedPad (x6).
+	Workspace.Lobby.SpawnPads: one Model named BluePad and one named RedPad (shared team pads).
 ]]
 
 return {
 	-- Waiting lobby: min total queued players before countdown; max sent to one arena match
-	MIN_PLAYERS = 1,
+	MIN_PLAYERS = 2,
 	MAX_PLAYERS = 8,
 	-- True = need at least one on blue pads and one on red pads before countdown (TDM).
-	REQUIRE_BOTH_TEAMS_TO_START = false,
-	-- Max players per team in the waiting queues (matches 6 blue + 6 red pads).
+	REQUIRE_BOTH_TEAMS_TO_START = true,
+	-- Max players per team in the waiting queues (not tied to number of physical pads).
 	MAX_PLAYERS_PER_TEAM = 6,
+	-- One pad per team: many players can stand on the same pad to queue; no per-pad "slot" occupancy.
+	LOBBY_SHARED_TEAM_PADS = true,
+	-- Waiting queues: |blueCount - redCount| must never exceed this (after adding one player to a team).
+	LOBBY_MAX_WAITING_QUEUE_TEAM_DIFF = 1,
 
 	-- Countdown (seconds) in waiting lobby before teleporting to arena
 	ARENA_COUNTDOWN_SECONDS = 3,
@@ -28,10 +32,8 @@ return {
 		TELEPORT_TO_WAITING = "TeleportToWaiting",
 		TELEPORT_TO_ARENA = "TeleportToArena",
 		TELEPORT_TO_SHOP = "TeleportToShop",
-		-- Server -> client: fullerTeam ("Blue"|"Red"), otherTeam — show queue balance toast
-		QUEUE_BALANCE_TOAST = "QueueBalanceToast",
-		-- Server -> client: this pad is already taken; use another pad
-		PAD_OCCUPIED_TOAST = "PadOccupiedToast",
+		-- Server -> client: otherTeam ("Blue"|"Red") — need someone on that team before more can queue on fuller pad
+		TEAM_QUEUE_BALANCE_TOAST = "TeamQueueBalanceToast",
 		-- Server -> client: arena lobby countdown seconds (3,2,1,0); plain number, no table replication issues
 		LOBBY_MATCH_COUNTDOWN = "LobbyMatchCountdown",
 	},
@@ -57,21 +59,16 @@ return {
 	LOBBY_BLUE_PAD_MODEL_NAME = "BluePad",
 	LOBBY_RED_PAD_MODEL_NAME = "RedPad",
 	LOBBY_LIGHTBEAM_PART_NAME = "LightBeam",
-	-- Server sets true on fuller-team unoccupied pads when queues are unbalanced; client dims LightBeam.
-	LOBBY_PAD_SUPPRESSED_ATTRIBUTE = "LobbyPadSuppressed",
-	-- Server sets to queued player's UserId while they hold this pad (one player per pad).
+	-- When LOBBY_SHARED_TEAM_PADS is false: server sets queued player's UserId on that pad (one player per pad).
 	LOBBY_PAD_OCCUPANT_USER_ID_ATTRIBUTE = "LobbyPadOccupantUserId",
-	LOBBY_LIGHTBEAM_SUPPRESSED_TRANSPARENCY = 1,
 	-- Client-only pulse on LightBeam transparency under each pad model
 	LOBBY_LIGHTBEAM_PULSE_SPEED = 1.5,
 	LOBBY_LIGHTBEAM_TRANSPARENCY_MIN = 0.4,
 	LOBBY_LIGHTBEAM_TRANSPARENCY_MAX = 0.88,
 	-- How often to test HRP vs pad model bounds (seconds)
 	LOBBY_PAD_POLL_INTERVAL = 0.2,
-	-- Min seconds between queue-balance toasts per player (standing on fuller team's closed pads)
-	LOBBY_QUEUE_BALANCE_TOAST_COOLDOWN = 5,
-	-- Min seconds between "pad already occupied" toasts per player
-	LOBBY_PAD_OCCUPIED_TOAST_COOLDOWN = 4,
+	-- Min seconds between team-queue balance toasts per player (fuller-team pad)
+	LOBBY_TEAM_QUEUE_BALANCE_TOAST_COOLDOWN = 5,
 
 	-- Player-facing copy (UI, toasts, server join errors). Use string.format where noted.
 	TEXT = {
@@ -98,8 +95,7 @@ return {
 		MATCH_STARTING_IN = "Match starting in %d...",
 		MATCH_STARTING = "Match starting...",
 
-		-- string.format(otherTeamDisplayName, fullerTeamDisplayName)
-		QUEUE_BALANCE_TOAST = "Please join the %s Team. The %s Team has too many players.",
-		PAD_OCCUPIED_TOAST = "This pad is already occupied. Please use another pad.",
+		-- string.format(otherTeamDisplayName) — fuller pad is over capacity vs other team
+		TEAM_QUEUE_BALANCE_TOAST = "One player needs to join the %s team before more can queue here.",
 	},
 }

@@ -1,15 +1,11 @@
 --[[
 	LobbyPadZones
 	Players queue by standing on pad models under Workspace/Lobby/SpawnPads:
-	six Models named "BluePad" (Blue) and six named "RedPad" (Red).
+	Models named "BluePad" (Blue) and "RedPad" (Red)—typically one of each (LOBBY_SHARED_TEAM_PADS).
 	Queue if HRP is inside the pad model’s X–Z bounds (bounding box local X/Z); Y ignored.
 
-	Each pad may be claimed by at most one queued player (attribute LobbyPadOccupantUserId).
-	Others overlapping that pad see a toast and cannot queue there; LightBeam is fully hidden on occupied pads.
-
-	Team balance: when one queue has more players than the other, fuller-team pads stay
-	suppressed unless a player already queued for that team stands on that pad (XZ).
-	Others standing on extra fuller pads see toast + dimmed beam; they cannot queue there.
+	When LOBBY_SHARED_TEAM_PADS is false: each pad may be claimed by at most one queued player
+	(LobbyPadOccupantUserId).
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -19,8 +15,8 @@ local Players = game:GetService("Players")
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 local LobbyQueue = require(script.Parent.LobbyQueue)
 
-local SUP_ATTR = LobbyConfig.LOBBY_PAD_SUPPRESSED_ATTRIBUTE or "LobbyPadSuppressed"
 local OCC_ATTR = LobbyConfig.LOBBY_PAD_OCCUPANT_USER_ID_ATTRIBUTE or "LobbyPadOccupantUserId"
+local SHARED_PADS = LobbyConfig.LOBBY_SHARED_TEAM_PADS == true
 
 local function getPadsContainer()
 	local inst = Workspace
@@ -99,158 +95,8 @@ local function clearPadOccupantForUser(userId)
 	end
 end
 
--- True if a player already in `team`’s queue has HRP on this pad (XZ only).
--- Ignores non-queued players so extra fuller-team pads stay suppressed when someone steps on them.
-local function isPadOccupiedByQueuedMemberOfTeam(state, model, team)
-	for _, player in ipairs(Players:GetPlayers()) do
-		if state.playerPhase[player.UserId] ~= LobbyConfig.PHASE.ARENA then
-			if LobbyQueue.playerQueuedTeam(state, player) == team then
-				local char = player.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
-				local hum = char and char:FindFirstChildOfClass("Humanoid")
-				if hrp and hrp:IsA("BasePart") and hum and hum.Health > 0 then
-					if hrpOverlapsModelBounds(hrp, model) then
-						return true
-					end
-				end
-			end
-		end
-	end
-	return false
-end
-
-local function isPadActiveForFullerTeamQueue(state, model, fullerTeam)
-	local team = teamForPadName(model.Name)
-	if team ~= fullerTeam then
-		return false
-	end
-	local occUid = getOccupantUserId(model)
-	if occUid then
-		local p = Players:GetPlayerByUserId(occUid)
-		if p and LobbyQueue.playerQueuedTeam(state, p) == fullerTeam then
-			return true
-		end
-	end
-	return isPadOccupiedByQueuedMemberOfTeam(state, model, fullerTeam)
-end
-
-local function updatePadSuppression(state)
-	local folder = getPadsContainer()
-	if not folder then
-		return
-	end
-	local bCount = #state.waitingQueueBlue
-	local rCount = #state.waitingQueueRed
-	if bCount == rCount then
-		for _, child in ipairs(folder:GetChildren()) do
-			if child:IsA("Model") and teamForPadName(child.Name) then
-				child:SetAttribute(SUP_ATTR, false)
-			end
-		end
-		return
-	end
-	local fullerTeam = bCount > rCount and "Blue" or "Red"
-	for _, child in ipairs(folder:GetChildren()) do
-		if child:IsA("Model") then
-			local team = teamForPadName(child.Name)
-			if team then
-				if team == fullerTeam then
-					child:SetAttribute(SUP_ATTR, not isPadActiveForFullerTeamQueue(state, child, fullerTeam))
-				else
-					child:SetAttribute(SUP_ATTR, false)
-				end
-			end
-		end
-	end
-end
-
-local function tryFireQueueBalanceToasts(state, remotes)
-	local toastRe = remotes and remotes.QueueBalanceToast
-	if not toastRe then
-		return
-	end
-	local bCount = #state.waitingQueueBlue
-	local rCount = #state.waitingQueueRed
-	if bCount == rCount then
-		return
-	end
-	local fuller = bCount > rCount and "Blue" or "Red"
-	local other = fuller == "Blue" and "Red" or "Blue"
-	local folder = getPadsContainer()
-	if not folder then
-		return
-	end
-	local cooldown = LobbyConfig.LOBBY_QUEUE_BALANCE_TOAST_COOLDOWN or 5
-	local now = os.clock()
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		if state.playerPhase[player.UserId] ~= LobbyConfig.PHASE.ARENA then
-			local char = player.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			if hrp and hrp:IsA("BasePart") and hum and hum.Health > 0 then
-				local uid = player.UserId
-				for _, child in ipairs(folder:GetChildren()) do
-					if
-						child:IsA("Model")
-						and teamForPadName(child.Name) == fuller
-						and child:GetAttribute(SUP_ATTR) == true
-					then
-						if hrpOverlapsModelBounds(hrp, child) then
-							if now >= (state.balanceToastCooldown[uid] or 0) then
-								toastRe:FireClient(player, fuller, other)
-								state.balanceToastCooldown[uid] = now + cooldown
-							end
-							break
-						end
-					end
-				end
-			end
-		end
-	end
-end
-
-local function overlapsAnotherPlayersOccupiedPad(hrp, player)
-	for _, entry in ipairs(cachedPads) do
-		if hrpOverlapsModelBounds(hrp, entry.model) then
-			local occ = getOccupantUserId(entry.model)
-			if occ and occ ~= player.UserId then
-				return true
-			end
-		end
-	end
-	return false
-end
-
-local function tryFirePadOccupiedToasts(state, remotes)
-	local toastRe = remotes and remotes.PadOccupiedToast
-	if not toastRe then
-		return
-	end
-	local cooldown = LobbyConfig.LOBBY_PAD_OCCUPIED_TOAST_COOLDOWN or 4
-	local now = os.clock()
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		if state.playerPhase[player.UserId] ~= LobbyConfig.PHASE.ARENA then
-			local char = player.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			if hrp and hrp:IsA("BasePart") and hum and hum.Health > 0 then
-				if overlapsAnotherPlayersOccupiedPad(hrp, player) then
-					local uid = player.UserId
-					if now >= (state.padOccupiedToastCooldown[uid] or 0) then
-						toastRe:FireClient(player)
-						state.padOccupiedToastCooldown[uid] = now + cooldown
-					end
-				end
-			end
-		end
-	end
-end
-
 --[[
-	Non-suppressed pad overlapping HRP where no other player holds the pad (or this player holds it).
-	If already queued, prefer a candidate matching that team.
+	Overlapping pad. If already queued, prefer a candidate matching that team.
 ]]
 local function getValidQueuePadModelAndTeam(state, player, character)
 	local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -261,10 +107,14 @@ local function getValidQueuePadModelAndTeam(state, player, character)
 	local candidates = {}
 	for _, entry in ipairs(cachedPads) do
 		local model = entry.model
-		if model:GetAttribute(SUP_ATTR) ~= true and hrpOverlapsModelBounds(hrp, model) then
-			local occ = getOccupantUserId(model)
-			if not occ or occ == player.UserId then
+		if hrpOverlapsModelBounds(hrp, model) then
+			if SHARED_PADS then
 				candidates[#candidates + 1] = entry
+			else
+				local occ = getOccupantUserId(model)
+				if not occ or occ == player.UserId then
+					candidates[#candidates + 1] = entry
+				end
 			end
 		end
 	end
@@ -291,6 +141,69 @@ local function syncPlayerPadOccupancy(userId, targetPadModel)
 	end
 	clearPadOccupantForUser(userId)
 	targetPadModel:SetAttribute(OCC_ATTR, userId)
+end
+
+local function padModelForTeamFolder(folder, team)
+	if not folder then
+		return nil
+	end
+	local name = team == "Blue" and LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME or LobbyConfig.LOBBY_RED_PAD_MODEL_NAME
+	local m = folder:FindFirstChild(name)
+	if m and m:IsA("Model") then
+		return m
+	end
+	return nil
+end
+
+--[[
+	Players on the strictly fuller team's pad: toast if queue is over max diff, or they cannot join fuller team.
+]]
+local function tryFireTeamQueueBalanceToasts(state, remotes)
+	local re = remotes and remotes.TeamQueueBalanceToast
+	if not re then
+		return
+	end
+	local fuller, other = LobbyQueue.strictFullerTeam(state)
+	if not fuller or not other then
+		return
+	end
+	local b = #state.waitingQueueBlue
+	local r = #state.waitingQueueRed
+	local absDiff = math.abs(b - r)
+	local maxDiff = LobbyQueue.maxQueueTeamDiff()
+	local folder = getPadsContainer()
+	local pad = padModelForTeamFolder(folder, fuller)
+	if not pad then
+		return
+	end
+	local cooldown = LobbyConfig.LOBBY_TEAM_QUEUE_BALANCE_TOAST_COOLDOWN or 5
+	local now = os.clock()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if state.playerPhase[player.UserId] ~= LobbyConfig.PHASE.ARENA then
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hrp and hrp:IsA("BasePart") and hum and hum.Health > 0 then
+				if hrpOverlapsModelBounds(hrp, pad) then
+					local queued = LobbyQueue.playerQueuedTeam(state, player)
+					local shouldToast = false
+					if queued == fuller then
+						shouldToast = absDiff > maxDiff
+					else
+						shouldToast = not LobbyQueue.balanceAllowsPlayerJoinTeam(state, player, fuller)
+					end
+					if shouldToast then
+						local uid = player.UserId
+						if now >= (state.teamQueueBalanceToastCooldown[uid] or 0) then
+							re:FireClient(player, other)
+							state.teamQueueBalanceToastCooldown[uid] = now + cooldown
+						end
+					end
+				end
+			end
+		end
+	end
 end
 
 local function reconcilePadOccupancyWithQueues(state)
@@ -322,13 +235,11 @@ local function init(state, remotes, teleportPlayerTo)
 		container.ChildAdded:Connect(function()
 			task.defer(function()
 				rebuildPadList(getPadsContainer())
-				updatePadSuppression(state)
 			end)
 		end)
 		container.ChildRemoved:Connect(function()
 			task.defer(function()
 				rebuildPadList(getPadsContainer())
-				updatePadSuppression(state)
 			end)
 		end)
 		container.Destroying:Connect(function()
@@ -375,7 +286,7 @@ local function init(state, remotes, teleportPlayerTo)
 							if phase ~= LobbyConfig.PHASE.WAITING_LOBBY or queued ~= padTeam then
 								LobbyQueue.addPlayerToTeamQueue(state, remotes, teleportPlayerTo, player, padTeam, true)
 							end
-							if LobbyQueue.playerQueuedTeam(state, player) == padTeam then
+							if not SHARED_PADS and LobbyQueue.playerQueuedTeam(state, player) == padTeam then
 								syncPlayerPadOccupancy(player.UserId, padModel)
 							end
 						elseif queued then
@@ -390,10 +301,8 @@ local function init(state, remotes, teleportPlayerTo)
 			end
 		end
 
-		updatePadSuppression(state)
-		tryFirePadOccupiedToasts(state, remotes)
-		tryFireQueueBalanceToasts(state, remotes)
 		reconcilePadOccupancyWithQueues(state)
+		tryFireTeamQueueBalanceToasts(state, remotes)
 	end)
 end
 

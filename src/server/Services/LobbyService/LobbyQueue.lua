@@ -6,6 +6,41 @@
 local Players = game:GetService("Players")
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 
+local function maxQueueTeamDiff()
+	return LobbyConfig.LOBBY_MAX_WAITING_QUEUE_TEAM_DIFF or 1
+end
+
+--[[
+	True if one new player (not in either queue) joining `team` would stay within max imbalance.
+]]
+local function balanceAllowsNewJoinToTeam(state, team)
+	local b = #state.waitingQueueBlue
+	local r = #state.waitingQueueRed
+	local maxDiff = maxQueueTeamDiff()
+	if team == "Blue" then
+		return math.abs((b + 1) - r) <= maxDiff
+	end
+	if team == "Red" then
+		return math.abs(b - (r + 1)) <= maxDiff
+	end
+	return false
+end
+
+--[[
+	Team with strictly more queued players, and the other team; nil if tied.
+]]
+local function strictFullerTeam(state)
+	local b = #state.waitingQueueBlue
+	local r = #state.waitingQueueRed
+	if b > r then
+		return "Blue", "Red"
+	end
+	if r > b then
+		return "Red", "Blue"
+	end
+	return nil, nil
+end
+
 local function totalWaiting(state)
 	return #state.waitingQueueBlue + #state.waitingQueueRed
 end
@@ -43,6 +78,40 @@ local function playerQueuedTeam(state, player)
 		end
 	end
 	return nil
+end
+
+--[[
+	Queue counts after `player` leaves their current queue (if any) and joins `team`.
+]]
+local function projectedCountsIfPlayerMovesToTeam(state, player, team)
+	local b = #state.waitingQueueBlue
+	local r = #state.waitingQueueRed
+	local q = playerQueuedTeam(state, player)
+	if q == "Blue" then
+		b = b - 1
+	elseif q == "Red" then
+		r = r - 1
+	end
+	if team == "Blue" then
+		b = b + 1
+	else
+		r = r + 1
+	end
+	return b, r
+end
+
+--[[
+	True if `player` may end up on `team` without exceeding max queue imbalance (same team is always ok).
+]]
+local function balanceAllowsPlayerJoinTeam(state, player, team)
+	if team ~= "Blue" and team ~= "Red" then
+		return false
+	end
+	if playerQueuedTeam(state, player) == team then
+		return true
+	end
+	local b, r = projectedCountsIfPlayerMovesToTeam(state, player, team)
+	return math.abs(b - r) <= maxQueueTeamDiff()
 end
 
 local function buildStateForPlayer(state, _remotes, player)
@@ -269,10 +338,13 @@ local function addPlayerToTeamQueue(state, remotes, teleportPlayerTo, player, te
 	local cap = LobbyConfig.MAX_PLAYERS_PER_TEAM or 6
 	local onBlue = playerQueuedTeam(state, player) == "Blue"
 	local onRed = playerQueuedTeam(state, player) == "Red"
+	if (team == "Blue" and onBlue) or (team == "Red" and onRed) then
+		return true
+	end
+	if not balanceAllowsPlayerJoinTeam(state, player, team) then
+		return false
+	end
 	if onBlue or onRed then
-		if (team == "Blue" and onBlue) or (team == "Red" and onRed) then
-			return true
-		end
 		removeFromWaitingQueue(state, player)
 	end
 	local q = team == "Blue" and state.waitingQueueBlue or state.waitingQueueRed
@@ -312,4 +384,8 @@ return {
 	canStartCountdown = canStartCountdown,
 	maybeCancelCountdown = maybeCancelCountdown,
 	tryBeginCountdown = tryBeginCountdown,
+	balanceAllowsNewJoinToTeam = balanceAllowsNewJoinToTeam,
+	balanceAllowsPlayerJoinTeam = balanceAllowsPlayerJoinTeam,
+	strictFullerTeam = strictFullerTeam,
+	maxQueueTeamDiff = maxQueueTeamDiff,
 }

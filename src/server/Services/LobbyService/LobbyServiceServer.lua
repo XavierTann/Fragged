@@ -49,8 +49,7 @@ local function bindRemoteHandlers()
 		LobbyPadZones.clearPadOccupantForUser(player.UserId)
 		state.playerPhase[player.UserId] = nil
 		state.joinQueueBlockedUntil[player.UserId] = nil
-		state.balanceToastCooldown[player.UserId] = nil
-		state.padOccupiedToastCooldown[player.UserId] = nil
+		state.teamQueueBalanceToastCooldown[player.UserId] = nil
 		LobbyQueue.maybeCancelCountdown(state, remotes)
 		LobbyQueue.broadcastStateToWaiting(state, remotes)
 	end)

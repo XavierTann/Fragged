@@ -71,6 +71,9 @@ return {
 	LOBBY_BLUE_PAD_SCREEN_NAME = "BluePadScreen",
 	LOBBY_RED_PAD_SCREEN_NAME = "RedPadScreen",
 	LOBBY_PAD_SCREEN_FRAME_SEGMENTS = { "Glass", "SurfaceGui", "Frame" },
+	-- Under Frame: name list slots Player1..PlayerN (N = MAX_PLAYERS_PER_TEAM)
+	LOBBY_PAD_SCREEN_PLAYER_NAMES_SEGMENTS = { "PlayerNames", "List" },
+	LOBBY_PAD_SCREEN_PLAYER_NAME_SLOT_PREFIX = "Player",
 	LOBBY_PAD_SCREEN_PLAYER_COUNT_NAME = "PlayerCount",
 	LOBBY_PAD_SCREEN_ALERT_NAME = "Alert",
 	-- Min seconds between team-queue balance toasts per player (fuller-team pad)

@@ -1,7 +1,7 @@
 --[[
 	LobbyPadScreens (server)
 	Updates SurfaceGui text under SpawnPads/BluePadScreen and RedPadScreen (Glass/SurfaceGui/Frame):
-	PlayerCount per team, Alert per team — independent copy from that team's queue count.
+	PlayerCount, Alert, and PlayerNames/List/Player1..N from each team's waiting queue.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -105,6 +105,53 @@ local function setTextIfChanged(guiObject, text)
 	end
 end
 
+local function displayNameForQueuedPlayer(player)
+	if not player or not player.Parent then
+		return ""
+	end
+	local dn = player.DisplayName
+	if type(dn) == "string" and dn ~= "" then
+		return dn
+	end
+	return player.Name
+end
+
+local function setPlainTextIfChanged(guiObject, text)
+	if not guiObject then
+		return
+	end
+	if guiObject:IsA("TextLabel") or guiObject:IsA("TextButton") or guiObject:IsA("TextBox") then
+		if guiObject.RichText ~= nil then
+			guiObject.RichText = false
+		end
+		if guiObject.Text ~= text then
+			guiObject.Text = text
+		end
+	end
+end
+
+local function findPlayerNameListFrame(screenFrame)
+	if not screenFrame then
+		return nil
+	end
+	return resolvePath(screenFrame, LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_NAMES_SEGMENTS)
+end
+
+local function syncPlayerNameSlots(listFrame, queue)
+	local prefix = LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_NAME_SLOT_PREFIX or "Player"
+	local maxSlots = LobbyConfig.MAX_PLAYERS_PER_TEAM or 6
+	if not listFrame then
+		return
+	end
+	for i = 1, maxSlots do
+		local label = listFrame:FindFirstChild(prefix .. tostring(i))
+		if label and (label:IsA("TextLabel") or label:IsA("TextButton") or label:IsA("TextBox")) then
+			local p = queue[i]
+			setPlainTextIfChanged(label, displayNameForQueuedPlayer(p))
+		end
+	end
+end
+
 local function sync(state)
 	local spawnPads = getSpawnPadsFolder()
 	local blueFrame = findFrameUnderScreen(spawnPads, LobbyConfig.LOBBY_BLUE_PAD_SCREEN_NAME)
@@ -121,10 +168,12 @@ local function sync(state)
 	if blueFrame then
 		setTextIfChanged(findTextChild(blueFrame, LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_COUNT_NAME), bluePlayerLine)
 		setTextIfChanged(findTextChild(blueFrame, LobbyConfig.LOBBY_PAD_SCREEN_ALERT_NAME), blueAlert)
+		syncPlayerNameSlots(findPlayerNameListFrame(blueFrame), state.waitingQueueBlue)
 	end
 	if redFrame then
 		setTextIfChanged(findTextChild(redFrame, LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_COUNT_NAME), redPlayerLine)
 		setTextIfChanged(findTextChild(redFrame, LobbyConfig.LOBBY_PAD_SCREEN_ALERT_NAME), redAlert)
+		syncPlayerNameSlots(findPlayerNameListFrame(redFrame), state.waitingQueueRed)
 	end
 end
 

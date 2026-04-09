@@ -49,6 +49,12 @@ LobbyTeamBalanceToastClient.Init()
 local LobbyPadLightBeamPulse = require(Shared.Services.LobbyPadLightBeamPulse)
 LobbyPadLightBeamPulse.Init()
 
+local ShopGUI = require(Shared.UI.Shop.ShopGUI)
+ShopGUI.Init()
+
+local ShopKeeperPromptClient = require(Shared.Services.ShopKeeperPromptClient)
+ShopKeeperPromptClient.Init()
+
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 CombatServiceClient.Init()
 

@@ -1,6 +1,7 @@
 --[[
-	Lobby configuration: Shop Lobby -> stand on team pad in Lobby -> Waiting -> Arena.
-	Workspace.Lobby.SpawnPads: one Model named BluePad and one named RedPad (shared team pads).
+	Lobby configuration: Lobby (pre-arena) -> stand on team pad -> waiting -> arena.
+	PHASE.SHOP_LOBBY is the replicated id for that pre-arena lobby (legacy string "ShopLobby" on the wire).
+	Workspace.Lobby.SpawnPads: BluePad and RedPad (shared team pads).
 ]]
 
 return {
@@ -38,7 +39,7 @@ return {
 		LOBBY_MATCH_COUNTDOWN = "LobbyMatchCountdown",
 	},
 
-	-- Phases for UI/state
+	-- Phases for UI/state (SHOP_LOBBY = pre-arena lobby; name kept for replication compatibility)
 	PHASE = {
 		SHOP_LOBBY = "ShopLobby",
 		WAITING_LOBBY = "WaitingLobby",

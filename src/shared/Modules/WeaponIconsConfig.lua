@@ -10,4 +10,8 @@ return {
 	Shotgun = 4753989987,
 	Grenade = 913025958,
 	RocketLauncher = 5834509428,
+	-- Shop / future loadout: plasma carbine decal
+	PlasmaCarbine = 85001511160443,
+	HeliosThread = 14826766010,
+	PrismRipper = 117104799815404,
 }

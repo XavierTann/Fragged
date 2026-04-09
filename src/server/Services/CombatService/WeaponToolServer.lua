@@ -1,6 +1,44 @@
 --[[
 	Minimal Tool instances for guns not provided by StarterPack (e.g. shop unlocks).
+	Specific guns clone from ReplicatedStorage.Imports.3DModels when a template exists.
 ]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- First match wins; keep names aligned with Instances under Imports.3DModels.
+local IMPORTED_GUN_TOOL_TEMPLATE_NAMES: { [string]: { string } } = {
+	PlasmaCarbine = {
+		"PlasmaCarbineTool",
+		"Plasma Carbine",
+		"PlasmaCarbine",
+		"plasma carbine",
+	},
+}
+
+local function findImportedGunToolTemplate(gunId: string): Tool?
+	local names = IMPORTED_GUN_TOOL_TEMPLATE_NAMES[gunId]
+	if not names then
+		return nil
+	end
+	local imports = ReplicatedStorage:FindFirstChild("Imports")
+	local models3D = imports and imports:FindFirstChild("3DModels")
+	if not models3D then
+		return nil
+	end
+	for _, name in ipairs(names) do
+		local inst = models3D:FindFirstChild(name)
+		if inst and inst:IsA("Tool") then
+			return inst
+		end
+		if inst and inst:IsA("Model") then
+			local inner = inst:FindFirstChildWhichIsA("Tool", true)
+			if inner then
+				return inner
+			end
+		end
+	end
+	return nil
+end
 
 local function playerHasToolNamed(player, gunId: string): boolean
 	local bp = player:FindFirstChild("Backpack")
@@ -36,6 +74,14 @@ function WeaponToolServer.giveGunToolIfMissing(player, gunId: string)
 		return
 	end
 	if playerHasToolNamed(player, gunId) then
+		return
+	end
+	local template = findImportedGunToolTemplate(gunId)
+	if template then
+		local tool = template:Clone()
+		tool.Name = gunId
+		tool.CanBeDropped = false
+		tool.Parent = backpack
 		return
 	end
 	local tool = createMinimalGunTool(gunId)

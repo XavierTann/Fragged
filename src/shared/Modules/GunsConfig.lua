@@ -36,13 +36,16 @@ return {
 	PlasmaCarbine = {
 		name = "Plasma Carbine",
 		bulletSpeed = 260,
-		damage = 22,
+		damage = 24,
 		fireRate = 0.1,
-		bulletSize = Vector3.new(0.38, 0.38, 1.05),
-		bulletColor = Color3.fromRGB(255, 80, 200),
+		-- Longer bolt (Z = forward along tracer)
+		bulletSize = Vector3.new(0.4, 0.4, 1.75),
+		bulletColor = Color3.fromRGB(255, 255, 255),
 		magazineSize = 28,
 		reloadTime = 2.2,
-		gunshotSoundId = "rbxassetid://139083804782836",
+		gunshotSoundId = "rbxassetid://127207975351230",
+		-- Asset is longer than a single tap; trim playback so one shot matches one burst
+		gunshotMaxDurationSeconds = 0.28,
 		reloadSoundId = "rbxassetid://140301163976554",
 	},
 	HeliosThread = {

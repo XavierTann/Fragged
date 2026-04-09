@@ -152,11 +152,29 @@ local function playSpatialGunshotOnPart(parentPart, gunId)
 	sound.RollOffMinDistance = GUNSHOT_ROLLOFF_MIN
 	sound.RollOffMaxDistance = GUNSHOT_ROLLOFF_MAX
 	sound.EmitterSize = GUNSHOT_EMITTER_SIZE
+	sound.TimePosition = 0
 	sound.Parent = parentPart
+	-- Playing before the instance is loaded queues start and feels like lag vs muzzle/tracer
+	if not sound.IsLoaded then
+		pcall(function()
+			sound.Loaded:Wait()
+		end)
+	end
 	sound:Play()
-	sound.Ended:Connect(function()
-		sound:Destroy()
-	end)
+	local maxDur = gun.gunshotMaxDurationSeconds
+	if typeof(maxDur) == "number" and maxDur > 0 then
+		task.delay(maxDur, function()
+			if not sound.Parent then
+				return
+			end
+			sound:Stop()
+			sound:Destroy()
+		end)
+	else
+		sound.Ended:Connect(function()
+			sound:Destroy()
+		end)
+	end
 end
 
 local function playGunshotSound(gunId)
@@ -461,7 +479,6 @@ end
 local function playPredictedGunfire(gunId, shotOrigin, aimDir)
 	playMuzzleFlash(shotOrigin, aimDir)
 	applyLocalRecoil(gunId)
-	playGunshotSound(gunId)
 
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local pelletCount = gun.pelletCount or 1
@@ -482,6 +499,9 @@ local function playPredictedGunfire(gunId, shotOrigin, aimDir)
 		end
 		spawnPredictedTracer(shotOrigin, d, gunId)
 	end
+
+	-- After tracers so Sound.Loaded:Wait() in playGunshotSound never blocks bullet feedback
+	playGunshotSound(gunId)
 end
 
 local function fireInDirection(dir)

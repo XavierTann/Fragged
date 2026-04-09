@@ -4,8 +4,8 @@
 ]]
 
 return {
-	-- Minimum total queued when match can start (e.g. 1v1 = 2); countdown requires equal team sizes and each team ≥ MIN_PLAYERS_PER_TEAM.
-	MIN_PLAYERS = 2,
+	-- When > 1: both teams need ≥ MIN_PLAYERS_PER_TEAM and equal counts. When 1: one team may queue alone for solo playtests.
+	MIN_PLAYERS = 1,
 	-- Each team must have at least this many queued before a match can start (in addition to equal counts).
 	MIN_PLAYERS_PER_TEAM = 1,
 	MAX_PLAYERS = 8,

@@ -47,11 +47,30 @@ end
 
 local function canStartCountdown(state)
 	local b, r = #state.waitingQueueBlue, #state.waitingQueueRed
-	local minTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM or 2
+	local minTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM or 1
+	local minTotal = LobbyConfig.MIN_PLAYERS or 2
+
+	if b == 0 and r == 0 then
+		return false
+	end
+
+	-- Solo / dev: MIN_PLAYERS == 1 allows one non-empty team (other queue empty) if it meets minTeam.
+	if minTotal <= 1 then
+		if b >= minTeam and r == 0 then
+			return true
+		end
+		if r >= minTeam and b == 0 then
+			return true
+		end
+		if b >= minTeam and r >= minTeam and b == r then
+			return true
+		end
+		return false
+	end
+
 	if b < minTeam or r < minTeam then
 		return false
 	end
-	-- Match starts only when teams are equal (e.g. 2v2, 3v3); imbalance blocks countdown until the smaller team catches up.
 	if b ~= r then
 		return false
 	end

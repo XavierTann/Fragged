@@ -1,0 +1,59 @@
+---
+description: Use Roblox Studio MCP explore subagent when a live DataModel hierarchy snapshot is needed; use repo tools for Rojo src/.
+alwaysApply: true
+---
+
+# Roblox Studio — explore subagent for DataModel snapshots
+
+Cursor cannot auto-fire MCP tools without the agent choosing to call them. This rule tells the agent **when** and **how** to invoke the **`user-Roblox_Studio`** tool **`subagent`** with **`subagent_type: "explore"`** so investigation runs in Studio instead of guessing instance paths.
+
+## Two different “hierarchies”
+
+| Need | Use |
+|------|-----|
+| **Rojo / repo layout** (`src/client`, `src/shared`, `.lua` files) | Workspace tools: `Glob`, `Grep`, `SemanticSearch`, `Read` — **do not** use Roblox explore for this. |
+| **Live place / DataModel** (what exists under `Workspace`, `ReplicatedStorage`, services in the open `.rbx` place) | Prefer **`subagent` → `explore`** with a task that uses **`search_game_tree`** / **`inspect_instance`** (and **`execute_luau`** only if the task requires runtime state). |
+
+If the user mentions **Workspace**, **ReplicatedStorage**, **Imports**, **GunShop**, **Lobby**, **pad**, **SpawnLocations**, **3DModels**, **Tool** templates in the place, or **instance paths** that are not in `src/`, assume they mean the **Studio DataModel** unless they say “in the repo”.
+
+## When to launch the explore subagent
+
+Launch **`subagent`** with **`explore`** when **any** of the following is true:
+
+1. You need a **structured snapshot** of part of the DataModel (paths, class names, keywords).
+2. You would otherwise guess **Workspace / ReplicatedStorage** paths for this project’s place.
+3. The task is **multi-step discovery** in the tree (several folders, prompts, GUIs under `PlayerGui` during Play, etc.) and a single `search_game_tree` is not enough context.
+4. The user asks what exists **in Studio** vs what exists only in **Rojo source**.
+
+**Before** launching: call **`list_roblox_studios`**; use **`set_active_studio`** if multiple studios are open and the wrong one is active.
+
+## When NOT to use explore
+
+- **Reading or editing this repository’s Lua/ Luau source** under `src/` — use file tools.
+- **No Roblox Studio / MCP** available — say so and fall back to repo + `default.project.json` assumptions.
+
+## How to call the MCP tool
+
+Use MCP server **`user-Roblox_Studio`**, tool name **`subagent`**, with:
+
+- **`subagent_type`**: `"explore"` (only supported type for this server).
+- **`description`**: 3–5 words, present continuous tense (e.g. `Mapping Workspace GunShop and Lobby`).
+- **`task`**: Detailed instructions (see templates below). The explore run returns **one** final summary — put required output format in the task.
+
+## Task templates (paste and customize)
+
+**Broad hierarchy snapshot** (adjust paths/keywords as needed):
+
+```text
+Using Roblox Studio MCP tools only: call list_roblox_studios if needed. Then search_game_tree with path "Workspace", max_depth 4-6, head_limit 150; separately path "ReplicatedStorage", max_depth 5, head_limit 120. If the user cares about keywords (e.g. GunShop, Lobby, Arena, Imports, 3DModels), add keywords filter runs. Summarize fullPath list grouped by area (Workspace vs ReplicatedStorage). Note missing folders. Read-only; do not change instances.
+```
+
+**Targeted find** (replace KEYWORDS and PATH):
+
+```text
+search_game_tree starting path PATH (e.g. Workspace.GunShop or ReplicatedStorage.Imports), keywords "KEYWORDS", max_depth 10, head_limit 80. inspect_instance on any ambiguous hits. Return exact fullPath strings for instances the parent agent will reference in code or MCP (e.g. ProximityPrompt parents, Tool templates). Read-only.
+```
+
+## After explore returns
+
+The **parent** conversation should integrate the subagent’s summary, cite concrete **`fullPath`** strings when suggesting code or MCP `instance_path` values, and avoid contradicting the tree snapshot unless the user’s place changed.

@@ -38,5 +38,8 @@ return {
 		GUNSHOT_SPATIAL = "GunshotSpatial",
 		-- Server -> clients in round: cosmetic grenade burst at authoritative explosion position.
 		GRENADE_EXPLOSION_FX = "GrenadeExplosionFX",
+		-- Economy / shop (server authoritative)
+		ECONOMY_SYNC = "EconomySync", -- Server -> Client: { credits, matchesPlayed, ownedShopGunIds }
+		SHOP_PURCHASE = "ShopPurchase", -- RemoteFunction: itemId string -> { ok: boolean, error: string?, credits: number?, ... }
 	},
 }

@@ -108,7 +108,7 @@ end
 
 local function buildStateForPlayer(state, _remotes, player)
 	local userId = player.UserId
-	local phase = state.playerPhase[userId] or LobbyConfig.PHASE.SHOP_LOBBY
+	local phase = state.playerPhase[userId] or LobbyConfig.PHASE.LOBBY
 	local b, r = #state.waitingQueueBlue, #state.waitingQueueRed
 	local result = {
 		phase = phase,
@@ -130,8 +130,8 @@ local function buildStateForPlayer(state, _remotes, player)
 end
 
 --[[
-	Push LobbyState to every player in shop or waiting lobby (not arena).
-	Queue counts / "players needed" must stay in sync for shoppers on pads and off.
+	Push LobbyState to every player in main lobby or waiting lobby (not arena).
+	Queue counts / "players needed" must stay in sync for players on pads and off.
 	LobbyMatchCountdown only goes to players actually in a queue (toast + teleport flow).
 ]]
 local function broadcastStateToWaiting(state, remotes)
@@ -169,7 +169,7 @@ local function removeFromWaitingQueue(state, player)
 			break
 		end
 	end
-	state.playerPhase[player.UserId] = LobbyConfig.PHASE.SHOP_LOBBY
+	state.playerPhase[player.UserId] = LobbyConfig.PHASE.LOBBY
 end
 
 local function cancelCountdown(state, remotes)

@@ -5,6 +5,9 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local Workspace = game:GetService("Workspace")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages:WaitForChild("React"))
@@ -21,6 +24,9 @@ export type ShopItem = {
 	accent: Color3?,
 	-- Roblox image/decal asset id for the shop icon (rbxassetid://…)
 	imageAssetId: number?,
+	buyLabel: string?,
+	buyDisabled: boolean?,
+	statusNote: string?,
 }
 
 local ICON_SIZE = 76
@@ -58,8 +64,35 @@ local function corner(radius: number)
 	return e("UICorner", { CornerRadius = UDim.new(0, radius) })
 end
 
+local HEADER_H = 52
+local BODY_PAD = 12
+
+local function getShopModalLayout(): (number, number, number, number)
+	local vp = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
+	local topInset = 0
+	pcall(function()
+		topInset = GuiService:GetGuiInset().Y
+	end)
+	-- Tighter bottom/top margin + higher fraction so the panel uses almost all usable height.
+	local bottomSafe = if UserInputService.TouchEnabled then 32 else 12
+	local availH = math.max(80, vp.Y - topInset - bottomSafe - 4)
+	local heightFraction = 0.98
+	local h = math.max(240, math.floor(availH * heightFraction))
+	if UserInputService.TouchEnabled then
+		local chatPad = 14
+		local w = math.floor(math.clamp(vp.X * 0.92, 280, 520))
+		return w, h, chatPad, 28
+	end
+	local w = 520
+	return w, h, 72, 8
+end
+
 local function itemCard(item: ShopItem, layoutOrder: number, onBuy: (ShopItem) -> ())
 	local accent = item.accent or Theme.NeonCyan
+	local buyLabel = item.buyLabel or "BUY"
+	local buyDisabled = item.buyDisabled == true
+	local statusNote = item.statusNote
+	local cardHeight = if statusNote then 122 else 108
 	local rowChildren: { any } = {
 		corner(10),
 		e("UIStroke", {
@@ -143,7 +176,7 @@ local function itemCard(item: ShopItem, layoutOrder: number, onBuy: (ShopItem) -
 		rowChildren,
 		e("TextLabel", {
 			Size = UDim2.new(1, -(TEXT_LEFT + 100), 0, 20),
-			Position = UDim2.fromOffset(TEXT_LEFT, 38),
+			Position = UDim2.fromOffset(TEXT_LEFT, 36),
 			BackgroundTransparency = 1,
 			Text = string.format("◆ %d credits", item.price),
 			TextColor3 = Theme.NeonAmber,
@@ -153,20 +186,44 @@ local function itemCard(item: ShopItem, layoutOrder: number, onBuy: (ShopItem) -
 		})
 	)
 
+	if statusNote then
+		table.insert(
+			rowChildren,
+			e("TextLabel", {
+				Size = UDim2.new(1, -(TEXT_LEFT + 100), 0, 16),
+				Position = UDim2.fromOffset(TEXT_LEFT, 56),
+				BackgroundTransparency = 1,
+				Text = statusNote,
+				TextColor3 = Theme.TextMuted,
+				TextSize = 12,
+				Font = Theme.FontBody,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			})
+		)
+	end
+
+	local btnBg = if buyDisabled then Theme.PanelDeep else accent
+	local btnText = if buyDisabled then Theme.TextMuted else Theme.BgVoid
+
 	table.insert(
 		rowChildren,
 		e("TextButton", {
 			Size = UDim2.fromOffset(88, 34),
 			Position = UDim2.new(1, -88, 1, -34),
-			BackgroundColor3 = accent,
+			BackgroundColor3 = btnBg,
 			BorderSizePixel = 0,
-			Text = "BUY",
-			TextColor3 = Theme.BgVoid,
-			TextSize = 15,
+			Text = buyLabel,
+			TextColor3 = btnText,
+			TextSize = 14,
 			Font = Theme.FontDisplay,
-			AutoButtonColor = true,
+			AutoButtonColor = not buyDisabled,
+			Active = not buyDisabled,
+			Selectable = not buyDisabled,
 			[React.Event.Activated] = function()
-				onBuy(item)
+				if not buyDisabled then
+					onBuy(item)
+				end
 			end,
 		}, {
 			corner(8),
@@ -176,7 +233,7 @@ local function itemCard(item: ShopItem, layoutOrder: number, onBuy: (ShopItem) -
 	return e(
 		"Frame",
 		{
-			Size = UDim2.new(1, -12, 0, 108),
+			Size = UDim2.new(1, -12, 0, cardHeight),
 			BackgroundColor3 = Theme.Card,
 			BorderSizePixel = 0,
 			LayoutOrder = layoutOrder,
@@ -198,6 +255,8 @@ local function ShopApp(props: ShopAppProps)
 	local onClose = props.onClose
 	local onPurchase = props.onPurchase or function(_item: ShopItem) end
 
+	local panelW, panelH, chatPad, listBottomPad = getShopModalLayout()
+	local touchUi = UserInputService.TouchEnabled
 	local listChildren: { any } = {
 		e("UIListLayout", {
 			SortOrder = Enum.SortOrder.LayoutOrder,
@@ -205,7 +264,7 @@ local function ShopApp(props: ShopAppProps)
 		}),
 		e("UIPadding", {
 			PaddingTop = UDim.new(0, 8),
-			PaddingBottom = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, listBottomPad),
 			PaddingLeft = UDim.new(0, 8),
 			PaddingRight = UDim.new(0, 8),
 		}),
@@ -215,6 +274,8 @@ local function ShopApp(props: ShopAppProps)
 		table.insert(listChildren, itemCard(it, i, onPurchase))
 	end
 
+	-- Credits sit left of title; chatPad is larger on desktop (chat), smaller on touch.
+	local CREDITS_TO_TITLE_GAP = 10
 	local headerRightInset = if onClose then 50 else 14
 	local creditStr = string.format("CR %s", tostring(coins))
 	local creditTextSize = TextService:GetTextSize(creditStr, 17, Theme.FontBody, Vector2.new(4096, 256))
@@ -222,24 +283,28 @@ local function ShopApp(props: ShopAppProps)
 	local creditPadY = 6
 	local creditPillW = math.ceil(creditTextSize.X + creditPadX * 2)
 	local creditPillH = math.max(30, math.ceil(creditTextSize.Y + creditPadY * 2))
-	local titleLeftPx = 12 + creditPillW + 10
+	local titleLeftPx = chatPad + creditPillW + CREDITS_TO_TITLE_GAP
 
 	local headerChildren: { any } = {
-		e("UICorner", { CornerRadius = UDim.new(0, 14) }),
-		e("UIGradient", {
-			Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Theme.NeonMagenta),
-				ColorSequenceKeypoint.new(0.5, Theme.NeonCyan),
-				ColorSequenceKeypoint.new(1, Theme.NeonLime),
-			}),
-			Transparency = NumberSequence.new(0.88),
+		e("TextLabel", {
+			Size = UDim2.new(1, -(titleLeftPx + headerRightInset), 1, 0),
+			Position = UDim2.fromOffset(titleLeftPx, 0),
+			BackgroundTransparency = 1,
+			Text = "ORBITAL SUPPLY",
+			TextColor3 = Theme.TextBright,
+			TextSize = 20,
+			Font = Theme.FontDisplay,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Center,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 1,
 		}),
 		e("Frame", {
 			Size = UDim2.fromOffset(creditPillW, creditPillH),
-			Position = UDim2.new(0, 12, 0.5, 0),
+			Position = UDim2.new(0, chatPad, 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BackgroundTransparency = 0.35,
+			BackgroundColor3 = Theme.Card,
+			BackgroundTransparency = 0.2,
 			BorderSizePixel = 0,
 			ZIndex = 2,
 		}, {
@@ -266,19 +331,6 @@ local function ShopApp(props: ShopAppProps)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Center,
 			}),
-		}),
-		e("TextLabel", {
-			Size = UDim2.new(1, -(titleLeftPx + headerRightInset), 1, 0),
-			Position = UDim2.fromOffset(titleLeftPx, 0),
-			BackgroundTransparency = 1,
-			Text = "ORBITAL SUPPLY",
-			TextColor3 = Theme.TextBright,
-			TextSize = 20,
-			Font = Theme.FontDisplay,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Center,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 1,
 		}),
 	}
 
@@ -314,7 +366,7 @@ local function ShopApp(props: ShopAppProps)
 	return e("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Theme.Overlay,
-		BackgroundTransparency = 0.25,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, {
 		e("TextButton", {
@@ -326,11 +378,12 @@ local function ShopApp(props: ShopAppProps)
 			[React.Event.Activated] = function() end,
 		}),
 		e("Frame", {
-			Size = UDim2.fromOffset(520, 420),
+			Size = UDim2.fromOffset(panelW, panelH),
 			Position = UDim2.fromScale(0.5, 0.5),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = Theme.Panel,
 			BorderSizePixel = 0,
+			ClipsDescendants = true,
 			ZIndex = 2,
 		}, {
 			corner(14),
@@ -340,18 +393,19 @@ local function ShopApp(props: ShopAppProps)
 				Transparency = 0.2,
 			}),
 			e("Frame", {
-				Size = UDim2.new(1, 0, 0, 52),
+				Size = UDim2.new(1, 0, 0, HEADER_H),
 				Position = UDim2.fromScale(0, 0),
-				BackgroundColor3 = Theme.PanelDeep,
+				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 			}, headerChildren),
 			e("ScrollingFrame", {
-				Size = UDim2.new(1, -24, 1, -64),
-				Position = UDim2.fromOffset(12, 58),
+				Size = UDim2.new(1, -BODY_PAD * 2, 1, -(HEADER_H + BODY_PAD * 2)),
+				Position = UDim2.fromOffset(BODY_PAD, HEADER_H + BODY_PAD),
 				BackgroundColor3 = Theme.PanelDeep,
 				BackgroundTransparency = 0.35,
 				BorderSizePixel = 0,
-				ScrollBarThickness = 6,
+				ScrollBarThickness = if touchUi then 14 else 6,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
 				ScrollBarImageColor3 = Theme.NeonCyan,
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				CanvasSize = UDim2.new(0, 0, 0, 0),

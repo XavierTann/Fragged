@@ -10,17 +10,20 @@ local Server = ServerScriptService:WaitForChild("Server")
 local Services = Server:WaitForChild("Services")
 local LobbyService = Services:WaitForChild("LobbyService"):WaitForChild("LobbyServiceServer")
 local CombatService = Services:WaitForChild("CombatService"):WaitForChild("CombatServiceServer")
+local EconomyService = Services:WaitForChild("EconomyService"):WaitForChild("EconomyServiceServer")
 local DropService = Services:WaitForChild("DropService"):WaitForChild("DropServiceServer")
 local CharacterService = Services:WaitForChild("CharacterService"):WaitForChild("CharacterServiceServer")
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
+local EconomyServiceModule = require(EconomyService)
 local DropServiceModule = require(DropService)
 local CharacterServiceModule = require(CharacterService)
 local WeaponInventoryServer = require(Services:WaitForChild("CombatService"):WaitForChild("WeaponInventoryServer"))
 
 CharacterServiceModule.Init()
 CombatServiceModule.Init()
+EconomyServiceModule.Init()
 
 DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 	if dropType == "RocketLauncher" then
@@ -50,7 +53,7 @@ DropServiceModule.Init()
 LobbyServiceModule.Init(function(players, playerTeamsMap)
 	CombatServiceModule.StartRound(players, function()
 		for _, p in ipairs(players) do
-			LobbyServiceModule.ReturnPlayerToShop(p)
+			LobbyServiceModule.ReturnPlayerToLobby(p)
 		end
 	end, playerTeamsMap)
 end)

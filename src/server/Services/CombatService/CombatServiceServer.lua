@@ -23,6 +23,9 @@ local CombatGrenades = require(script.Parent.CombatGrenades)
 local CombatRockets = require(script.Parent.CombatRockets)
 local CombatTDM = require(script.Parent.CombatTDM)
 local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
+local WeaponToolServer = require(script.Parent.WeaponToolServer)
+
+local ShopCatalog = require(ReplicatedStorage.Shared.Modules.ShopCatalog)
 
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
@@ -120,6 +123,14 @@ end
 local function characterHasGunEquipped(character, gunId)
 	local tool = character:FindFirstChild(gunId)
 	return tool and tool:IsA("Tool")
+end
+
+local function giveShopGunTools(player)
+	for _, w in ipairs(WeaponInventoryServer.getWeapons(player)) do
+		if ShopCatalog.isShopGun(w) then
+			WeaponToolServer.giveGunToolIfMissing(player, w)
+		end
+	end
 end
 
 local function giveRocketLauncherTool(player)
@@ -450,6 +461,7 @@ return {
 				end
 			end
 			WeaponInventoryServer.sendToPlayer(p)
+			giveShopGunTools(p)
 			local cf = TDMSpawnStrategy.getSpawnCFrame(p, CombatTDM.getTDMContext(state))
 			local character = p.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then
@@ -479,6 +491,9 @@ return {
 						break
 					end
 				end
+				task.defer(function()
+					giveShopGunTools(p)
+				end)
 			end)
 			state.characterAddedConnections[p.UserId] = conn
 			for gunId, ammo in pairs(state.ammoInMagazine[p.UserId] or {}) do

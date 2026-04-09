@@ -1,6 +1,5 @@
 --[[
-	Lobby configuration: Lobby (pre-arena) -> stand on team pad -> waiting -> arena.
-	PHASE.SHOP_LOBBY is the replicated id for that pre-arena lobby (legacy string "ShopLobby" on the wire).
+	Lobby configuration: main lobby (pre-arena) -> stand on team pad -> waiting -> arena.
 	Workspace.Lobby.SpawnPads: BluePad and RedPad (shared team pads).
 ]]
 
@@ -20,7 +19,7 @@ return {
 	-- Countdown (seconds) in waiting lobby before teleporting to arena
 	ARENA_COUNTDOWN_SECONDS = 3,
 
-	-- Seconds to ignore portal/join after leaving waiting lobby (prevents instant re-enter when teleporting to shop)
+	-- Seconds to ignore portal/join after leaving waiting lobby (prevents instant re-enter when teleporting back to main lobby)
 	LEAVE_WAITING_COOLDOWN_SECONDS = 2,
 
 	-- Remote folder and event names
@@ -32,24 +31,23 @@ return {
 		LOBBY_STATE = "LobbyState",
 		TELEPORT_TO_WAITING = "TeleportToWaiting",
 		TELEPORT_TO_ARENA = "TeleportToArena",
-		TELEPORT_TO_SHOP = "TeleportToShop",
+		TELEPORT_TO_LOBBY = "TeleportToLobby",
 		-- Server -> client: otherTeam ("Blue"|"Red") — need someone on that team before more can queue on fuller pad
 		TEAM_QUEUE_BALANCE_TOAST = "TeamQueueBalanceToast",
 		-- Server -> client: arena lobby countdown seconds (3,2,1,0); plain number, no table replication issues
 		LOBBY_MATCH_COUNTDOWN = "LobbyMatchCountdown",
 	},
 
-	-- Phases for UI/state (SHOP_LOBBY = pre-arena lobby; name kept for replication compatibility)
+	-- Phases for UI/state (replicated to clients on LobbyState)
 	PHASE = {
-		SHOP_LOBBY = "ShopLobby",
+		LOBBY = "Lobby",
 		WAITING_LOBBY = "WaitingLobby",
 		ARENA = "Arena",
 	},
 
-	-- Workspace folder: SpawnLocations (ShopSpawnLocation, LobbySpawnLocation, BlueTeamSpawnLocation, RedTeamSpawnLocation)
+	-- Workspace folder: SpawnLocations (LobbySpawnLocation, BlueTeamSpawnLocation, RedTeamSpawnLocation)
 	SPAWNS_FOLDER_NAME = "SpawnLocations",
 	SPAWN_NAMES = {
-		SHOP = "ShopSpawnLocation",
 		LOBBY = "LobbySpawnLocation",
 		RED_TEAM = "RedTeamSpawnLocation",
 		BLUE_TEAM = "BlueTeamSpawnLocation",

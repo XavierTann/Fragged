@@ -8,7 +8,6 @@ local Workspace = game:GetService("Workspace")
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 
 local SPAWN_OFFSETS = {
-	[LobbyConfig.SPAWN_NAMES.SHOP] = Vector3.new(-14, 5, 0),
 	[LobbyConfig.SPAWN_NAMES.LOBBY] = Vector3.new(20, 5, 0),
 	[LobbyConfig.SPAWN_NAMES.RED_TEAM] = Vector3.new(35, 5, -8),
 	[LobbyConfig.SPAWN_NAMES.BLUE_TEAM] = Vector3.new(45, 5, 8),
@@ -29,7 +28,7 @@ local function getSpawnsFolder()
 			spawn.Transparency = 1
 			spawn.CanCollide = true
 			spawn.Neutral = true
-			spawn.Enabled = (name == LobbyConfig.SPAWN_NAMES.SHOP)
+			spawn.Enabled = (name == LobbyConfig.SPAWN_NAMES.LOBBY)
 			spawn.Parent = folder
 		end
 	end
@@ -72,10 +71,10 @@ local function configureSpawnLocations()
 	if not folder then
 		return
 	end
-	local shopSpawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.SHOP)
-	if shopSpawn and shopSpawn:IsA("SpawnLocation") then
-		shopSpawn.Neutral = true
-		shopSpawn.Enabled = true
+	local lobbySpawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.LOBBY)
+	if lobbySpawn and lobbySpawn:IsA("SpawnLocation") then
+		lobbySpawn.Neutral = true
+		lobbySpawn.Enabled = true
 	end
 end
 

@@ -9,6 +9,7 @@ local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUti
 local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 local TDMSpawnStrategy = require(script.Parent.TDMSpawnStrategy)
 local CombatRemotes = require(script.Parent.CombatRemotes)
+local EconomyServiceServer = require(script.Parent.Parent.EconomyService.EconomyServiceServer)
 
 local function getTDMContext(state)
 	return {
@@ -94,6 +95,7 @@ local function endMatch(state, winningTeam)
 		end
 	end
 	state.characterAddedConnections = {}
+	EconomyServiceServer.ApplyMatchEndRewards(state.currentRoundPlayers, winningTeam, state.playerTeams)
 	local bluePlayers, redPlayers = buildLeaderboardData(state)
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent and state.matchEndedRE then

@@ -48,8 +48,12 @@ function Mount.mount(options: MountOptions): MountHandle
 		sg.Name = screenGuiName
 		sg.ResetOnSpawn = false
 		sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		-- Wins vs other PlayerGui layers. CoreGui (default chat, etc.) still paints above PlayerGui.
 		sg.DisplayOrder = displayOrder
 		sg.IgnoreGuiInset = false
+		pcall(function()
+			sg.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+		end)
 		sg.Enabled = false
 		sg.Parent = parent
 		screenGui = sg

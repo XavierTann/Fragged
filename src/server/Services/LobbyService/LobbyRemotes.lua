@@ -30,7 +30,7 @@ local function ensureRemotes()
 		LobbyState = remote(LobbyConfig.REMOTES.LOBBY_STATE, "RemoteEvent"),
 		TeleportToWaiting = remote(LobbyConfig.REMOTES.TELEPORT_TO_WAITING, "RemoteEvent"),
 		TeleportToArena = remote(LobbyConfig.REMOTES.TELEPORT_TO_ARENA, "RemoteEvent"),
-		TeleportToShop = remote(LobbyConfig.REMOTES.TELEPORT_TO_SHOP, "RemoteEvent"),
+		TeleportToLobby = remote(LobbyConfig.REMOTES.TELEPORT_TO_LOBBY, "RemoteEvent"),
 		TeamQueueBalanceToast = remote(LobbyConfig.REMOTES.TEAM_QUEUE_BALANCE_TOAST, "RemoteEvent"),
 		LobbyMatchCountdown = remote(LobbyConfig.REMOTES.LOBBY_MATCH_COUNTDOWN, "RemoteEvent"),
 	}

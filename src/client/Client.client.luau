@@ -157,7 +157,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	end
 end)
 
-LobbyServiceClient.OnTeleportToShop(function()
+LobbyServiceClient.OnTeleportToLobby(function()
 	postMatchLeaderboard = false
 	LeaderboardGUI.Hide()
 	RotationJoystickGUI.Hide()

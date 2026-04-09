@@ -327,6 +327,9 @@ local function getAimOffsetTargetXZ(weapon)
 	if weapon ~= "Pistol"
 		and weapon ~= "Rifle"
 		and weapon ~= "Shotgun"
+		and weapon ~= "PlasmaCarbine"
+		and weapon ~= "HeliosThread"
+		and weapon ~= "PrismRipper"
 		and weapon ~= "RocketLauncher"
 		and weapon ~= "Grenade"
 	then
@@ -500,6 +503,9 @@ end
 local weaponHandlers = {
 	Pistol = updateRifle,
 	Rifle = updateRifle,
+	PlasmaCarbine = updateRifle,
+	HeliosThread = updateRifle,
+	PrismRipper = updateRifle,
 	Shotgun = updateShotgun,
 	RocketLauncher = updateRocketLauncher,
 	Grenade = updateGrenade,

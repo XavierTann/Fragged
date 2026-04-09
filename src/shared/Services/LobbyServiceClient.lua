@@ -1,6 +1,6 @@
 --[[
 	LobbyServiceClient
-	Flow: Shop Lobby -> stand on team pad -> Waiting Lobby -> Arena -> Shop Lobby.
+	Flow: Lobby -> stand on team pad -> Waiting Lobby -> Arena -> Lobby.
 	Module returns a table with Init and public API. Remote bindings run in Init().
 ]]
 
@@ -17,7 +17,7 @@ local GetStateRF = nil
 local LobbyStateRE = nil
 local TeleportToWaitingRE = nil
 local TeleportToArenaRE = nil
-local TeleportToShopRE = nil
+local TeleportToLobbyRE = nil
 
 -- Public API
 return {
@@ -35,7 +35,7 @@ return {
 		end
 		TeleportToWaitingRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_WAITING)
 		TeleportToArenaRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_ARENA)
-		TeleportToShopRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_SHOP)
+		TeleportToLobbyRE = folder:WaitForChild(LobbyConfig.REMOTES.TELEPORT_TO_LOBBY)
 
 		LobbyStateRE.OnClientEvent:Connect(function(state)
 			currentState = state
@@ -94,9 +94,9 @@ return {
 		end
 	end,
 
-	OnTeleportToShop = function(cb)
-		if TeleportToShopRE then
-			TeleportToShopRE.OnClientEvent:Connect(cb)
+	OnTeleportToLobby = function(cb)
+		if TeleportToLobbyRE then
+			TeleportToLobbyRE.OnClientEvent:Connect(cb)
 		end
 	end,
 

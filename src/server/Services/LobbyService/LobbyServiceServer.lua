@@ -1,6 +1,6 @@
 --[[
 	LobbyService (server)
-	Flow: Shop Lobby -> stand on blue/red pad in Lobby -> Waiting -> Arena -> Shop Lobby.
+	Flow: Lobby -> stand on blue/red pad -> Waiting -> Arena -> Lobby.
 	Module returns a table with Init and public API. All event/remote setup runs in Init().
 ]]
 
@@ -34,8 +34,8 @@ local function bindRemoteHandlers()
 		LobbyQueue.removeFromWaitingQueue(state, player)
 		LobbyPadZones.clearPadOccupantForUser(player.UserId)
 		LobbyQueue.maybeCancelCountdown(state, remotes)
-		remotes.TeleportToShop:FireClient(player)
-		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+		remotes.TeleportToLobby:FireClient(player)
+		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 		remotes.LobbyState:FireClient(player, LobbyQueue.buildStateForPlayer(state, remotes, player))
 		LobbyQueue.broadcastStateToWaiting(state, remotes)
 	end)
@@ -58,26 +58,26 @@ end
 local function setupPlayerSpawn()
 	Players.PlayerAdded:Connect(function(player)
 		player.CharacterAdded:Connect(function()
-			local phase = state.playerPhase[player.UserId] or LobbyConfig.PHASE.SHOP_LOBBY
-			if phase == LobbyConfig.PHASE.SHOP_LOBBY then
+			local phase = state.playerPhase[player.UserId] or LobbyConfig.PHASE.LOBBY
+			if phase == LobbyConfig.PHASE.LOBBY then
 				task.defer(function()
-					LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+					LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 				end)
 			end
 		end)
 		if player.Character then
-			local phase = state.playerPhase[player.UserId] or LobbyConfig.PHASE.SHOP_LOBBY
-			if phase == LobbyConfig.PHASE.SHOP_LOBBY then
+			local phase = state.playerPhase[player.UserId] or LobbyConfig.PHASE.LOBBY
+			if phase == LobbyConfig.PHASE.LOBBY then
 				task.defer(function()
-					LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+					LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 				end)
 			end
 		end
 	end)
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.defer(function()
-			if player.Character and (not state.playerPhase[player.UserId] or state.playerPhase[player.UserId] == LobbyConfig.PHASE.SHOP_LOBBY) then
-				LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+			if player.Character and (not state.playerPhase[player.UserId] or state.playerPhase[player.UserId] == LobbyConfig.PHASE.LOBBY) then
+				LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 			end
 		end)
 	end
@@ -99,14 +99,14 @@ return {
 		return LobbyQueue.addPlayerToWaitingLobby(state, remotes, LobbySpawns.teleportPlayerTo, player)
 	end,
 
-	ReturnPlayerToShop = function(player)
-		state.playerPhase[player.UserId] = LobbyConfig.PHASE.SHOP_LOBBY
-		remotes.TeleportToShop:FireClient(player)
-		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.SHOP)
+	ReturnPlayerToLobby = function(player)
+		state.playerPhase[player.UserId] = LobbyConfig.PHASE.LOBBY
+		remotes.TeleportToLobby:FireClient(player)
+		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
 		remotes.LobbyState:FireClient(player, LobbyQueue.buildStateForPlayer(state, remotes, player))
 	end,
 
 	GetPhase = function(userId)
-		return state.playerPhase[userId] or LobbyConfig.PHASE.SHOP_LOBBY
+		return state.playerPhase[userId] or LobbyConfig.PHASE.LOBBY
 	end,
 }

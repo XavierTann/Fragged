@@ -13,17 +13,20 @@ local CombatService = Services:WaitForChild("CombatService"):WaitForChild("Comba
 local EconomyService = Services:WaitForChild("EconomyService"):WaitForChild("EconomyServiceServer")
 local DropService = Services:WaitForChild("DropService"):WaitForChild("DropServiceServer")
 local CharacterService = Services:WaitForChild("CharacterService"):WaitForChild("CharacterServiceServer")
+local LoadoutService = Services:WaitForChild("LoadoutService"):WaitForChild("LoadoutServiceServer")
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
 local EconomyServiceModule = require(EconomyService)
 local DropServiceModule = require(DropService)
 local CharacterServiceModule = require(CharacterService)
+local LoadoutServiceModule = require(LoadoutService)
 local WeaponInventoryServer = require(Services:WaitForChild("CombatService"):WaitForChild("WeaponInventoryServer"))
 
 CharacterServiceModule.Init()
 CombatServiceModule.Init()
 EconomyServiceModule.Init()
+LoadoutServiceModule.Init()
 
 DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 	if dropType == "RocketLauncher" then

@@ -26,7 +26,7 @@ end
 local TRACER_TRAIL_LENGTH = 4 -- studs behind bullet
 
 local function spawnBullet(state, shooter, startPos, direction, gunId)
-	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local dir = direction.Unit
 	local shooterUserId = shooter.UserId
 	local bullet = Instance.new("Part")

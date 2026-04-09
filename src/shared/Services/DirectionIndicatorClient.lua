@@ -18,7 +18,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local renderConnection = nil
 local smoothedAimOffsetXZ = Vector3.zero
-local cachedWeapon = "Pistol"
+local cachedWeapon = "Rifle"
 -- Movement dot + aim beam are arena-only; lobby keeps these off.
 local indicatorsEnabled = false
 

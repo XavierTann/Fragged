@@ -8,10 +8,10 @@
 	bounds, inventory, equipped tool, ammo, cooldown, and reload; on reject it may fire FireGunRejected
 	(resetClientFireRate) and AmmoState to resync.
 	Gunshots: local predicted sound + GunshotSpatial to other round players; all use 3D Sound on HRP or tool Handle.
-	Mobile: Pistol/Rifle fire while aim joystick is off-axis; Shotgun matches Grenade/Rocket
+	Mobile: Primary weapons fire while aim joystick is off-axis; Secondary weapons match Grenade/Rocket
 	(fire on joystick release with last aim direction). Releasing inside the cancel zone
 	skips the shot for those weapons only.
-	Desktop: Pistol/Rifle on LMB; Shotgun matches Grenade/Rocket (G key + mouse aim, no LMB).
+	Desktop: Primary weapons on LMB; Secondary weapons match Grenade/Rocket (G key + mouse aim, no LMB).
 	Respects ammo and reload state from server to prevent spamming.
 ]]
 
@@ -26,6 +26,7 @@ local Debris = game:GetService("Debris")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local LoadoutConfig = require(ReplicatedStorage.Shared.Modules.LoadoutConfig)
 
 local FireGunRE = nil
 local RequestReloadRE = nil
@@ -34,7 +35,7 @@ local ThrowGrenadeRE = nil
 local ThrowRocketRE = nil
 local GetLiveLeaderboardRF = nil
 local shootingEnabled = false
-local currentWeapon = "Pistol"
+local currentWeapon = "Rifle"
 local inputConnection = nil
 local renderSteppedConnection = nil
 
@@ -43,7 +44,7 @@ local ammoState = {}
 local lastFiredAt = 0
 local grenadeCount = 0
 local rocketCount = 0
-local availableWeapons = { "Pistol", "Rifle", "Shotgun", "Grenade" }
+local availableWeapons = { "Rifle", "Shotgun", "Grenade", "RocketLauncher" }
 local weaponInventorySubscribers = {}
 local ammoStateSubscribers = {}
 local matchEndedSubscribers = {}
@@ -90,7 +91,7 @@ local function getAmmoStateForWeapon(gunId)
 	if s then
 		return s.ammo, s.isReloading, s.reloadStartedAt
 	end
-	local gun = GunsConfig[gunId or "Pistol"] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId or "Rifle"] or GunsConfig.Rifle
 	return gun.magazineSize or 6, false, nil
 end
 
@@ -109,8 +110,8 @@ local function canFire()
 end
 
 local function canFireByRate()
-	local gun = GunsConfig[currentWeapon] or GunsConfig.Pistol
-	local fireRate = gun.fireRate or 0.4
+	local gun = GunsConfig[currentWeapon] or GunsConfig.Rifle
+	local fireRate = gun.fireRate or 0.12
 	return (os.clock() - lastFiredAt) >= fireRate
 end
 
@@ -138,7 +139,7 @@ local function playSpatialGunshotOnPart(parentPart, gunId)
 	if not parentPart or not parentPart:IsA("BasePart") then
 		return
 	end
-	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local soundId = gun.gunshotSoundId
 	if not soundId then
 		return
@@ -167,7 +168,7 @@ local function playGunshotSound(gunId)
 end
 
 local function playReloadSound(gunId)
-	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local soundId = gun.reloadSoundId
 	if not soundId then
 		return
@@ -260,7 +261,6 @@ local PREDICTED_TRACER_TRAIL = 4
 local PREDICTED_TRACER_MAX_TIME = 0.35
 
 local RECOIL_PITCH_DEG = {
-	Pistol = 0.65,
 	Rifle = 0.38,
 	Shotgun = 1.8,
 }
@@ -387,7 +387,7 @@ end
 
 -- Cosmetic only; does not deal damage. Stops at geometry (local raycast).
 local function spawnPredictedTracer(startPos, direction, gunId)
-	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local dir = direction.Unit
 	local bullet = Instance.new("Part")
 	bullet.Name = "PredictedTracer"
@@ -463,7 +463,7 @@ local function playPredictedGunfire(gunId, shotOrigin, aimDir)
 	applyLocalRecoil(gunId)
 	playGunshotSound(gunId)
 
-	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local pelletCount = gun.pelletCount or 1
 	local spreadDeg = gun.spreadDegrees or 0
 	for _ = 1, pelletCount do
@@ -566,11 +566,16 @@ local function throwGrenade(dir)
 	ThrowGrenadeRE:FireServer(dir)
 end
 
+local function isReleaseToFireWeapon(weaponId)
+	return weaponId == "Grenade" or weaponId == "RocketLauncher"
+		or LoadoutConfig:isSecondaryWeapon(weaponId)
+end
+
 local function onRenderStepped()
 	if not shootingEnabled or not FireGunRE then
 		return
 	end
-	if currentWeapon == "Grenade" or currentWeapon == "RocketLauncher" or currentWeapon == "Shotgun" then
+	if isReleaseToFireWeapon(currentWeapon) then
 		return
 	end
 	local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
@@ -580,13 +585,13 @@ local function onRenderStepped()
 	end
 end
 
--- Fire on click (desktop) for hold-fire guns; Grenade/Rocket/Shotgun use G (desktop) or joystick release (mobile)
+-- Fire on click (desktop) for hold-fire guns; release-to-fire weapons use G (desktop) or joystick release (mobile)
 local function onInputBegan(input, gameProcessed)
 	if gameProcessed then
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if currentWeapon ~= "Grenade" and currentWeapon ~= "RocketLauncher" and currentWeapon ~= "Shotgun" then
+		if not isReleaseToFireWeapon(currentWeapon) then
 			local dir = getAimDirectionFromMouse()
 			if dir then
 				fireInDirection(dir)
@@ -594,16 +599,18 @@ local function onInputBegan(input, gameProcessed)
 		end
 		return
 	end
-	-- Grenade/Rocket/Shotgun: G key (desktop only; mobile uses joystick release)
+	-- Release-to-fire weapons: G key (desktop only; mobile uses joystick release)
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
-		local dir = getAimDirectionFromMouse()
-		if dir then
-			if currentWeapon == "Grenade" then
-				throwGrenade(dir)
-			elseif currentWeapon == "RocketLauncher" then
-				throwRocket(dir)
-			elseif currentWeapon == "Shotgun" then
-				fireInDirection(dir)
+		if isReleaseToFireWeapon(currentWeapon) then
+			local dir = getAimDirectionFromMouse()
+			if dir then
+				if currentWeapon == "Grenade" then
+					throwGrenade(dir)
+				elseif currentWeapon == "RocketLauncher" then
+					throwRocket(dir)
+				else
+					fireInDirection(dir)
+				end
 			end
 		end
 	end
@@ -617,10 +624,6 @@ local function requestReload()
 		return
 	end
 	RequestReloadRE:FireServer(currentWeapon)
-end
-
-local function isReleaseToFireWeapon(weaponId)
-	return weaponId == "Grenade" or weaponId == "RocketLauncher" or weaponId == "Shotgun"
 end
 
 local function syncRotationJoystickCancelZone()
@@ -759,18 +762,21 @@ return {
 				task.defer(cb, payload)
 			end
 		end)
-		-- Mobile: grenade/rocket/shotgun fire when right joystick released (last direction before lift)
+		-- Mobile: release-to-fire weapons fire when right joystick released (last direction before lift)
 		if UserInputService.TouchEnabled then
 			local RotationJoystickGUI = require(ReplicatedStorage.Shared.UI.RotationJoystickGUI)
 			RotationJoystickGUI.SubscribeOnRelease(function(worldDir, releaseInsideCancelZone)
 				if releaseInsideCancelZone then
 					return
 				end
+				if not isReleaseToFireWeapon(currentWeapon) then
+					return
+				end
 				if currentWeapon == "Grenade" then
 					throwGrenade(worldDir)
 				elseif currentWeapon == "RocketLauncher" then
 					throwRocket(worldDir)
-				elseif currentWeapon == "Shotgun" then
+				else
 					fireInDirection(worldDir)
 				end
 			end)
@@ -797,7 +803,7 @@ return {
 			notifyAmmoSubscribers()
 		end)
 		weaponInventoryRE.OnClientEvent:Connect(function(weapons)
-			availableWeapons = weapons or { "Pistol", "Rifle", "Shotgun", "Grenade" }
+			availableWeapons = weapons or { "Rifle", "Shotgun", "Grenade", "RocketLauncher" }
 			local stillHas = false
 			for _, w in ipairs(availableWeapons) do
 				if w == currentWeapon then
@@ -838,7 +844,7 @@ return {
 	GetAmmoState = function(gunId)
 		gunId = gunId or currentWeapon
 		local ammo, isReloading, reloadStartedAt = getAmmoStateForWeapon(gunId)
-		local gun = GunsConfig[gunId] or GunsConfig.Pistol
+		local gun = GunsConfig[gunId] or GunsConfig.Rifle
 		return {
 			ammo = ammo,
 			maxAmmo = gun.magazineSize or 6,
@@ -855,7 +861,7 @@ return {
 	RequestReload = requestReload,
 
 	SetCurrentWeapon = function(gunId)
-		currentWeapon = gunId or "Pistol"
+		currentWeapon = gunId or "Rifle"
 		if not equipCurrentWeapon() then
 			task.defer(function()
 				if not equipCurrentWeapon() then

@@ -5,7 +5,6 @@
 ]]
 
 return {
-	Pistol = 413788230,
 	Rifle = 168510758,
 	Shotgun = 4753989987,
 	Grenade = 913025958,

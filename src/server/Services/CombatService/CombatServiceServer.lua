@@ -26,6 +26,7 @@ local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
 local WeaponToolServer = require(script.Parent.WeaponToolServer)
 
 local ShopCatalog = require(ReplicatedStorage.Shared.Modules.ShopCatalog)
+local LoadoutServiceServer = require(script.Parent.Parent.LoadoutService.LoadoutServiceServer)
 
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
@@ -50,7 +51,7 @@ end
 
 local function sendAuthoritativeAmmoForGun(player, gunId)
 	local uid = player.UserId
-	local gun = GunsConfig[gunId] or GunsConfig.Pistol
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	state.ammoInMagazine[uid] = state.ammoInMagazine[uid] or {}
 	state.reloadEndAt[uid] = state.reloadEndAt[uid] or {}
 	local ammo = state.ammoInMagazine[uid][gunId]
@@ -452,15 +453,12 @@ return {
 			state.playerAssists[p.UserId] = 0
 			CombatAmmo.initPlayerAmmo(state, p.UserId)
 			CombatAmmo.initPlayerGrenades(state, p.UserId)
-			local weapons = WeaponInventoryServer.getWeapons(p)
-			for _, w in ipairs(weapons) do
-				if w == "RocketLauncher" then
-					CombatAmmo.initPlayerRockets(state, p.UserId)
-					giveRocketLauncherTool(p)
-					break
-				end
-			end
-			WeaponInventoryServer.sendToPlayer(p)
+			local loadout = LoadoutServiceServer.GetLoadout(p)
+			WeaponInventoryServer.setWeapons(p, {
+				loadout.primary, loadout.secondary, "Grenade", "RocketLauncher",
+			})
+			CombatAmmo.initPlayerRockets(state, p.UserId)
+			giveRocketLauncherTool(p)
 			giveShopGunTools(p)
 			local cf = TDMSpawnStrategy.getSpawnCFrame(p, CombatTDM.getTDMContext(state))
 			local character = p.Character

@@ -100,6 +100,12 @@ KillNotificationGUI.Init()
 local TeamIndicatorGUI = require(Shared.UI.TeamIndicatorGUI)
 TeamIndicatorGUI.Init()
 
+local LoadoutGUI = require(Shared.UI.LoadoutGUI)
+LoadoutGUI.Init()
+
+local WeaponStoragePromptClient = require(Shared.Services.WeaponStoragePromptClient)
+WeaponStoragePromptClient.Init()
+
 local postMatchLeaderboard = false
 local wasInArena = false
 
@@ -117,6 +123,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 		RotationJoystickGUI.Hide()
 	end
 	if inArena and not postMatchLeaderboard then
+		LoadoutGUI.Hide()
 		WeaponSelectGUI.Show()
 		ReloadBarGUI.Show()
 		ManualReloadGUI.Show()
@@ -143,6 +150,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	TopDownCameraService.SetEnabled(false)
 	DirectionIndicatorClient.SetEnabled(false)
 	RotationJoystickGUI.Hide()
+	LoadoutGUI.Hide()
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	ManualReloadGUI.Hide()

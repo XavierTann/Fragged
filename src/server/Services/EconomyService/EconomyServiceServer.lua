@@ -254,4 +254,11 @@ function EconomyServiceServer.ApplyMatchEndRewards(
 	end
 end
 
+function EconomyServiceServer.GetPlayerData(player: Player): EconomyData?
+	if not player or not player.Parent then
+		return nil
+	end
+	return getOrLoad(player)
+end
+
 return EconomyServiceServer

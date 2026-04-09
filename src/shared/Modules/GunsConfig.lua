@@ -5,18 +5,6 @@
 ]]
 
 return {
-	Pistol = {
-		name = "Pistol",
-		bulletSpeed = 200,
-		damage = 40,
-		fireRate = 0.4, -- slow, deliberate shots
-		bulletSize = Vector3.new(0.4, 0.4, 1.2),
-		bulletColor = Color3.fromRGB(255, 220, 100),
-		magazineSize = 8,
-		reloadTime = 1.2,
-		gunshotSoundId = "rbxassetid://138905044369113",
-		reloadSoundId = "rbxassetid://140301163976554",
-	},
 	Rifle = {
 		name = "Rifle",
 		bulletSpeed = 250,

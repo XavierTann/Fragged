@@ -27,7 +27,7 @@ return {
 		TEAM_SCORE_UPDATE = "TeamScoreUpdate", -- Server -> Client: blueKills, redKills (real-time)
 		GRENADE_STATE = "GrenadeState", -- Server -> Client: grenadeCount (current)
 		ROCKET_STATE = "RocketState", -- Server -> Client: rocketCount (current)
-		WEAPON_INVENTORY = "WeaponInventory", -- Server -> Client: { "Pistol", "Rifle", ... }
+		WEAPON_INVENTORY = "WeaponInventory", -- Server -> Client: { "Rifle", "Shotgun", ... }
 		PLAYER_DIED = "PlayerDied", -- Server -> Client: respawnDelaySeconds (local player died in TDM)
 		TEAM_ASSIGNMENT = "TeamAssignment", -- Server -> Client: myTeam, playerTeams table
 		-- Server -> attacking client only: damage dealt (number), worldPosition (Vector3 above head)
@@ -41,5 +41,6 @@ return {
 		-- Economy / shop (server authoritative)
 		ECONOMY_SYNC = "EconomySync", -- Server -> Client: { credits, matchesPlayed, ownedShopGunIds }
 		SHOP_PURCHASE = "ShopPurchase", -- RemoteFunction: itemId string -> { ok: boolean, error: string?, credits: number?, ... }
+		LOADOUT_SELECT = "LoadoutSelect", -- Client -> Server: { primary = string, secondary = string }
 	},
 }

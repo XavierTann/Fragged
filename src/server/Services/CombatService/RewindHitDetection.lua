@@ -63,15 +63,19 @@ end
 	Run the catch-up simulation from fireTime to currentTime.
 
 	params:
-		startPos        : Vector3   — muzzle position at fire time
-		direction       : Vector3   — aim unit vector
-		gunId           : string    — key into GunsConfig
-		fireTime        : number    — estimated server time when client fired
-		currentTime     : number    — server os.clock() now
-		historyBuffer   : HistoryBuffer
-		shooterUserId   : number
-		roundPlayers    : { Player }
-		playerTeams     : { [number]: string }
+		startPos          : Vector3   — muzzle position at fire time
+		direction         : Vector3   — aim unit vector
+		gunId             : string    — key into GunsConfig
+		fireTime          : number    — estimated server time when client fired
+		currentTime       : number    — server os.clock() now
+		historyBuffer     : HistoryBuffer
+		shooterUserId     : number
+		roundPlayers      : { Player }
+		playerTeams       : { [number]: string }
+		shooterViewDelay  : number?   — extra offset (seconds) to shift enemy history lookups
+		                                back, approximating the shooter's screen delay (≈ one-way ping).
+		                                When set, enemy positions are sampled at (simTime - viewDelay)
+		                                instead of simTime, matching what the shooter actually saw.
 
 	Returns:
 		hitResult : { hitPlayer: Player, hitPosition: Vector3, hitTime: number,
@@ -88,6 +92,7 @@ function RewindHitDetection.catchUpSimulate(params)
 	local shooterUserId = params.shooterUserId
 	local roundPlayers = params.roundPlayers
 	local playerTeams = params.playerTeams
+	local viewDelay = params.shooterViewDelay or 0
 
 	local shooterTeam = playerTeams[shooterUserId]
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
@@ -129,11 +134,13 @@ function RewindHitDetection.catchUpSimulate(params)
 		local closestPlayer = nil
 		local closestHistPos = nil
 
+		local enemyLookupTime = simTime - viewDelay
+
 		for _, player in ipairs(roundPlayers) do
 			if player.UserId ~= shooterUserId then
 				local targetTeam = playerTeams[player.UserId]
 				if targetTeam and shooterTeam and targetTeam ~= shooterTeam then
-					local histState = historyBuffer:getStateAtTime(player.UserId, simTime)
+					local histState = historyBuffer:getStateAtTime(player.UserId, enemyLookupTime)
 					if histState then
 						local t = segmentSphereIntersect(pos, newPos, histState.position, hitRadius)
 						if t and t < closestT then

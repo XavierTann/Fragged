@@ -284,9 +284,16 @@ local function bindHandlers()
 		local spreadDeg = gun.spreadDegrees or 0
 
 		local useRewind = rewindSeconds > 0 and #state.currentRoundPlayers > 1
+
+		local shooterViewDelay = 0
+		if useRewind and LagCompConfig.VIEW_DELAY_ENABLED then
+			local oneWayPing = player:GetNetworkPing()
+			shooterViewDelay = math.clamp(oneWayPing, 0, LagCompConfig.MAX_VIEW_DELAY_SECONDS)
+		end
+
 		if useRewind and LagCompConfig.DEBUG_LOGGING then
-			print(("[LagComp] Player %s fired %s | rewind=%.1fms | fireTime=%.3f | serverNow=%.3f"):format(
-				player.Name, gunId, rewindSeconds * 1000, fireTime, now
+			print(("[LagComp] Player %s fired %s | rewind=%.1fms | viewDelay=%.1fms | fireTime=%.3f | serverNow=%.3f"):format(
+				player.Name, gunId, rewindSeconds * 1000, shooterViewDelay * 1000, fireTime, now
 			))
 		end
 
@@ -311,6 +318,7 @@ local function bindHandlers()
 					shooterUserId = uid,
 					roundPlayers = state.currentRoundPlayers,
 					playerTeams = state.playerTeams,
+					shooterViewDelay = shooterViewDelay,
 				})
 
 				if hitResult then

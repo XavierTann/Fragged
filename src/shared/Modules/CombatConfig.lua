@@ -42,5 +42,7 @@ return {
 		ECONOMY_SYNC = "EconomySync", -- Server -> Client: { credits, matchesPlayed, ownedShopGunIds }
 		SHOP_PURCHASE = "ShopPurchase", -- RemoteFunction: itemId string -> { ok: boolean, error: string?, credits: number?, ... }
 		LOADOUT_SELECT = "LoadoutSelect", -- Client -> Server: { primary = string, secondary = string }
+		-- Lag compensation time sync (RemoteFunction: client invokes, server returns os.clock())
+		TIME_SYNC = "CombatTimeSync",
 	},
 }

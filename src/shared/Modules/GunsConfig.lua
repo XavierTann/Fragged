@@ -7,7 +7,7 @@
 return {
 	Rifle = {
 		name = "Rifle",
-		bulletSpeed = 250,
+		bulletSpeed = 1000,
 		damage = 18,
 		fireRate = 0.12, -- fast shooting
 		bulletSize = Vector3.new(0.35, 0.35, 1.0),
@@ -35,7 +35,7 @@ return {
 	},
 	PlasmaCarbine = {
 		name = "Plasma Carbine",
-		bulletSpeed = 260,
+		bulletSpeed = 1000,
 		damage = 24,
 		fireRate = 0.1,
 		-- Longer bolt (Z = forward along tracer)

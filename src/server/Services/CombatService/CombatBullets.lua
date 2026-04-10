@@ -112,7 +112,78 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	end)
 end
 
+local function spawnVisualTracer(shooterUserId, startPos, direction, gunId, roundPlayers)
+	local gun = GunsConfig[gunId] or GunsConfig.Rifle
+	local dir = direction.Unit
+	local bullet = Instance.new("Part")
+	bullet.Name = "Bullet"
+	bullet.Size = gun.bulletSize
+	bullet.Color = gun.bulletColor
+	bullet.Material = Enum.Material.Neon
+	bullet.Anchored = true
+	bullet.CanCollide = false
+	bullet.CFrame = CFrame.lookAt(startPos, startPos + dir)
+	bullet:SetAttribute("ShooterUserId", shooterUserId)
+	bullet.Parent = getBulletsFolder()
+
+	local att0 = Instance.new("Attachment")
+	att0.Position = Vector3.new(0, 0, -TRACER_TRAIL_LENGTH)
+	att0.Parent = bullet
+	local att1 = Instance.new("Attachment")
+	att1.Position = Vector3.new(0, 0, gun.bulletSize.Z / 2)
+	att1.Parent = bullet
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.Color = ColorSequence.new(gun.bulletColor)
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.Width0 = gun.bulletSize.X * 1.5
+	beam.Width1 = gun.bulletSize.X * 0.5
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	beam.Parent = bullet
+
+	local speed = gun.bulletSpeed
+	local lastPos = startPos
+	local params = RaycastParams.new()
+	local filter = { bullet, getBulletsFolder() }
+	for _, p in ipairs(roundPlayers or {}) do
+		if p.Character then
+			filter[#filter + 1] = p.Character
+		end
+	end
+	params.FilterDescendantsInstances = filter
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local conn
+	conn = RunService.Heartbeat:Connect(function(dt)
+		if not bullet.Parent then
+			conn:Disconnect()
+			return
+		end
+		local move = dir * speed * dt
+		local newPos = lastPos + move
+		local result = Workspace:Raycast(lastPos, move, params)
+		if result then
+			conn:Disconnect()
+			bullet:Destroy()
+			return
+		end
+		lastPos = newPos
+		bullet.CFrame = CFrame.lookAt(newPos, newPos + dir)
+	end)
+	task.delay(5, function()
+		if bullet and bullet.Parent then
+			conn:Disconnect()
+			bullet:Destroy()
+		end
+	end)
+end
+
 return {
 	getBulletsFolder = getBulletsFolder,
 	spawnBullet = spawnBullet,
+	spawnVisualTracer = spawnVisualTracer,
 }

@@ -7,12 +7,14 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
 local CollectionService = game:GetService("CollectionService")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
+local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
 local TDMSpawnStrategy = require(script.Parent.TDMSpawnStrategy)
 
 local CombatState = require(script.Parent.CombatState)
@@ -24,9 +26,13 @@ local CombatRockets = require(script.Parent.CombatRockets)
 local CombatTDM = require(script.Parent.CombatTDM)
 local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
 local WeaponToolServer = require(script.Parent.WeaponToolServer)
+local HistoryBuffer = require(script.Parent.HistoryBuffer)
+local RewindHitDetection = require(script.Parent.RewindHitDetection)
 
 local ShopCatalog = require(ReplicatedStorage.Shared.Modules.ShopCatalog)
 local LoadoutServiceServer = require(script.Parent.Parent.LoadoutService.LoadoutServiceServer)
+
+local historyBuffer = HistoryBuffer.new(LagCompConfig.HISTORY_DURATION_SECONDS)
 
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
@@ -67,12 +73,12 @@ local function isFiniteVector3(v)
 	return typeof(v) == "Vector3" and v.X == v.X and v.Y == v.Y and v.Z == v.Z
 end
 
-local function parseFireGunArgs(a, b, c)
-	-- FireServer(shotOrigin, aimDirection, gunId) — required for validation and prediction sync.
+local function parseFireGunArgs(a, b, c, d)
 	if typeof(a) == "Vector3" and typeof(b) == "Vector3" and typeof(c) == "string" then
-		return a, b, c
+		local fireTime = if typeof(d) == "number" then d else nil
+		return a, b, c, fireTime
 	end
-	return nil, nil, nil
+	return nil, nil, nil, nil
 end
 
 local function validateClientShotOrigin(rootPos, shotOrigin, aimUnit)
@@ -175,7 +181,7 @@ local function setupBulletBlockerWalls()
 end
 
 local function bindHandlers()
-	state.fireGunRE.OnServerEvent:Connect(function(player, a, b, c)
+	state.fireGunRE.OnServerEvent:Connect(function(player, a, b, c, d)
 		if state.matchEnded then
 			return
 		end
@@ -183,7 +189,7 @@ local function bindHandlers()
 			return
 		end
 
-		local shotOrigin, aimDirection, gunId = parseFireGunArgs(a, b, c)
+		local shotOrigin, aimDirection, gunId, fireTime = parseFireGunArgs(a, b, c, d)
 		if not shotOrigin or not aimDirection or not gunId then
 			CombatRemotes.sendFireGunRejected(state, player, "InvalidArgs", nil, true)
 			return
@@ -257,6 +263,17 @@ local function bindHandlers()
 			return
 		end
 
+		-- Validate fire timestamp for lag compensation
+		local rewindSeconds = 0
+		if fireTime then
+			local rw, reason = RewindHitDetection.validateFireTime(fireTime, now)
+			if not rw then
+				rejectFire(player, reason, gunId, true)
+				return
+			end
+			rewindSeconds = rw
+		end
+
 		state.lastFiredAt[uid] = now
 		state.ammoInMagazine[uid][gunId] = ammo - 1
 		local newAmmo = state.ammoInMagazine[uid][gunId]
@@ -265,6 +282,14 @@ local function bindHandlers()
 		local startPos = root.Position + aimUnit * originForward
 		local pelletCount = gun.pelletCount or 1
 		local spreadDeg = gun.spreadDegrees or 0
+
+		local useRewind = rewindSeconds > 0 and #state.currentRoundPlayers > 1
+		if useRewind and LagCompConfig.DEBUG_LOGGING then
+			print(("[LagComp] Player %s fired %s | rewind=%.1fms | fireTime=%.3f | serverNow=%.3f"):format(
+				player.Name, gunId, rewindSeconds * 1000, fireTime, now
+			))
+		end
+
 		for _ = 1, pelletCount do
 			local dir = aimUnit
 			if spreadDeg > 0 and pelletCount > 1 then
@@ -274,7 +299,35 @@ local function bindHandlers()
 				local angle2 = math.rad(spreadDeg * 0.5 * (math.random() * 2 - 1))
 				dir = (dir * math.cos(angle2) + Vector3.new(0, 1, 0) * math.sin(angle2)).Unit
 			end
-			CombatBullets.spawnBullet(state, player, startPos, dir, gunId)
+
+			if useRewind then
+				local hitResult, _continuePos = RewindHitDetection.catchUpSimulate({
+					startPos = startPos,
+					direction = dir,
+					gunId = gunId,
+					fireTime = fireTime,
+					currentTime = now,
+					historyBuffer = historyBuffer,
+					shooterUserId = uid,
+					roundPlayers = state.currentRoundPlayers,
+					playerTeams = state.playerTeams,
+				})
+
+				if hitResult then
+					local hChar = hitResult.hitPlayer.Character
+					local hHumanoid = hChar and hChar:FindFirstChildOfClass("Humanoid")
+					if hHumanoid and hHumanoid.Health > 0 then
+						hHumanoid:SetAttribute("LastDamagerUserId", uid)
+						hHumanoid:TakeDamage(gun.damage)
+						CombatRemotes.notifyAttackerDamage(state, uid, hChar, gun.damage)
+					end
+					CombatBullets.spawnVisualTracer(uid, startPos, dir, gunId, state.currentRoundPlayers)
+				else
+					CombatBullets.spawnBullet(state, player, startPos, dir, gunId)
+				end
+			else
+				CombatBullets.spawnBullet(state, player, startPos, dir, gunId)
+			end
 		end
 
 		CombatRemotes.broadcastGunshotSpatial(state, uid, gunId)
@@ -422,17 +475,46 @@ local function bindHandlers()
 	end
 end
 
+local function setupTimeSyncRemote()
+	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = CombatConfig.REMOTE_FOLDER_NAME
+		folder.Parent = ReplicatedStorage
+	end
+	local rf = folder:FindFirstChild(LagCompConfig.TIME_SYNC_REMOTE_NAME)
+	if not rf then
+		rf = Instance.new("RemoteFunction")
+		rf.Name = LagCompConfig.TIME_SYNC_REMOTE_NAME
+		rf.Parent = folder
+	end
+	rf.OnServerInvoke = function(_player)
+		return os.clock()
+	end
+end
+
+local function startHistoryRecording()
+	RunService.Heartbeat:Connect(function(_dt)
+		if #state.currentRoundPlayers > 0 then
+			historyBuffer:record(state.currentRoundPlayers, os.clock())
+		end
+	end)
+end
+
 return {
 	Init = function()
 		state = CombatState()
 		setupWallCollisionGroups()
 		setupBulletBlockerWalls()
 		CombatRemotes.ensureRemotes(state)
+		setupTimeSyncRemote()
 		bindHandlers()
 		CombatAmmo.startReloadLoop(state)
+		startHistoryRecording()
 	end,
 
 	StartRound = function(players, onRoundEnd, playerTeamsMap)
+		historyBuffer:clearAll()
 		state.onRoundEndCallback = onRoundEnd
 		state.matchEnded = false
 		state.currentRoundPlayers = {}

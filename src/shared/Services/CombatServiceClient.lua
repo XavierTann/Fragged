@@ -27,6 +27,7 @@ local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local LoadoutConfig = require(ReplicatedStorage.Shared.Modules.LoadoutConfig)
+local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
 
 local FireGunRE = nil
 local RequestReloadRE = nil
@@ -35,6 +36,7 @@ local ThrowGrenadeRE = nil
 local ThrowRocketRE = nil
 local GetLiveLeaderboardRF = nil
 local shootingEnabled = false
+local serverTimeOffset = 0
 local currentWeapon = "Rifle"
 local inputConnection = nil
 local renderSteppedConnection = nil
@@ -521,7 +523,8 @@ local function fireInDirection(dir)
 	end
 	lastFiredAt = os.clock()
 	playPredictedGunfire(currentWeapon, shotOrigin, dir)
-	FireGunRE:FireServer(shotOrigin, dir, currentWeapon)
+	local estimatedServerTime = os.clock() + serverTimeOffset
+	FireGunRE:FireServer(shotOrigin, dir, currentWeapon, estimatedServerTime)
 end
 
 local function playRocketThrowSound()
@@ -717,6 +720,29 @@ return {
 		GetLiveLeaderboardRF = folder:WaitForChild(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
 		local gunshotSpatialRE = folder:WaitForChild(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
 		local grenadeExplosionFXRE = folder:WaitForChild(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
+
+		local timeSyncRF = folder:FindFirstChild(LagCompConfig.TIME_SYNC_REMOTE_NAME)
+		if timeSyncRF and timeSyncRF:IsA("RemoteFunction") then
+			task.spawn(function()
+				local bestOffset = 0
+				local bestRtt = math.huge
+				for _ = 1, 5 do
+					local t0 = os.clock()
+					local ok, serverTime = pcall(function()
+						return timeSyncRF:InvokeServer()
+					end)
+					if ok and typeof(serverTime) == "number" then
+						local rtt = os.clock() - t0
+						if rtt < bestRtt then
+							bestRtt = rtt
+							bestOffset = serverTime - (t0 + rtt / 2)
+						end
+					end
+					task.wait(0.3)
+				end
+				serverTimeOffset = bestOffset
+			end)
+		end
 
 		grenadeExplosionFXRE.OnClientEvent:Connect(function(serverCenter, radius, explosionSoundId, _throwerUserId)
 			if typeof(serverCenter) ~= "Vector3" or typeof(radius) ~= "number" then

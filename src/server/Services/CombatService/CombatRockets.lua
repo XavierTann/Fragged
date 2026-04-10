@@ -9,10 +9,12 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
 local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
+local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
 local CombatRemotes = require(script.Parent.CombatRemotes)
 
 local ROCKETS_FOLDER_NAME = "CombatRockets"
 local PROJECTILE_TEMPLATE_NAME = "RocketLauncherProjectile"
+local cachedSphereRadius = nil
 
 local function getRocketsFolder()
 	local folder = Workspace:FindFirstChild(ROCKETS_FOLDER_NAME)
@@ -33,6 +35,32 @@ local function getProjectileRootPart(instance)
 		return instance
 	end
 	return nil
+end
+
+local function getProjectileSphereRadius()
+	if cachedSphereRadius then
+		return cachedSphereRadius
+	end
+	local imports = ReplicatedStorage:FindFirstChild("Imports")
+	local models3D = imports and imports:FindFirstChild("3DModels")
+	local template = models3D and models3D:FindFirstChild(PROJECTILE_TEMPLATE_NAME)
+	if template then
+		local extents
+		if template:IsA("Model") then
+			extents = template:GetExtentsSize()
+		elseif template:IsA("BasePart") then
+			extents = template.Size
+		end
+		if extents then
+			local scale = RocketLauncherConfig.scale or 1
+			extents = extents * scale
+			cachedSphereRadius = math.max(extents.X, extents.Y) / 2
+			return cachedSphereRadius
+		end
+	end
+	local fallbackSize = RocketLauncherConfig.size
+	cachedSphereRadius = math.max(fallbackSize.X, fallbackSize.Y) / 2
+	return cachedSphereRadius
 end
 
 local function doExplosionDamage(state, center, radius, damage, throwerUserId)
@@ -120,7 +148,49 @@ local function triggerExplosion(state, center, thrower)
 	doExplosionDamage(state, center, cfg.radius, cfg.damage, thrower and thrower.UserId or nil)
 end
 
-local function spawnRocket(state, thrower, startPos, direction)
+local function doRewoundExplosionDamage(state, center, radius, damage, throwerUserId, historyBuffer, explosionTime, viewDelay)
+	local radiusSq = radius * radius
+	local throwerTeam = throwerUserId and state.playerTeams[throwerUserId]
+	local lookupTime = explosionTime - (viewDelay or 0)
+	local debugLog = LagCompConfig.DEBUG_LOGGING
+
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p and p.Parent and p.Character then
+			if not (throwerTeam and throwerTeam == (state.playerTeams[p.UserId] or "")) then
+				local humanoid = p.Character:FindFirstChildOfClass("Humanoid")
+				if humanoid and humanoid.Health > 0 then
+					local histState = historyBuffer:getStateAtTime(p.UserId, lookupTime)
+					local targetPos = histState and histState.position
+					if not targetPos then
+						local root = p.Character:FindFirstChild("HumanoidRootPart")
+						targetPos = root and root.Position
+					end
+					if targetPos then
+						local offset = targetPos - center
+						local distSq = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z
+						if distSq <= radiusSq then
+							local dist = math.sqrt(distSq)
+							local falloff = dist > 0 and math.max(0, 1 - dist / radius) or 1
+							local dmg = math.ceil(damage * falloff)
+							if dmg > 0 then
+								if debugLog then
+									print(("[LagComp] Rewound rocket explosion hit %s | dist=%.1f | dmg=%d | lookupTime=%.3f"):format(
+										p.Name, dist, dmg, lookupTime
+									))
+								end
+								humanoid:SetAttribute("LastDamagerUserId", throwerUserId or 0)
+								humanoid:TakeDamage(dmg)
+								CombatRemotes.notifyAttackerDamage(state, throwerUserId, p.Character, dmg)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+local function spawnRocket(state, thrower, startPos, direction, fuseElapsedOffset)
 	local cfg = RocketLauncherConfig
 	local dir = direction.Unit
 	local folder = getRocketsFolder()
@@ -185,7 +255,7 @@ local function spawnRocket(state, thrower, startPos, direction)
 
 	local lastPos = startPos
 	local speed = cfg.speed
-	local fuseEndTime = os.clock() + cfg.fuseTime
+	local fuseEndTime = os.clock() + cfg.fuseTime - (fuseElapsedOffset or 0)
 	local conn
 
 	local function setVisualCf(cf)
@@ -196,6 +266,8 @@ local function spawnRocket(state, thrower, startPos, direction)
 		end
 	end
 
+	local sphereRadius = getProjectileSphereRadius()
+
 	conn = RunService.Heartbeat:Connect(function(dt)
 		if not rocket.Parent then
 			conn:Disconnect()
@@ -203,7 +275,7 @@ local function spawnRocket(state, thrower, startPos, direction)
 		end
 		local move = dir * speed * dt
 		local newPos = lastPos + move
-		local result = Workspace:Raycast(lastPos, move + dir * 0.5, params)
+		local result = Workspace:Spherecast(lastPos, sphereRadius, move + dir * 0.5, params)
 		if result and result.Instance then
 			conn:Disconnect()
 			rocket:Destroy()
@@ -224,4 +296,7 @@ end
 return {
 	getRocketsFolder = getRocketsFolder,
 	spawnRocket = spawnRocket,
+	triggerExplosion = triggerExplosion,
+	doRewoundExplosionDamage = doRewoundExplosionDamage,
+	getProjectileSphereRadius = getProjectileSphereRadius,
 }

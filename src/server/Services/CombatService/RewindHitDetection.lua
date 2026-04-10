@@ -192,6 +192,102 @@ function RewindHitDetection.catchUpSimulate(params)
 end
 
 --[[
+	Rocket catch-up: step the rocket forward from fireTime to currentTime.
+	Rockets only explode on geometry (walls/BulletBlocker), not direct player contact.
+	If geometry is hit during catch-up, returns the explosion center for rewound AoE damage.
+	Uses Spherecast matching the rocket model's cross-section.
+
+	params:
+		startPos            : Vector3
+		direction           : Vector3
+		speed               : number     — rocket speed (studs/s)
+		fuseTime            : number     — max flight time before auto-explode
+		fireTime            : number
+		currentTime         : number
+		shooterCharacter    : Model?     — excluded from raycast
+		projectileSphereRadius : number  — radius for Spherecast
+
+	Returns:
+		explosionCenter : Vector3 | nil  — position where rocket hit geometry (nil = no geometry hit)
+		continuePos     : Vector3 | nil  — position to spawn live rocket if no explosion
+		elapsedFuse     : number         — seconds of fuse consumed during catch-up
+]]
+function RewindHitDetection.catchUpRocket(params)
+	local startPos = params.startPos
+	local direction = params.direction.Unit
+	local speed = params.speed
+	local fuseTime = params.fuseTime
+	local fireTime = params.fireTime
+	local currentTime = params.currentTime
+	local shooterCharacter = params.shooterCharacter
+	local sphereRadius = params.projectileSphereRadius or 0.3
+
+	local stepDt = LagCompConfig.CATCH_UP_STEP_SECONDS
+	local elapsed = currentTime - fireTime
+	if elapsed <= 0 then
+		return nil, startPos, 0
+	end
+
+	local worldParams = RaycastParams.new()
+	local filter = {}
+	local rocketsFolder = Workspace:FindFirstChild("CombatRockets")
+	if rocketsFolder then
+		filter[#filter + 1] = rocketsFolder
+	end
+	if shooterCharacter then
+		filter[#filter + 1] = shooterCharacter
+	end
+	worldParams.FilterDescendantsInstances = filter
+	worldParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local pos = startPos
+	local simTime = fireTime
+	local stepsNeeded = math.ceil(elapsed / stepDt)
+	local fuseElapsed = 0
+	local debugLog = LagCompConfig.DEBUG_LOGGING
+
+	for step = 1, stepsNeeded do
+		local dt = math.min(stepDt, fireTime + elapsed - simTime)
+		if dt <= 1e-6 then
+			break
+		end
+
+		local moveVec = direction * speed * dt
+		simTime = simTime + dt
+		fuseElapsed = fuseElapsed + dt
+
+		local result = Workspace:Spherecast(pos, sphereRadius, moveVec + direction * 0.5, worldParams)
+		if result then
+			if debugLog then
+				print(("[LagComp] Rocket catch-up HIT GEOMETRY at step %d/%d | pos=%s"):format(
+					step, stepsNeeded, tostring(result.Position)
+				))
+			end
+			return result.Position, nil, fuseElapsed
+		end
+
+		if fuseElapsed >= fuseTime then
+			local endPos = pos + moveVec
+			if debugLog then
+				print(("[LagComp] Rocket catch-up FUSE EXPIRED at step %d/%d | pos=%s"):format(
+					step, stepsNeeded, tostring(endPos)
+				))
+			end
+			return endPos, nil, fuseElapsed
+		end
+
+		pos = pos + moveVec
+	end
+
+	if debugLog then
+		print(("[LagComp] Rocket catch-up complete, no hit | caughtUpPos=%s | fuseElapsed=%.3f"):format(
+			tostring(pos), fuseElapsed
+		))
+	end
+	return nil, pos, fuseElapsed
+end
+
+--[[
 	Validate that a client-supplied fireTime is plausible.
 	Returns clamped rewind seconds (>= 0), or nil + reason string if rejected.
 ]]

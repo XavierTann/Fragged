@@ -29,6 +29,7 @@ local WeaponToolServer = require(script.Parent.WeaponToolServer)
 local HistoryBuffer = require(script.Parent.HistoryBuffer)
 local RewindHitDetection = require(script.Parent.RewindHitDetection)
 
+local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 local ShopCatalog = require(ReplicatedStorage.Shared.Modules.ShopCatalog)
 local LoadoutServiceServer = require(script.Parent.Parent.LoadoutService.LoadoutServiceServer)
 
@@ -428,7 +429,7 @@ local function bindHandlers()
 		CombatGrenades.spawnGrenade(state, player, startPos, aimDirection)
 	end)
 
-	state.throwRocketRE.OnServerEvent:Connect(function(player, aimDirection)
+	state.throwRocketRE.OnServerEvent:Connect(function(player, shotOrigin, aimDirection, fireTime)
 		if state.matchEnded then
 			return
 		end
@@ -438,17 +439,40 @@ local function bindHandlers()
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
 			return
 		end
+		if not shotOrigin or typeof(shotOrigin) ~= "Vector3" or not isFiniteVector3(shotOrigin) then
+			return
+		end
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		if not character or not humanoid or humanoid.Health <= 0 or not root then
 			return
 		end
+
+		local aimUnit = aimDirection.Unit
+		if not validateClientShotOrigin(root.Position, shotOrigin, aimUnit) then
+			return
+		end
+
 		local uid = player.UserId
 		local count = state.rocketCount[uid] or 0
 		if count <= 0 then
 			return
 		end
+
+		local now = os.clock()
+		local rewindSeconds = 0
+		if typeof(fireTime) == "number" then
+			local rw, _reason = RewindHitDetection.validateFireTime(fireTime, now)
+			if rw then
+				rewindSeconds = rw
+			else
+				fireTime = nil
+			end
+		else
+			fireTime = nil
+		end
+
 		state.rocketCount[uid] = count - 1
 		local newCount = state.rocketCount[uid]
 		CombatRemotes.sendRocketState(state, player, newCount)
@@ -465,9 +489,47 @@ local function bindHandlers()
 				end
 			end
 		end
-		local originForward = CombatConfig.SHOT_ORIGIN_FORWARD_STUDS or 0
-		local startPos = root.Position + aimDirection.Unit * originForward
-		CombatRockets.spawnRocket(state, player, startPos, aimDirection)
+
+		local startPos = shotOrigin
+
+		local useRewind = rewindSeconds > 0 and fireTime and #state.currentRoundPlayers > 1
+		if useRewind then
+			local shooterViewDelay = 0
+			if LagCompConfig.VIEW_DELAY_ENABLED then
+				shooterViewDelay = math.clamp(player:GetNetworkPing(), 0, LagCompConfig.MAX_VIEW_DELAY_SECONDS)
+			end
+
+			if LagCompConfig.DEBUG_LOGGING then
+				print(("[LagComp] Player %s fired Rocket | rewind=%.1fms | viewDelay=%.1fms"):format(
+					player.Name, rewindSeconds * 1000, shooterViewDelay * 1000
+				))
+			end
+
+			local explosionCenter, continuePos, fuseElapsed = RewindHitDetection.catchUpRocket({
+				startPos = startPos,
+				direction = aimDirection,
+				speed = RocketLauncherConfig.speed,
+				fuseTime = RocketLauncherConfig.fuseTime,
+				fireTime = fireTime,
+				currentTime = now,
+				shooterCharacter = character,
+				projectileSphereRadius = CombatRockets.getProjectileSphereRadius(),
+			})
+
+			if explosionCenter then
+				local explosionTime = fireTime + fuseElapsed
+				CombatRockets.doRewoundExplosionDamage(
+					state, explosionCenter, RocketLauncherConfig.radius,
+					RocketLauncherConfig.damage, uid,
+					historyBuffer, explosionTime, shooterViewDelay
+				)
+				CombatRockets.triggerExplosion(state, explosionCenter, player)
+			elseif continuePos then
+				CombatRockets.spawnRocket(state, player, startPos, aimDirection, fuseElapsed)
+			end
+		else
+			CombatRockets.spawnRocket(state, player, startPos, aimDirection)
+		end
 	end)
 
 	state.getLiveLeaderboardRF.OnServerInvoke = function(player)

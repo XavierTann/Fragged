@@ -562,8 +562,14 @@ local function throwRocket(dir)
 	if rocketCount <= 0 then
 		return
 	end
+	local character = Players.LocalPlayer.Character
+	local shotOrigin = getShotOriginForDirection(character, dir)
+	if not shotOrigin then
+		return
+	end
 	playRocketThrowSound()
-	ThrowRocketRE:FireServer(dir)
+	local estimatedServerTime = os.clock() + serverTimeOffset
+	ThrowRocketRE:FireServer(shotOrigin, dir, estimatedServerTime)
 end
 
 -- Fire when aiming joystick is off-axis (mobile). No continuous fire for release-style weapons.

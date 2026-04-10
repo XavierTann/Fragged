@@ -97,8 +97,10 @@ local function freezeMovement()
 	if not hum then
 		return
 	end
-	savedWalkSpeed = hum.WalkSpeed
-	savedJumpHeight = hum.JumpHeight
+	if savedWalkSpeed == nil then
+		savedWalkSpeed = hum.WalkSpeed > 0 and hum.WalkSpeed or 16
+		savedJumpHeight = hum.JumpHeight
+	end
 	hum.WalkSpeed = 0
 	hum.JumpHeight = 0
 	local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -108,18 +110,29 @@ local function freezeMovement()
 end
 
 local function restoreMovement()
+	local walk = savedWalkSpeed
+	local jump = savedJumpHeight
+	savedWalkSpeed = nil
+	savedJumpHeight = nil
+	if walk == nil then
+		return
+	end
 	local char = LocalPlayer.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	if hum then
-		if savedWalkSpeed then
-			hum.WalkSpeed = savedWalkSpeed
-		end
-		if savedJumpHeight then
-			hum.JumpHeight = savedJumpHeight
-		end
+		hum.WalkSpeed = walk
+		hum.JumpHeight = jump or hum.JumpHeight
+		return
 	end
-	savedWalkSpeed = nil
-	savedJumpHeight = nil
+	local conn
+	conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+		conn:Disconnect()
+		local newHum = newChar:WaitForChild("Humanoid", 5)
+		if newHum then
+			newHum.WalkSpeed = walk
+			newHum.JumpHeight = jump or newHum.JumpHeight
+		end
+	end)
 end
 
 local function sendLoadoutToServer()
@@ -607,8 +620,8 @@ local function buildGUI()
 	local overlay = Instance.new("Frame")
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.fromScale(1, 1)
+	overlay.BackgroundTransparency = 1
 	overlay.BackgroundColor3 = Theme.BgVoid
-	overlay.BackgroundTransparency = 0.25
 	overlay.BorderSizePixel = 0
 	overlay.Parent = gui
 

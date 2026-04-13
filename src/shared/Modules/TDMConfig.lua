@@ -3,7 +3,7 @@
 ]]
 
 return {
-	KILL_LIMIT = 5,
+	KILL_LIMIT = 1,
 	-- Internal keys "Blue" / "Red"; UI labels match.
 	TEAMS = { "Blue", "Red" },
 	RESPAWN_DELAY = 2,

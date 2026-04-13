@@ -22,6 +22,7 @@ local mountHandle = nil
 local coinOverride: number? = nil
 
 local shopUiEnabled = false
+local onOpenCallbacks = {}
 local savedWalkSpeed: number? = nil
 local savedJumpHeight: number? = nil
 
@@ -167,7 +168,14 @@ function ShopGUI.Show()
 	if mountHandle then
 		pushProps()
 		setShopUiEnabled(true)
+		for _, cb in ipairs(onOpenCallbacks) do
+			task.spawn(cb)
+		end
 	end
+end
+
+function ShopGUI.SubscribeOnOpen(cb)
+	table.insert(onOpenCallbacks, cb)
 end
 
 function ShopGUI.Hide()

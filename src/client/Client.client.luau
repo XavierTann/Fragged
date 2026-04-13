@@ -37,6 +37,9 @@ DirectionIndicatorClient.Init()
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 LobbyServiceClient.Init()
 
+local FTUEPadArrowsGUI = require(Shared.UI.FTUEPadArrowsGUI)
+FTUEPadArrowsGUI.Init()
+
 local CenterScreenToast = require(Shared.UI.CenterScreenToast)
 CenterScreenToast.Init()
 

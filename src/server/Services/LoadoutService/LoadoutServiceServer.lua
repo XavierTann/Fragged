@@ -28,6 +28,11 @@ local function isWeaponOwned(player, weaponId)
 			return true
 		end
 	end
+	for _, tw in ipairs(data.tempWeapons or {}) do
+		if tw.id == weaponId and tw.roundsLeft > 0 then
+			return true
+		end
+	end
 	return false
 end
 

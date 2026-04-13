@@ -14,10 +14,17 @@ local CombatConfig = require(Shared.Modules.CombatConfig)
 local WeaponInventoryServer = require(script.Parent.Parent.CombatService.WeaponInventoryServer)
 local WeaponToolServer = require(script.Parent.Parent.CombatService.WeaponToolServer)
 
+export type TempWeapon = {
+	id: string,
+	roundsLeft: number,
+}
+
 export type EconomyData = {
 	credits: number,
 	matchesPlayed: number,
 	ownedShopGuns: { string },
+	tempWeapons: { TempWeapon },
+	hasUsedFirstRoll: boolean,
 }
 
 local store: DataStore? = nil
@@ -35,6 +42,8 @@ local function defaultData(): EconomyData
 		credits = 0,
 		matchesPlayed = 0,
 		ownedShopGuns = {},
+		tempWeapons = {},
+		hasUsedFirstRoll = false,
 	}
 end
 
@@ -77,10 +86,16 @@ local function savePlayer(userId: number, data: EconomyData)
 		return
 	end
 	local key = tostring(userId)
+	local serializedTemp = {}
+	for _, tw in ipairs(data.tempWeapons) do
+		table.insert(serializedTemp, { id = tw.id, r = tw.roundsLeft })
+	end
 	local payload = {
 		c = data.credits,
 		m = data.matchesPlayed,
 		g = data.ownedShopGuns,
+		t = serializedTemp,
+		f = data.hasUsedFirstRoll,
 	}
 	local ok, err = pcall(function()
 		store:SetAsync(key, payload)
@@ -115,6 +130,16 @@ local function loadPlayer(userId: number): EconomyData
 			end
 		end
 	end
+	if typeof(result.t) == "table" then
+		for _, tw in ipairs(result.t) do
+			if typeof(tw) == "table" and typeof(tw.id) == "string" and typeof(tw.r) == "number" and tw.r > 0 then
+				table.insert(data.tempWeapons, { id = tw.id, roundsLeft = math.floor(tw.r) })
+			end
+		end
+	end
+	if result.f == true then
+		data.hasUsedFirstRoll = true
+	end
 	return data
 end
 
@@ -143,6 +168,12 @@ local function applyOwnedGunsToInventory(player: Player, data: EconomyData)
 			WeaponToolServer.giveGunToolIfMissing(player, gunId)
 		end
 	end
+	for _, tw in ipairs(data.tempWeapons) do
+		if tw.roundsLeft > 0 then
+			WeaponInventoryServer.addWeapon(player, tw.id)
+			WeaponToolServer.giveGunToolIfMissing(player, tw.id)
+		end
+	end
 end
 
 local function buildSyncPayload(data: EconomyData)
@@ -150,10 +181,18 @@ local function buildSyncPayload(data: EconomyData)
 	for _, g in ipairs(data.ownedShopGuns) do
 		table.insert(owned, g)
 	end
+	local tempList = {}
+	for _, tw in ipairs(data.tempWeapons) do
+		if tw.roundsLeft > 0 then
+			table.insert(tempList, { id = tw.id, roundsLeft = tw.roundsLeft })
+		end
+	end
 	return {
 		credits = data.credits,
 		matchesPlayed = data.matchesPlayed,
 		ownedShopGunIds = owned,
+		tempWeapons = tempList,
+		freeSpinAvailable = not data.hasUsedFirstRoll,
 	}
 end
 
@@ -247,6 +286,32 @@ function EconomyServiceServer.ApplyMatchEndRewards(
 			else
 				data.credits += CreditsConfig.LOSS_CREDITS
 			end
+
+			local surviving: { TempWeapon } = {}
+			for _, tw in ipairs(data.tempWeapons) do
+				tw.roundsLeft -= 1
+				if tw.roundsLeft > 0 then
+					table.insert(surviving, tw)
+				else
+					WeaponInventoryServer.removeWeapon(p, tw.id)
+					local backpack = p:FindFirstChild("Backpack")
+					if backpack then
+						local tool = backpack:FindFirstChild(tw.id)
+						if tool then
+							tool:Destroy()
+						end
+					end
+					local char = p.Character
+					if char then
+						local charTool = char:FindFirstChild(tw.id)
+						if charTool then
+							charTool:Destroy()
+						end
+					end
+				end
+			end
+			data.tempWeapons = surviving
+
 			cache[p.UserId] = data
 			savePlayer(p.UserId, data)
 			fireSync(p)
@@ -259,6 +324,52 @@ function EconomyServiceServer.GetPlayerData(player: Player): EconomyData?
 		return nil
 	end
 	return getOrLoad(player)
+end
+
+function EconomyServiceServer.AddTempWeapon(player: Player, weaponId: string, rounds: number)
+	local data = getOrLoad(player)
+	for _, tw in ipairs(data.tempWeapons) do
+		if tw.id == weaponId then
+			tw.roundsLeft += rounds
+			cache[player.UserId] = data
+			WeaponInventoryServer.addWeapon(player, weaponId)
+			WeaponToolServer.giveGunToolIfMissing(player, weaponId)
+			savePlayer(player.UserId, data)
+			fireSync(player)
+			return
+		end
+	end
+	table.insert(data.tempWeapons, { id = weaponId, roundsLeft = rounds })
+	cache[player.UserId] = data
+	WeaponInventoryServer.addWeapon(player, weaponId)
+	WeaponToolServer.giveGunToolIfMissing(player, weaponId)
+	savePlayer(player.UserId, data)
+	fireSync(player)
+end
+
+function EconomyServiceServer.AddPermanentGun(player: Player, gunId: string)
+	local data = getOrLoad(player)
+	if ownsGun(data, gunId) then
+		return
+	end
+	table.insert(data.ownedShopGuns, gunId)
+	cache[player.UserId] = data
+	WeaponInventoryServer.addWeapon(player, gunId)
+	WeaponToolServer.giveGunToolIfMissing(player, gunId)
+	savePlayer(player.UserId, data)
+	fireSync(player)
+end
+
+function EconomyServiceServer.SetHasUsedFirstRoll(player: Player)
+	local data = getOrLoad(player)
+	data.hasUsedFirstRoll = true
+	cache[player.UserId] = data
+	savePlayer(player.UserId, data)
+	fireSync(player)
+end
+
+function EconomyServiceServer.FireSync(player: Player)
+	fireSync(player)
 end
 
 return EconomyServiceServer

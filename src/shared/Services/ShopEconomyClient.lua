@@ -7,16 +7,25 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CombatConfig = require(Shared.Modules.CombatConfig)
 
+export type TempWeaponInfo = {
+	id: string,
+	roundsLeft: number,
+}
+
 export type EconomySnapshot = {
 	credits: number,
 	matchesPlayed: number,
 	ownedShopGunIds: { [string]: boolean },
+	tempWeapons: { TempWeaponInfo },
+	freeSpinAvailable: boolean,
 }
 
 local snapshot: EconomySnapshot = {
 	credits = 0,
 	matchesPlayed = 0,
 	ownedShopGunIds = {},
+	tempWeapons = {},
+	freeSpinAvailable = false,
 }
 
 local subscribers: { (EconomySnapshot) -> () } = {}
@@ -33,6 +42,18 @@ local function fillOwnedFromList(list: any)
 	return owned
 end
 
+local function parseTempWeapons(raw: any): { TempWeaponInfo }
+	local result: { TempWeaponInfo } = {}
+	if typeof(raw) == "table" then
+		for _, tw in ipairs(raw) do
+			if typeof(tw) == "table" and typeof(tw.id) == "string" and typeof(tw.roundsLeft) == "number" then
+				table.insert(result, { id = tw.id, roundsLeft = tw.roundsLeft })
+			end
+		end
+	end
+	return result
+end
+
 local function applyPayload(payload: any)
 	if typeof(payload) ~= "table" then
 		return
@@ -40,6 +61,8 @@ local function applyPayload(payload: any)
 	snapshot.credits = math.max(0, math.floor(tonumber(payload.credits) or 0))
 	snapshot.matchesPlayed = math.max(0, math.floor(tonumber(payload.matchesPlayed) or 0))
 	snapshot.ownedShopGunIds = fillOwnedFromList(payload.ownedShopGunIds)
+	snapshot.tempWeapons = parseTempWeapons(payload.tempWeapons)
+	snapshot.freeSpinAvailable = payload.freeSpinAvailable == true
 	for _, cb in ipairs(subscribers) do
 		cb(snapshot)
 	end

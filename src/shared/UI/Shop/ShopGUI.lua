@@ -135,7 +135,7 @@ function ShopGUI.Init()
 	mountHandle = ShopReactMount.mount({
 		parent = pg,
 		props = {},
-		displayOrder = 1000,
+		displayOrder = 11,
 	})
 	pushProps()
 	setShopUiEnabled(false)

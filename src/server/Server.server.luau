@@ -14,6 +14,7 @@ local EconomyService = Services:WaitForChild("EconomyService"):WaitForChild("Eco
 local DropService = Services:WaitForChild("DropService"):WaitForChild("DropServiceServer")
 local CharacterService = Services:WaitForChild("CharacterService"):WaitForChild("CharacterServiceServer")
 local LoadoutService = Services:WaitForChild("LoadoutService"):WaitForChild("LoadoutServiceServer")
+local GachaService = Services:WaitForChild("GachaService"):WaitForChild("GachaServiceServer")
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
@@ -21,11 +22,13 @@ local EconomyServiceModule = require(EconomyService)
 local DropServiceModule = require(DropService)
 local CharacterServiceModule = require(CharacterService)
 local LoadoutServiceModule = require(LoadoutService)
+local GachaServiceModule = require(GachaService)
 local WeaponInventoryServer = require(Services:WaitForChild("CombatService"):WaitForChild("WeaponInventoryServer"))
 
 CharacterServiceModule.Init()
 CombatServiceModule.Init()
 EconomyServiceModule.Init()
+GachaServiceModule.Init()
 LoadoutServiceModule.Init()
 
 DropServiceModule.SetPickupCallback(function(player, dropType, _drop)

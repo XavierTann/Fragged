@@ -36,14 +36,14 @@ local loadoutRE = nil
 
 local LoadoutGUI = {}
 
-local ICON_SIZE = 72
-local ICON_GAP = 10
+local ICON_SIZE = 56
+local ICON_GAP = 8
 local CORNER_RADIUS = 14
-local EQUIPPED_SLOT_SIZE = 64
-local DETAIL_WIDTH = 200
-local CONTENT_PAD = 20
-local ROW_LABEL_H = 20
-local ROW_GAP = 14
+local EQUIPPED_SLOT_SIZE = 48
+local DETAIL_WIDTH = 170
+local CONTENT_PAD = 16
+local ROW_LABEL_H = 18
+local ROW_GAP = 10
 
 local function getIconImage(weaponId)
 	local assetId = WeaponIconsConfig[weaponId]
@@ -51,6 +51,19 @@ local function getIconImage(weaponId)
 		return ""
 	end
 	return "rbxassetid://" .. tostring(assetId)
+end
+
+local function getTempWeaponRounds(weaponId): number?
+	if not ShopEconomyClient then
+		return nil
+	end
+	local snap = ShopEconomyClient.GetSnapshot()
+	for _, tw in ipairs(snap.tempWeapons or {}) do
+		if tw.id == weaponId and tw.roundsLeft > 0 then
+			return tw.roundsLeft
+		end
+	end
+	return nil
 end
 
 local function isWeaponOwned(weaponId)
@@ -61,7 +74,13 @@ local function isWeaponOwned(weaponId)
 		return false
 	end
 	local snap = ShopEconomyClient.GetSnapshot()
-	return snap.ownedShopGunIds[weaponId] == true
+	if snap.ownedShopGunIds[weaponId] == true then
+		return true
+	end
+	if getTempWeaponRounds(weaponId) then
+		return true
+	end
+	return false
 end
 
 local function getAccentColor(weaponId)
@@ -205,6 +224,7 @@ local function showDetailPanel(weaponId)
 	end
 
 	local owned = isWeaponOwned(weaponId)
+	local tempRounds = getTempWeaponRounds(weaponId)
 	local alreadyEquipped = (w.category == LoadoutConfig.CATEGORY.PRIMARY and weaponId == equippedPrimary)
 		or (w.category == LoadoutConfig.CATEGORY.SECONDARY and weaponId == equippedSecondary)
 
@@ -224,7 +244,16 @@ local function showDetailPanel(weaponId)
 		end
 	end
 	if lockLabel then
-		lockLabel.Visible = not owned
+		if not owned then
+			lockLabel.Text = "Purchase from shop to unlock"
+			lockLabel.Visible = true
+		elseif tempRounds then
+			lockLabel.Text = tempRounds .. " rounds remaining"
+			lockLabel.TextColor3 = Theme.NeonAmber
+			lockLabel.Visible = true
+		else
+			lockLabel.Visible = false
+		end
 	end
 
 	detailFrame.Visible = true
@@ -232,21 +261,50 @@ end
 
 local function syncWeaponButtonOwnership(btn, weaponId)
 	local owned = isWeaponOwned(weaponId)
+	local tempRounds = getTempWeaponRounds(weaponId)
 	btn.ImageColor3 = owned and Color3.new(1, 1, 1) or Color3.fromRGB(80, 80, 80)
 	btn.ImageTransparency = owned and 0 or 0.55
+
 	local lock = btn:FindFirstChild("LockOverlay")
+	local badge = btn:FindFirstChild("TempBadge")
+
 	if owned then
 		if lock then
 			lock:Destroy()
 		end
+		if tempRounds then
+			if not badge then
+				badge = Instance.new("TextLabel")
+				badge.Name = "TempBadge"
+				badge.Size = UDim2.fromOffset(40, 16)
+				badge.Position = UDim2.new(1, -2, 1, -2)
+				badge.AnchorPoint = Vector2.new(1, 1)
+				badge.BackgroundColor3 = Theme.NeonAmber
+				badge.BackgroundTransparency = 0.1
+				badge.TextSize = 10
+				badge.Font = Enum.Font.GothamBold
+				badge.TextColor3 = Theme.BgVoid
+				badge.Parent = btn
+				corner(badge, 6)
+			end
+			badge.Text = tempRounds .. "R"
+			badge.Visible = true
+		else
+			if badge then
+				badge.Visible = false
+			end
+		end
 	else
+		if badge then
+			badge.Visible = false
+		end
 		if not lock then
 			local lockLabel = Instance.new("TextLabel")
 			lockLabel.Name = "LockOverlay"
 			lockLabel.Size = UDim2.fromScale(1, 1)
 			lockLabel.BackgroundTransparency = 0.7
 			lockLabel.BackgroundColor3 = Theme.BgVoid
-			lockLabel.Text = "🔒"
+			lockLabel.Text = "\xF0\x9F\x94\x92"
 			lockLabel.TextSize = 22
 			lockLabel.Font = Enum.Font.GothamBold
 			lockLabel.TextColor3 = Theme.TextMuted
@@ -326,10 +384,13 @@ local function buildModal(parent)
 	local modalW = leftColW + DETAIL_WIDTH + CONTENT_PAD * 2 + 16
 	modalW = math.max(modalW, 480)
 	local twoRowsH = (ROW_LABEL_H + ICON_SIZE + ROW_GAP) * 2
-	local headerH = 50
-	local equippedH = EQUIPPED_SLOT_SIZE + 46
+	local headerH = 44
+	local equippedH = EQUIPPED_SLOT_SIZE + 40
 	local modalH = headerH + twoRowsH + equippedH + CONTENT_PAD * 2
-	modalH = math.max(modalH, 380)
+	modalH = math.max(modalH, 320)
+
+	local screenH = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 600
+	modalH = math.min(modalH, math.floor(screenH * 0.85))
 
 	local modal = Instance.new("Frame")
 	modal.Name = "Modal"
@@ -373,11 +434,11 @@ local function buildModal(parent)
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, -80, 0, 40)
-	title.Position = UDim2.fromOffset(CONTENT_PAD, 10)
+	title.Size = UDim2.new(1, -80, 0, 32)
+	title.Position = UDim2.fromOffset(CONTENT_PAD, 8)
 	title.BackgroundTransparency = 1
 	title.Text = "LOADOUT"
-	title.TextSize = 20
+	title.TextSize = 17
 	title.Font = Theme.FontDisplay
 	title.TextColor3 = Theme.NeonCyan
 	title.TextXAlignment = Enum.TextXAlignment.Left
@@ -542,7 +603,7 @@ local function buildModal(parent)
 	eqTitle.TextXAlignment = Enum.TextXAlignment.Left
 	eqTitle.Parent = equippedBar
 
-	local slotY = 36
+	local slotY = 22
 
 	local pSlotLabel = Instance.new("TextLabel")
 	pSlotLabel.Size = UDim2.fromOffset(EQUIPPED_SLOT_SIZE, 14)
@@ -613,7 +674,7 @@ local function buildGUI()
 	gui.Name = "LoadoutGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 1
+	gui.DisplayOrder = 11
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 

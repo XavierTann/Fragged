@@ -106,6 +106,12 @@ TeamIndicatorGUI.Init()
 local LoadoutGUI = require(Shared.UI.LoadoutGUI)
 LoadoutGUI.Init()
 
+local GachaGUI = require(Shared.UI.GachaGUI)
+GachaGUI.Init()
+
+local GachaServiceClient = require(Shared.Services.GachaServiceClient)
+GachaServiceClient.Init()
+
 local WeaponStoragePromptClient = require(Shared.Services.WeaponStoragePromptClient)
 WeaponStoragePromptClient.Init()
 

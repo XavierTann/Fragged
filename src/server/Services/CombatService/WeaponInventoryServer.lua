@@ -8,7 +8,7 @@ local Players = game:GetService("Players")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 
-local DEFAULT_WEAPONS = { "Rifle", "Shotgun", "Grenade", "RocketLauncher" }
+local DEFAULT_WEAPONS = { "Rifle", "Shotgun", "Grenade" }
 local playerWeapons = {}
 local weaponInventoryRE = nil
 

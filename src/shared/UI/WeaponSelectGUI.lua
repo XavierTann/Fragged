@@ -1,6 +1,6 @@
 --[[
 	WeaponSelectGUI
-	Bottom-center bar with weapon buttons. Click to switch weapons.
+	Top-right bar with weapon buttons. Click to switch weapons.
 	Uses raw asset IDs from WeaponIconsConfig.
 ]]
 
@@ -19,9 +19,9 @@ local weaponBar = nil
 local weaponBarContainer = nil
 local buttonMap = {} -- gunId -> ImageButton
 local ammoLabelMap = {} -- gunId -> TextLabel
-local BAR_HEIGHT = 56
-local BUTTON_WIDTH = 100
-local BUTTON_GAP = 8
+local BAR_HEIGHT = 55
+local BUTTON_WIDTH = 60
+local BUTTON_GAP = 4
 local BACKGROUND_TRANSPARENCY = 0.45
 local ICON_TRANSPARENCY = 0.35
 
@@ -42,6 +42,7 @@ local function createGui()
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.DisplayOrder = 5
+	gui.IgnoreGuiInset = true
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	return gui
 end
@@ -99,9 +100,9 @@ local function createWeaponBar(parent)
 	local totalWidth = #weapons * BUTTON_WIDTH + (#weapons - 1) * BUTTON_GAP
 	local bar = Instance.new("Frame")
 	bar.Name = "WeaponBar"
-	bar.Size = UDim2.fromOffset(totalWidth + 24, BAR_HEIGHT + 16)
-	bar.Position = UDim2.fromScale(0.5, 1)
-	bar.AnchorPoint = Vector2.new(0.5, 1)
+	bar.Size = UDim2.fromOffset(totalWidth + 16, BAR_HEIGHT + 12)
+	bar.Position = UDim2.fromScale(1, 0)
+	bar.AnchorPoint = Vector2.new(1, 0)
 	bar.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	bar.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 	bar.BorderSizePixel = 0
@@ -109,7 +110,7 @@ local function createWeaponBar(parent)
 	weaponBar = bar
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 12)
+	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = bar
 
 	for i, itemId in ipairs(weapons) do
@@ -125,7 +126,7 @@ local function createWeaponBar(parent)
 		local btn = Instance.new("ImageButton")
 		btn.Name = itemId
 		btn.Size = UDim2.fromOffset(BUTTON_WIDTH, BAR_HEIGHT)
-		btn.Position = UDim2.fromOffset(12 + (i - 1) * (BUTTON_WIDTH + BUTTON_GAP), 8)
+		btn.Position = UDim2.fromOffset(8 + (i - 1) * (BUTTON_WIDTH + BUTTON_GAP), 6)
 		btn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
 		btn.BackgroundTransparency = BACKGROUND_TRANSPARENCY
 		btn.Image = iconImage
@@ -137,12 +138,12 @@ local function createWeaponBar(parent)
 
 		local fallbackLabel = Instance.new("TextLabel")
 		fallbackLabel.Name = "Fallback"
-		fallbackLabel.Size = UDim2.new(1, -8, 1, 0)
-		fallbackLabel.Position = UDim2.fromOffset(4, 0)
+		fallbackLabel.Size = UDim2.new(1, -6, 1, 0)
+		fallbackLabel.Position = UDim2.fromOffset(3, 0)
 		fallbackLabel.BackgroundTransparency = 1
 		fallbackLabel.Text = itemId
 		fallbackLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		fallbackLabel.TextSize = 14
+		fallbackLabel.TextSize = 10
 		fallbackLabel.Font = Enum.Font.GothamMedium
 		fallbackLabel.Visible = (iconImage == "")
 		fallbackLabel.Parent = btn
@@ -152,7 +153,7 @@ local function createWeaponBar(parent)
 		btnCorner.Parent = btn
 
 		local accent = Instance.new("Frame")
-		accent.Size = UDim2.new(0, 4, 1, 0)
+		accent.Size = UDim2.new(0, 3, 1, 0)
 		accent.Position = UDim2.fromOffset(0, 0)
 		accent.BackgroundColor3 = accentColor or Color3.fromRGB(150, 150, 150)
 		accent.BorderSizePixel = 0
@@ -163,13 +164,13 @@ local function createWeaponBar(parent)
 
 		local ammoLabel = Instance.new("TextLabel")
 		ammoLabel.Name = "AmmoLabel"
-		ammoLabel.Size = UDim2.new(1, -8, 0, 14)
-		ammoLabel.Position = UDim2.new(0, 8, 1, 0)
+		ammoLabel.Size = UDim2.new(1, -6, 0, 12)
+		ammoLabel.Position = UDim2.new(0, 6, 1, 0)
 		ammoLabel.AnchorPoint = Vector2.new(0, 1)
 		ammoLabel.BackgroundTransparency = 1
 		ammoLabel.Text = "0/0"
 		ammoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		ammoLabel.TextSize = 11
+		ammoLabel.TextSize = 9
 		ammoLabel.Font = Enum.Font.GothamMedium
 		ammoLabel.TextXAlignment = Enum.TextXAlignment.Left
 		ammoLabel.Parent = btn

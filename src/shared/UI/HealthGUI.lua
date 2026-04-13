@@ -13,8 +13,8 @@ local fillFrame = nil
 local healthConnection = nil
 local diedConnection = nil
 
-local BAR_WIDTH = 160
-local BAR_HEIGHT = 14
+local BAR_WIDTH = 20
+local BAR_HEIGHT = 140
 
 local function createGui()
 	if gui then
@@ -32,8 +32,8 @@ local function createGui()
 	container = Instance.new("Frame")
 	container.Name = "HealthContainer"
 	container.Size = UDim2.fromOffset(BAR_WIDTH + 16, BAR_HEIGHT + 16)
-	container.AnchorPoint = Vector2.new(1, 0)
-	container.Position = UDim2.fromScale(1, 0)
+	container.AnchorPoint = Vector2.new(0, 0.5)
+	container.Position = UDim2.new(0, 8, 0.5, 0)
 	container.BackgroundColor3 = Color3.fromRGB(28, 32, 48)
 	container.BackgroundTransparency = 0.5
 	container.BorderSizePixel = 0
@@ -59,8 +59,8 @@ local function createGui()
 	fillFrame = Instance.new("Frame")
 	fillFrame.Name = "HealthFill"
 	fillFrame.Size = UDim2.fromScale(1, 1)
-	fillFrame.Position = UDim2.fromOffset(0, 0)
-	fillFrame.AnchorPoint = Vector2.new(0, 0)
+	fillFrame.Position = UDim2.fromScale(0, 1)
+	fillFrame.AnchorPoint = Vector2.new(0, 1)
 	fillFrame.BackgroundColor3 = Color3.fromRGB(80, 180, 100)
 	fillFrame.BackgroundTransparency = 0.1
 	fillFrame.BorderSizePixel = 0
@@ -91,7 +91,7 @@ local function updateHealth(humanoid)
 	local health = humanoid.Health
 	local maxHealth = humanoid.MaxHealth
 	local ratio = maxHealth > 0 and (health / maxHealth) or 0
-	fillFrame.Size = UDim2.fromScale(math.clamp(ratio, 0, 1), 1)
+	fillFrame.Size = UDim2.fromScale(1, math.clamp(ratio, 0, 1))
 	if ratio < 0.30 then
 		fillFrame.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
 	elseif ratio < 0.75 then

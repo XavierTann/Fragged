@@ -1,6 +1,6 @@
 --[[
 	ManualReloadGUI
-	Top-right reload icon below HealthGUI; requests server reload for magazine weapons only.
+	Bottom-right reload icon above joystick; requests server reload for magazine weapons only.
 ]]
 
 local RELOAD_ICON_ASSET_ID = "rbxassetid://6943199776"
@@ -17,9 +17,6 @@ local LocalPlayer = Players.LocalPlayer
 local gui = nil
 local reloadBtn = nil
 
--- Match HealthGUI outer frame: BAR_HEIGHT 14 + vertical padding 16
-local HEALTH_STRIP_HEIGHT = 30
-local GAP = 8
 local BUTTON_SIZE = 68
 
 local function updateButtonVisual()
@@ -57,8 +54,8 @@ local function createGui()
 	reloadBtn = Instance.new("ImageButton")
 	reloadBtn.Name = "ReloadButton"
 	reloadBtn.Size = UDim2.fromOffset(BUTTON_SIZE, BUTTON_SIZE)
-	reloadBtn.AnchorPoint = Vector2.new(1, 0)
-	reloadBtn.Position = UDim2.new(1, 0, 0, HEALTH_STRIP_HEIGHT + GAP)
+	reloadBtn.AnchorPoint = Vector2.new(1, 1)
+	reloadBtn.Position = UDim2.new(1, 0, 1, 0)
 	reloadBtn.BackgroundTransparency = 1
 	reloadBtn.BorderSizePixel = 0
 	reloadBtn.Image = RELOAD_ICON_ASSET_ID

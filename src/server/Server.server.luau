@@ -54,7 +54,9 @@ end)
 DropServiceModule.Init()
 
 LobbyServiceModule.Init(function(players, playerTeamsMap)
+	DropServiceModule.Start()
 	CombatServiceModule.StartRound(players, function()
+		DropServiceModule.Stop()
 		for _, p in ipairs(players) do
 			LobbyServiceModule.ReturnPlayerToLobby(p)
 		end

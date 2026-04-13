@@ -378,30 +378,65 @@ local function spawnDrop()
 	return drop
 end
 
+local running = false
+local cleanupLoopStarted = false
+
+local function clearAllDrops()
+	for _, drop in ipairs(activeDrops) do
+		if drop and drop.Parent then
+			drop:Destroy()
+		end
+	end
+	activeDrops = {}
+end
+
 local function startSpawnLoop()
 	if spawnConnection then
 		return
 	end
+	running = true
 	spawnConnection = task.spawn(function()
-		while true do
+		while running do
 			task.wait(DropConfig.SPAWN_INTERVAL_SECONDS or 15)
-			spawnDrop()
+			if running then
+				spawnDrop()
+			end
 		end
 	end)
 end
 
+local function stopSpawnLoop()
+	running = false
+	if spawnConnection then
+		task.cancel(spawnConnection)
+		spawnConnection = nil
+	end
+	clearAllDrops()
+end
+
 return {
 	Init = function()
+		if not cleanupLoopStarted then
+			cleanupLoopStarted = true
+			task.spawn(function()
+				while true do
+					task.wait(5)
+					cleanupDestroyedDrops()
+				end
+			end)
+		end
+	end,
+
+	Start = function()
+		stopSpawnLoop()
 		task.defer(function()
 			spawnDrop()
 		end)
 		startSpawnLoop()
-		task.spawn(function()
-			while true do
-				task.wait(5)
-				cleanupDestroyedDrops()
-			end
-		end)
+	end,
+
+	Stop = function()
+		stopSpawnLoop()
 	end,
 
 	SetPickupCallback = function(cb)

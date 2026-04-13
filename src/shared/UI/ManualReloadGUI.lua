@@ -46,7 +46,7 @@ local function createGui()
 	gui.Name = "ManualReloadGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 8
+	gui.DisplayOrder = 1
 	gui.IgnoreGuiInset = true
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")

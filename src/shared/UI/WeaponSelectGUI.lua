@@ -6,6 +6,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
@@ -13,12 +14,109 @@ local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 local WeaponIconsConfig = require(ReplicatedStorage.Shared.Modules.WeaponIconsConfig)
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
+local CenterScreenToast = require(ReplicatedStorage.Shared.UI.CenterScreenToast)
 
 local gui = nil
 local weaponBar = nil
 local weaponBarContainer = nil
 local buttonMap = {} -- gunId -> ImageButton
 local ammoLabelMap = {} -- gunId -> TextLabel
+local fireHintLabel = nil
+local hintFlashTween = nil
+local hasFlashedHint = false
+
+local function stopHintFlash()
+	if hintFlashTween then
+		hintFlashTween:Cancel()
+		hintFlashTween = nil
+	end
+	if fireHintLabel then
+		fireHintLabel.TextTransparency = 0
+	end
+end
+
+local HINT_FLASH_CYCLES = 6
+local HINT_FLASH_HALF = 0.35
+
+local function startHintFlash()
+	if not fireHintLabel then
+		return
+	end
+	stopHintFlash()
+
+	local cyclesLeft = HINT_FLASH_CYCLES * 2
+	local tweenFade = TweenService:Create(fireHintLabel, TweenInfo.new(HINT_FLASH_HALF, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { TextTransparency = 0.7 })
+	local tweenShow = TweenService:Create(fireHintLabel, TweenInfo.new(HINT_FLASH_HALF, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { TextTransparency = 0 })
+
+	local fadingOut = true
+	local function step()
+		cyclesLeft -= 1
+		if cyclesLeft <= 0 or not fireHintLabel or not fireHintLabel.Parent then
+			stopHintFlash()
+			return
+		end
+		fadingOut = not fadingOut
+		if fadingOut then
+			hintFlashTween = tweenFade
+			tweenFade:Play()
+			tweenFade.Completed:Once(step)
+		else
+			hintFlashTween = tweenShow
+			tweenShow:Play()
+			tweenShow.Completed:Once(step)
+		end
+	end
+
+	hintFlashTween = tweenFade
+	tweenFade:Play()
+	tweenFade.Completed:Once(step)
+end
+
+local RELEASE_TO_FIRE_WEAPONS = {
+	Shotgun = true,
+	Grenade = true,
+	RocketLauncher = true,
+}
+
+local weaponEquipCount = {} -- weaponId -> number of times equipped
+
+local function getFireModeText(weaponId)
+	if RELEASE_TO_FIRE_WEAPONS[weaponId] then
+		return "Release to Fire", Color3.fromRGB(200, 170, 0)
+	end
+	return "Hold to Fire", Color3.fromRGB(255, 80, 80)
+end
+
+local function showFireModeToast(weaponId)
+	if not weaponId then
+		return
+	end
+	weaponEquipCount[weaponId] = (weaponEquipCount[weaponId] or 0) + 1
+	local count = weaponEquipCount[weaponId]
+	local isRelease = RELEASE_TO_FIRE_WEAPONS[weaponId]
+
+	-- Release-to-fire: toast on first equip; Hold-to-fire: toast on second equip
+	if isRelease and count ~= 1 then
+		return
+	end
+	if not isRelease and count ~= 2 then
+		return
+	end
+
+	local text, color = getFireModeText(weaponId)
+	local displayName = weaponId
+	local gun = GunsConfig[weaponId]
+	if gun and gun.name then
+		displayName = gun.name
+	end
+	CenterScreenToast.Show({
+		text = displayName .. ": " .. text,
+		textColor = color,
+		holdSeconds = 2.5,
+		fadeSeconds = 0.5,
+		textSize = 18,
+	})
+end
 local BAR_HEIGHT = 55
 local BUTTON_WIDTH = 60
 local BUTTON_GAP = 4
@@ -41,7 +139,7 @@ local function createGui()
 	gui.Name = "WeaponSelectGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 5
+	gui.DisplayOrder = 1
 	gui.IgnoreGuiInset = true
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	return gui
@@ -65,6 +163,11 @@ local function updateSelection(gunId)
 		if ammoLabel then
 			ammoLabel.TextColor3 = selected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
 		end
+	end
+	if fireHintLabel then
+		local text, color = getFireModeText(gunId)
+		fireHintLabel.Text = text
+		fireHintLabel.TextColor3 = color
 	end
 end
 
@@ -184,6 +287,32 @@ local function createWeaponBar(parent)
 		ammoLabelMap[itemId] = ammoLabel
 	end
 
+	fireHintLabel = Instance.new("TextLabel")
+	fireHintLabel.Name = "FireHintLabel"
+	fireHintLabel.Size = UDim2.new(0, 0, 0, 18)
+	fireHintLabel.AutomaticSize = Enum.AutomaticSize.X
+	fireHintLabel.Position = UDim2.new(1, 0, 1, 4)
+	fireHintLabel.AnchorPoint = Vector2.new(1, 0)
+	fireHintLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	fireHintLabel.BackgroundTransparency = 0.4
+	fireHintLabel.BorderSizePixel = 0
+	local hintText, hintColor = getFireModeText(CombatServiceClient.GetCurrentWeapon())
+	fireHintLabel.Text = hintText
+	fireHintLabel.TextColor3 = hintColor
+	fireHintLabel.TextSize = 10
+	fireHintLabel.Font = Enum.Font.GothamBold
+	fireHintLabel.TextXAlignment = Enum.TextXAlignment.Center
+	fireHintLabel.Parent = bar
+
+	local hintCorner = Instance.new("UICorner")
+	hintCorner.CornerRadius = UDim.new(0, 6)
+	hintCorner.Parent = fireHintLabel
+
+	local hintPad = Instance.new("UIPadding")
+	hintPad.PaddingLeft = UDim.new(0, 6)
+	hintPad.PaddingRight = UDim.new(0, 6)
+	hintPad.Parent = fireHintLabel
+
 	updateAmmoLabels()
 	updateSelection(CombatServiceClient.GetCurrentWeapon())
 	return bar
@@ -209,8 +338,10 @@ local function init()
 	createWeaponBar(container)
 	CombatServiceClient.SubscribeAmmoState(updateAmmoLabels)
 	CombatServiceClient.SubscribeWeaponChanged(function()
+		local currentWeapon = CombatServiceClient.GetCurrentWeapon()
 		updateAmmoLabels()
-		updateSelection(CombatServiceClient.GetCurrentWeapon())
+		updateSelection(currentWeapon)
+		showFireModeToast(currentWeapon)
 	end)
 	CombatServiceClient.SubscribeWeaponInventory(refreshWeaponBar)
 	gui.Enabled = true
@@ -223,9 +354,14 @@ return {
 			gui.Enabled = true
 			updateAmmoLabels()
 			updateSelection(CombatServiceClient.GetCurrentWeapon())
+			if not hasFlashedHint then
+				hasFlashedHint = true
+				task.delay(1, startHintFlash)
+			end
 		end
 	end,
 	Hide = function()
+		stopHintFlash()
 		if gui then
 			gui.Enabled = false
 		end

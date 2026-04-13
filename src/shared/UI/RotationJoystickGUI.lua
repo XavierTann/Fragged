@@ -38,7 +38,7 @@ local function createGui()
 	gui.Name = "RotationJoystickGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 10
+	gui.DisplayOrder = 1
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	return gui
 end

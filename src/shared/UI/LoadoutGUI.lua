@@ -613,7 +613,7 @@ local function buildGUI()
 	gui.Name = "LoadoutGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 900
+	gui.DisplayOrder = 1
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 

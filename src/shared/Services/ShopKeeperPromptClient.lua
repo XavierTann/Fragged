@@ -18,7 +18,15 @@ local MAX_DISTANCE = 14
 
 local function findGunShopFolder(): Instance?
 	local ws = Workspace
-	return ws:FindFirstChild("GunShop") or ws:FindFirstChild("gunshop")
+	local direct = ws:FindFirstChild("GunShop") or ws:FindFirstChild("gunshop")
+	if direct then
+		return direct
+	end
+	local lobby = ws:FindFirstChild("Lobby")
+	if lobby then
+		return lobby:FindFirstChild("GunShop") or lobby:FindFirstChild("gunshop")
+	end
+	return nil
 end
 
 local function findBasePartForPrompt(model: Model): BasePart?
@@ -79,7 +87,13 @@ function ShopKeeperPromptClient.Init()
 	task.spawn(function()
 		local gunShop = findGunShopFolder()
 		if not gunShop then
-			gunShop = Workspace:WaitForChild("GunShop", 120) or Workspace:WaitForChild("gunshop", 5)
+			local lobby = Workspace:FindFirstChild("Lobby") or Workspace:WaitForChild("Lobby", 10)
+			if lobby then
+				gunShop = lobby:FindFirstChild("GunShop") or lobby:WaitForChild("GunShop", 120)
+			end
+		end
+		if not gunShop then
+			gunShop = Workspace:WaitForChild("GunShop", 5) or Workspace:WaitForChild("gunshop", 5)
 		end
 		if not gunShop then
 			warn("[ShopKeeperPromptClient] Workspace.GunShop / gunshop not found.")

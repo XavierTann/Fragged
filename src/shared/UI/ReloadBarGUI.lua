@@ -30,7 +30,7 @@ local function createGui()
 	gui.Name = "ReloadBarGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 6
+	gui.DisplayOrder = 1
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	return gui
 end

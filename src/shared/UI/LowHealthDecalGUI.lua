@@ -95,7 +95,7 @@ local function createGui()
 	gui.Name = "LowHealthDecalGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 5
+	gui.DisplayOrder = 1
 	gui.IgnoreGuiInset = true
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")

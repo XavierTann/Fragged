@@ -8,6 +8,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -24,6 +25,70 @@ local redScoreLabel = nil
 
 local backgroundClickConn = nil
 local wiredBackgroundButton = nil
+local hasShownFlashHint = false
+local flashHighlight = nil
+local flashTween = nil
+
+local function stopFlashHint()
+	if flashTween then
+		flashTween:Cancel()
+		flashTween = nil
+	end
+	if flashHighlight then
+		flashHighlight:Destroy()
+		flashHighlight = nil
+	end
+end
+
+local FLASH_HALF_PERIOD = 0.45
+
+local function startFlashHint(button)
+	if not button then
+		return
+	end
+	stopFlashHint()
+
+	flashHighlight = Instance.new("Frame")
+	flashHighlight.Name = "FlashHint"
+	flashHighlight.Size = UDim2.fromScale(1, 1)
+	flashHighlight.Position = UDim2.fromScale(0, 0)
+	flashHighlight.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	flashHighlight.BackgroundTransparency = 1
+	flashHighlight.BorderSizePixel = 0
+	flashHighlight.ZIndex = button.ZIndex + 1
+	flashHighlight.Parent = button
+
+	local corner = button:FindFirstChildOfClass("UICorner")
+	if corner then
+		local c = Instance.new("UICorner")
+		c.CornerRadius = corner.CornerRadius
+		c.Parent = flashHighlight
+	end
+
+	local tweenIn = TweenService:Create(flashHighlight, TweenInfo.new(FLASH_HALF_PERIOD, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { BackgroundTransparency = 0.55 })
+	local tweenOut = TweenService:Create(flashHighlight, TweenInfo.new(FLASH_HALF_PERIOD, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { BackgroundTransparency = 1 })
+
+	local fadingIn = true
+	local function step()
+		if not flashHighlight or not flashHighlight.Parent then
+			return
+		end
+		fadingIn = not fadingIn
+		if fadingIn then
+			flashTween = tweenIn
+			tweenIn:Play()
+			tweenIn.Completed:Once(step)
+		else
+			flashTween = tweenOut
+			tweenOut:Play()
+			tweenOut.Completed:Once(step)
+		end
+	end
+
+	flashTween = tweenIn
+	tweenIn:Play()
+	tweenIn.Completed:Once(step)
+end
 
 local function configureTdmScreenGui(sg)
 	if sg and sg:IsA("ScreenGui") then
@@ -60,6 +125,8 @@ local function wireBackgroundButton()
 		return
 	end
 	backgroundClickConn = bg.Activated:Connect(function()
+		stopFlashHint()
+		hasShownFlashHint = true
 		local data = CombatServiceClient.RequestLiveLeaderboard()
 		if data then
 			LeaderboardGUI.Show(data)
@@ -139,9 +206,16 @@ return {
 			end
 			tdmScoreFrame.Visible = true
 			updateScore(0, 0)
+			if not hasShownFlashHint then
+				hasShownFlashHint = true
+				task.delay(1.5, function()
+					startFlashHint(findBackgroundButton(tdmScoreFrame))
+				end)
+			end
 		end
 	end,
 	Hide = function()
+		stopFlashHint()
 		if ensureRefs() then
 			tdmScoreFrame.Visible = false
 		end

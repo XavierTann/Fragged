@@ -60,7 +60,7 @@ local function ensureGui()
 	screenGui.ResetOnSpawn = false
 	screenGui.IgnoreGuiInset = true
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.DisplayOrder = 9
+	screenGui.DisplayOrder = 1
 	screenGui.Enabled = true
 	screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 

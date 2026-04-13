@@ -25,7 +25,7 @@ local function createGui()
 	gui.Name = "RespawnTimerGUI"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 20
+	gui.DisplayOrder = 1
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 

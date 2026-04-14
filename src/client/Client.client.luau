@@ -106,6 +106,9 @@ TeamIndicatorGUI.Init()
 local LoadoutGUI = require(Shared.UI.LoadoutGUI)
 LoadoutGUI.Init()
 
+local LeaveMatchGUI = require(Shared.UI.LeaveMatchGUI)
+LeaveMatchGUI.Init()
+
 local GachaGUI = require(Shared.UI.GachaGUI)
 GachaGUI.Init()
 
@@ -140,6 +143,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 		HealthGUI.Show()
 		LowHealthDecalGUI.Show()
 		TeamIndicatorGUI.Show()
+		LeaveMatchGUI.Show()
 		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 	elseif not inArena then
 		WeaponSelectGUI.Hide()
@@ -151,6 +155,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 		RespawnTimerGUI.Hide()
 		OverheadHealthBarGUI.Hide()
 		TeamIndicatorGUI.Hide()
+		LeaveMatchGUI.Hide()
 	end
 end
 
@@ -169,6 +174,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	RespawnTimerGUI.Hide()
 	OverheadHealthBarGUI.Hide()
 	TeamIndicatorGUI.Hide()
+	LeaveMatchGUI.Hide()
 	if payload then
 		LeaderboardGUI.Show(payload)
 	end

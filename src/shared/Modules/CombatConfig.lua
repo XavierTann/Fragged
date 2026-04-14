@@ -44,6 +44,7 @@ return {
 		LOADOUT_SELECT = "LoadoutSelect", -- Client -> Server: { primary = string, secondary = string }
 		-- Lag compensation time sync (RemoteFunction: client invokes, server returns os.clock())
 		TIME_SYNC = "CombatTimeSync",
+		LEAVE_MATCH = "LeaveMatch", -- Client -> Server: voluntary forfeit, return to lobby
 		-- Gacha system
 		GACHA_RESULT = "GachaResult", -- Server -> Client: { weaponId, rarity, permanent, rounds, isFree }
 		GACHA_FREE_SPIN = "GachaFreeSpin", -- Client -> Server: request free first roll

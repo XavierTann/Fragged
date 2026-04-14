@@ -1,0 +1,17 @@
+---
+description: After implementing a feature, start the game in Studio via MCP so the user can test manually.
+alwaysApply: true
+---
+
+# Post-Implementation Playtest
+
+After finishing a feature implementation (code changes complete, no linter errors), **always** start the game in Roblox Studio using the MCP.
+
+## Steps
+
+1. Call `list_roblox_studios` to confirm the active studio.
+2. Call `start_stop_play` with `{"is_start": true}` to run the game.
+3. If the feature is **arena-only** (combat HUD, in-match UI, weapon behavior, round mechanics, etc.), also navigate the character to an arena pad using `character_navigation` to `game.Workspace.Lobby.SpawnPads.BluePad` with `speed_multiplier: 2`.
+4. Stop there. The user will take over for manual testing.
+
+Do **not** run the full shop/loadout/playtest flow. Do **not** click UI or interact with prompts. Just start the game and optionally move to the pad.

@@ -666,4 +666,43 @@ return {
 	end,
 
 	GiveRocketLauncherTool = giveRocketLauncherTool,
+
+	RemovePlayerFromRound = function(player)
+		if state.matchEnded then
+			return false
+		end
+		local uid = player.UserId
+		local found = false
+		local remaining = {}
+		for _, p in ipairs(state.currentRoundPlayers) do
+			if p.UserId == uid then
+				found = true
+			else
+				table.insert(remaining, p)
+			end
+		end
+		if not found then
+			return false
+		end
+		state.currentRoundPlayers = remaining
+
+		if state.diedConnections[uid] then
+			state.diedConnections[uid]:Disconnect()
+			state.diedConnections[uid] = nil
+		end
+		if state.characterAddedConnections[uid] then
+			state.characterAddedConnections[uid]:Disconnect()
+			state.characterAddedConnections[uid] = nil
+		end
+
+		state.ammoInMagazine[uid] = nil
+		state.lastFiredAt[uid] = nil
+		state.reloadEndAt[uid] = nil
+		state.grenadeCount[uid] = nil
+		state.grenadeRegenTimes[uid] = nil
+		state.rocketCount[uid] = nil
+		state.rocketRegenTimes[uid] = nil
+
+		return true
+	end,
 }

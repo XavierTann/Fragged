@@ -16,6 +16,9 @@ local CharacterService = Services:WaitForChild("CharacterService"):WaitForChild(
 local LoadoutService = Services:WaitForChild("LoadoutService"):WaitForChild("LoadoutServiceServer")
 local GachaService = Services:WaitForChild("GachaService"):WaitForChild("GachaServiceServer")
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CombatConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("CombatConfig"))
+
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
 local EconomyServiceModule = require(EconomyService)
@@ -65,5 +68,35 @@ LobbyServiceModule.Init(function(players, playerTeamsMap)
 		end
 	end, playerTeamsMap)
 end)
+
+do
+	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = CombatConfig.REMOTE_FOLDER_NAME
+		folder.Parent = ReplicatedStorage
+	end
+	local leaveRE = folder:FindFirstChild(CombatConfig.REMOTES.LEAVE_MATCH)
+	if not leaveRE then
+		leaveRE = Instance.new("RemoteEvent")
+		leaveRE.Name = CombatConfig.REMOTES.LEAVE_MATCH
+		leaveRE.Parent = folder
+	end
+	local leaveCooldowns = {}
+	leaveRE.OnServerEvent:Connect(function(player)
+		local now = os.clock()
+		if leaveCooldowns[player.UserId] and now - leaveCooldowns[player.UserId] < 2 then
+			return
+		end
+		leaveCooldowns[player.UserId] = now
+		local removed = CombatServiceModule.RemovePlayerFromRound(player)
+		if removed then
+			LobbyServiceModule.ReturnPlayerToLobby(player)
+		end
+	end)
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		leaveCooldowns[player.UserId] = nil
+	end)
+end
 
 print("Server startup complete.")

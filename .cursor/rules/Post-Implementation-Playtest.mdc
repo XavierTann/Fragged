@@ -7,6 +7,10 @@ alwaysApply: true
 
 After finishing a feature implementation (code changes complete, no linter errors), **always** start the game in Roblox Studio using the MCP.
 
+## Exception
+
+If the feature is **purely a GUI** and a `.story.lua` file exists for it (UI Labs compatible), do **not** run the game. The user will preview it in UI Labs instead.
+
 ## Steps
 
 1. Call `list_roblox_studios` to confirm the active studio.

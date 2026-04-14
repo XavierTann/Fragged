@@ -55,8 +55,8 @@ local REEL_CELL_STRIDE = REEL_CELL_SIZE + REEL_GAP
 local REEL_VISIBLE_CELLS = 3
 local REEL_SPIN_CELLS = 60
 local REEL_TOTAL_CELLS = REEL_SPIN_CELLS + REEL_VISIBLE_CELLS
-local REEL_WIDTH = 280
-local REEL_HEIGHT = REEL_CELL_STRIDE * REEL_VISIBLE_CELLS
+local REEL_HEIGHT = 100
+local RESULT_PANEL_HEIGHT = 150
 local SPIN_DURATION = 6.0
 
 local ALL_WEAPON_IDS = {}
@@ -86,8 +86,9 @@ local function getWeaponDisplayName(weaponId)
 	return weaponId
 end
 
-local function randomWeaponId(): string
-	return ALL_WEAPON_IDS[math.random(1, #ALL_WEAPON_IDS)]
+local function randomPoolEntry()
+	local pool = GachaConfig.POOL
+	return pool[math.random(1, #pool)]
 end
 
 local function corner(parent, radius)
@@ -197,8 +198,8 @@ local function updateRollButton()
 		rollBtn.AutoButtonColor = false
 		return
 	end
-	local snap = ShopEconomyClient.GetSnapshot()
-	if snap.freeSpinAvailable then
+	local isFree = GachaConfig.DEV_FREE_ROLLS or ShopEconomyClient.GetSnapshot().freeSpinAvailable
+	if isFree then
 		rollBtn.Text = "FREE SPIN!"
 		rollBtn.BackgroundColor3 = Theme.NeonLime
 		rollBtn.TextColor3 = Theme.BgVoid
@@ -218,23 +219,31 @@ local function hideResult()
 		resultFlash.Visible = false
 	end
 	if reelViewport then
-		reelViewport.Size = UDim2.fromOffset(REEL_WIDTH, REEL_HEIGHT)
+		reelViewport.Size = UDim2.new(1, -40, 0, REEL_HEIGHT)
 	end
 end
 
-local function buildReelCell(parent, weaponId, index)
+local function buildReelCell(parent, weaponId, index, rarity)
+	local rarityColor = RARITY_COLORS[rarity or "Common"] or RARITY_COLORS["Common"]
+
 	local cell = Instance.new("Frame")
 	cell.Name = "Cell_" .. index
 	cell.Size = UDim2.fromOffset(REEL_CELL_SIZE, REEL_CELL_SIZE)
 	cell.Position = UDim2.fromOffset(
-		(REEL_WIDTH - REEL_CELL_SIZE) / 2,
-		(index - 1) * REEL_CELL_STRIDE
+		(index - 1) * REEL_CELL_STRIDE,
+		(REEL_HEIGHT - REEL_CELL_SIZE) / 2
 	)
 	cell.BackgroundColor3 = Theme.Card
 	cell.BackgroundTransparency = 0.2
 	cell.BorderSizePixel = 0
 	cell.Parent = parent
 	corner(cell, 10)
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = rarityColor
+	stroke.Thickness = rarity == "Legendary" and 2.5 or rarity == "Epic" and 2 or rarity == "Rare" and 1.5 or 1
+	stroke.Transparency = rarity == "Common" and 0.5 or 0.1
+	stroke.Parent = cell
 
 	local img = Instance.new("ImageLabel")
 	img.Name = "Icon"
@@ -253,14 +262,14 @@ local function buildReelCell(parent, weaponId, index)
 	nameTag.Text = getWeaponDisplayName(weaponId)
 	nameTag.TextSize = 9
 	nameTag.Font = Theme.FontBody
-	nameTag.TextColor3 = Theme.TextMuted
+	nameTag.TextColor3 = rarityColor
 	nameTag.TextXAlignment = Enum.TextXAlignment.Center
 	nameTag.Parent = cell
 
 	return cell
 end
 
-local function populateReel(winWeaponId)
+local function populateReel(winWeaponId, winRarity)
 	if reelStrip then
 		for _, child in ipairs(reelStrip:GetChildren()) do
 			child:Destroy()
@@ -271,17 +280,16 @@ local function populateReel(winWeaponId)
 	local winIndex = REEL_SPIN_CELLS + centerSlot
 
 	for i = 1, REEL_TOTAL_CELLS do
-		local wid
 		if i == winIndex then
-			wid = winWeaponId
+			buildReelCell(reelStrip, winWeaponId, i, winRarity)
 		else
-			wid = randomWeaponId()
+			local entry = randomPoolEntry()
+			buildReelCell(reelStrip, entry.weaponId, i, entry.rarity)
 		end
-		buildReelCell(reelStrip, wid, i)
 	end
 
-	local totalH = REEL_TOTAL_CELLS * REEL_CELL_STRIDE
-	reelStrip.Size = UDim2.fromOffset(REEL_WIDTH, totalH)
+	local totalW = REEL_TOTAL_CELLS * REEL_CELL_STRIDE
+	reelStrip.Size = UDim2.fromOffset(totalW, REEL_HEIGHT)
 	reelStrip.Position = UDim2.fromOffset(0, 0)
 
 	return winIndex
@@ -294,13 +302,14 @@ local function stopReelConnection()
 	end
 end
 
-local function animateReel(winWeaponId, onFinished)
+local function animateReel(winWeaponId, winRarity, onFinished)
 	stopReelConnection()
 
-	local winIndex = populateReel(winWeaponId)
+	local winIndex = populateReel(winWeaponId, winRarity)
 
-	local centerSlot = math.floor(REEL_VISIBLE_CELLS / 2) + 1
-	local targetY = -((winIndex - centerSlot) * REEL_CELL_STRIDE)
+	local viewportWidth = reelViewport and reelViewport.AbsoluteSize.X or (340 - 40)
+	local winCellCenter = (winIndex - 1) * REEL_CELL_STRIDE + REEL_CELL_SIZE / 2
+	local targetX = -(winCellCenter - viewportWidth / 2)
 
 	reelStrip.Position = UDim2.fromOffset(0, 0)
 
@@ -314,16 +323,13 @@ local function animateReel(winWeaponId, onFinished)
 		elapsed += dt
 		local t = math.clamp(elapsed / SPIN_DURATION, 0, 1)
 
-		-- High-exponent ease-out: starts very fast, then has a long, gradual tail.
-		-- Power of 5 keeps it smooth and continuous while spending most of the
-		-- time crawling through the last few cells.
 		local eased = 1 - (1 - t) ^ 7
-		local currentY = eased * targetY
-		reelStrip.Position = UDim2.fromOffset(0, currentY)
+		local currentX = eased * targetX
+		reelStrip.Position = UDim2.fromOffset(currentX, 0)
 
 		if t >= 1 then
 			stopReelConnection()
-			reelStrip.Position = UDim2.fromOffset(0, targetY)
+			reelStrip.Position = UDim2.fromOffset(targetX, 0)
 
 			task.delay(0.15, function()
 				if selectorLine then
@@ -373,7 +379,7 @@ local function showResultPanel(payload)
 	-- Shrink the reel to make room for the result panel
 	if reelViewport then
 		local shrink = TweenService:Create(reelViewport, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Size = UDim2.fromOffset(REEL_WIDTH, 0),
+			Size = UDim2.new(1, -40, 0, 0),
 		})
 		shrink:Play()
 	end
@@ -391,13 +397,13 @@ local function showResultPanel(payload)
 		end)
 	end
 
-	-- Slide result panel up into the space the reel vacated
+	-- Slide result panel into the space the reel vacated
 	resultFrame.Position = UDim2.fromOffset(20, 56)
 	resultFrame.Visible = true
 	resultFrame.Size = UDim2.new(1, -40, 0, 10)
 	resultFrame.BackgroundTransparency = 0
 	local expandTween = TweenService:Create(resultFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.new(1, -40, 0, 160),
+		Size = UDim2.new(1, -40, 0, RESULT_PANEL_HEIGHT),
 	})
 	expandTween:Play()
 
@@ -417,7 +423,7 @@ local function showResultPanel(payload)
 	-- Move roll button below the result panel so player can roll again
 	if rollBtn then
 		local btnTween = TweenService:Create(rollBtn, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = UDim2.fromOffset(20, 224),
+			Position = UDim2.fromOffset(20, 56 + RESULT_PANEL_HEIGHT + 10),
 		})
 		btnTween:Play()
 	end
@@ -440,17 +446,20 @@ local function buildGUI()
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-	local overlay = Instance.new("Frame")
+	local overlay = Instance.new("TextButton")
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Theme.BgVoid
-	overlay.BackgroundTransparency = 1
+	overlay.BackgroundTransparency = 0.4
 	overlay.BorderSizePixel = 0
+	overlay.Text = ""
+	overlay.AutoButtonColor = false
+	overlay.Active = true
 	overlay.Parent = gui
 
 	local modal = Instance.new("Frame")
 	modal.Name = "Modal"
-	modal.Size = UDim2.fromOffset(340, 460)
+	modal.Size = UDim2.fromOffset(340, 380)
 	modal.Position = UDim2.fromScale(0.5, 0.5)
 	modal.AnchorPoint = Vector2.new(0.5, 0.5)
 	modal.BackgroundColor3 = Theme.Panel
@@ -458,6 +467,17 @@ local function buildGUI()
 	modal.ClipsDescendants = true
 	modal.Parent = overlay
 	corner(modal, 16)
+
+	local modalBg = Instance.new("ImageLabel")
+	modalBg.Name = "Background"
+	modalBg.Size = UDim2.fromScale(1, 1)
+	modalBg.BackgroundTransparency = 1
+	modalBg.Image = "rbxassetid://15911859597"
+	modalBg.ScaleType = Enum.ScaleType.Crop
+	modalBg.ImageTransparency = 0.3
+	modalBg.ZIndex = 0
+	modalBg.Parent = modal
+	corner(modalBg, 16)
 
 	local modalStroke = Instance.new("UIStroke")
 	modalStroke.Color = Theme.NeonCyan
@@ -505,9 +525,8 @@ local function buildGUI()
 	-- Reel viewport (clipping window for the spinning strip)
 	reelViewport = Instance.new("Frame")
 	reelViewport.Name = "ReelViewport"
-	reelViewport.Size = UDim2.fromOffset(REEL_WIDTH, REEL_HEIGHT)
-	reelViewport.Position = UDim2.new(0.5, 0, 0, 50)
-	reelViewport.AnchorPoint = Vector2.new(0.5, 0)
+	reelViewport.Size = UDim2.new(1, -40, 0, REEL_HEIGHT)
+	reelViewport.Position = UDim2.fromOffset(20, 50)
 	reelViewport.BackgroundColor3 = Theme.PanelDeep
 	reelViewport.BackgroundTransparency = 0.3
 	reelViewport.BorderSizePixel = 0
@@ -521,44 +540,44 @@ local function buildGUI()
 	viewportStroke.Transparency = 0.5
 	viewportStroke.Parent = reelViewport
 
-	-- Top/bottom gradient fades
-	local topGrad = Instance.new("Frame")
-	topGrad.Name = "TopFade"
-	topGrad.Size = UDim2.new(1, 0, 0, 60)
-	topGrad.Position = UDim2.fromOffset(0, 0)
-	topGrad.BackgroundColor3 = Theme.Panel
-	topGrad.BorderSizePixel = 0
-	topGrad.ZIndex = 3
-	topGrad.Parent = reelViewport
-	local tg = Instance.new("UIGradient")
-	tg.Transparency = NumberSequence.new({
+	-- Left/right gradient fades
+	local leftGrad = Instance.new("Frame")
+	leftGrad.Name = "LeftFade"
+	leftGrad.Size = UDim2.new(0, 50, 1, 0)
+	leftGrad.Position = UDim2.fromOffset(0, 0)
+	leftGrad.BackgroundColor3 = Theme.Panel
+	leftGrad.BorderSizePixel = 0
+	leftGrad.ZIndex = 3
+	leftGrad.Parent = reelViewport
+	local lg = Instance.new("UIGradient")
+	lg.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0),
 		NumberSequenceKeypoint.new(1, 1),
 	})
-	tg.Rotation = 90
-	tg.Parent = topGrad
+	lg.Rotation = 0
+	lg.Parent = leftGrad
 
-	local bottomGrad = Instance.new("Frame")
-	bottomGrad.Name = "BottomFade"
-	bottomGrad.Size = UDim2.new(1, 0, 0, 60)
-	bottomGrad.Position = UDim2.new(0, 0, 1, -60)
-	bottomGrad.BackgroundColor3 = Theme.Panel
-	bottomGrad.BorderSizePixel = 0
-	bottomGrad.ZIndex = 3
-	bottomGrad.Parent = reelViewport
-	local bg = Instance.new("UIGradient")
-	bg.Transparency = NumberSequence.new({
+	local rightGrad = Instance.new("Frame")
+	rightGrad.Name = "RightFade"
+	rightGrad.Size = UDim2.new(0, 50, 1, 0)
+	rightGrad.Position = UDim2.new(1, -50, 0, 0)
+	rightGrad.BackgroundColor3 = Theme.Panel
+	rightGrad.BorderSizePixel = 0
+	rightGrad.ZIndex = 3
+	rightGrad.Parent = reelViewport
+	local rg = Instance.new("UIGradient")
+	rg.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 1),
 		NumberSequenceKeypoint.new(1, 0),
 	})
-	bg.Rotation = 90
-	bg.Parent = bottomGrad
+	rg.Rotation = 0
+	rg.Parent = rightGrad
 
-	-- Center selector line
+	-- Center selector line (vertical)
 	selectorLine = Instance.new("Frame")
 	selectorLine.Name = "Selector"
-	selectorLine.Size = UDim2.new(1, 10, 0, REEL_CELL_SIZE + 8)
-	selectorLine.Position = UDim2.new(0, -5, 0.5, -(REEL_CELL_SIZE + 8) / 2)
+	selectorLine.Size = UDim2.new(0, REEL_CELL_SIZE + 8, 1, 10)
+	selectorLine.Position = UDim2.new(0.5, -(REEL_CELL_SIZE + 8) / 2, 0, -5)
 	selectorLine.BackgroundColor3 = Theme.NeonCyan
 	selectorLine.BackgroundTransparency = 0.85
 	selectorLine.BorderSizePixel = 0
@@ -575,22 +594,31 @@ local function buildGUI()
 	-- The moving strip that holds all reel cells
 	reelStrip = Instance.new("Frame")
 	reelStrip.Name = "ReelStrip"
-	reelStrip.Size = UDim2.fromOffset(REEL_WIDTH, 0)
+	reelStrip.Size = UDim2.fromOffset(0, REEL_HEIGHT)
 	reelStrip.Position = UDim2.fromOffset(0, 0)
 	reelStrip.BackgroundTransparency = 1
 	reelStrip.Parent = reelViewport
 
-	-- Populate idle state with a few random icons
+	-- Populate idle state with a few random icons, centered in viewport
 	for i = 1, REEL_VISIBLE_CELLS do
-		buildReelCell(reelStrip, randomWeaponId(), i)
+		local entry = randomPoolEntry()
+		buildReelCell(reelStrip, entry.weaponId, i, entry.rarity)
 	end
-	reelStrip.Size = UDim2.fromOffset(REEL_WIDTH, REEL_VISIBLE_CELLS * REEL_CELL_STRIDE)
+	local idleStripW = REEL_VISIBLE_CELLS * REEL_CELL_STRIDE
+	reelStrip.Size = UDim2.fromOffset(idleStripW, REEL_HEIGHT)
+	local viewW = reelViewport.AbsoluteSize.X
+	if viewW <= 0 then
+		viewW = 300
+	end
+	local centerCellCenter = math.floor(REEL_VISIBLE_CELLS / 2) * REEL_CELL_STRIDE + REEL_CELL_SIZE / 2
+	reelStrip.Position = UDim2.fromOffset(viewW / 2 - centerCellCenter, 0)
 
 	-- Roll button
+	local ROLL_BTN_Y = REEL_HEIGHT + 60
 	rollBtn = Instance.new("TextButton")
 	rollBtn.Name = "RollBtn"
 	rollBtn.Size = UDim2.new(1, -40, 0, 50)
-	rollBtn.Position = UDim2.fromOffset(20, REEL_HEIGHT + 56)
+	rollBtn.Position = UDim2.fromOffset(20, ROLL_BTN_Y)
 	rollBtn.BackgroundColor3 = Theme.NeonCyan
 	rollBtn.Text = "ROLL"
 	rollBtn.TextSize = 18
@@ -607,8 +635,8 @@ local function buildGUI()
 		end
 		hideResult()
 
-		local snap = ShopEconomyClient.GetSnapshot()
-		if snap.freeSpinAvailable then
+		local isFree = GachaConfig.DEV_FREE_ROLLS or ShopEconomyClient.GetSnapshot().freeSpinAvailable
+		if isFree then
 			rolling = true
 			updateRollButton()
 			if freeSpinRequester then
@@ -636,11 +664,10 @@ local function buildGUI()
 	resultFlash.Parent = modal
 
 	-- Result panel (appears after reel stops)
-	local resultY = REEL_HEIGHT + 56 + 54
 	resultFrame = Instance.new("Frame")
 	resultFrame.Name = "ResultPanel"
-	resultFrame.Size = UDim2.new(1, -40, 0, 140)
-	resultFrame.Position = UDim2.fromOffset(20, resultY)
+	resultFrame.Size = UDim2.new(1, -40, 0, RESULT_PANEL_HEIGHT)
+	resultFrame.Position = UDim2.fromOffset(20, 56)
 	resultFrame.BackgroundColor3 = Theme.PanelDeep
 	resultFrame.BackgroundTransparency = 0.1
 	resultFrame.BorderSizePixel = 0
@@ -716,7 +743,7 @@ function GachaGUI.Show()
 	refreshTempWeapons()
 
 	if rollBtn then
-		rollBtn.Position = UDim2.fromOffset(20, REEL_HEIGHT + 56)
+		rollBtn.Position = UDim2.fromOffset(20, REEL_HEIGHT + 60)
 	end
 
 	stopReelConnection()
@@ -725,10 +752,17 @@ function GachaGUI.Show()
 			child:Destroy()
 		end
 		for i = 1, REEL_VISIBLE_CELLS do
-			buildReelCell(reelStrip, randomWeaponId(), i)
+			local entry = randomPoolEntry()
+			buildReelCell(reelStrip, entry.weaponId, i, entry.rarity)
 		end
-		reelStrip.Size = UDim2.fromOffset(REEL_WIDTH, REEL_VISIBLE_CELLS * REEL_CELL_STRIDE)
-		reelStrip.Position = UDim2.fromOffset(0, 0)
+		local idleW = REEL_VISIBLE_CELLS * REEL_CELL_STRIDE
+		reelStrip.Size = UDim2.fromOffset(idleW, REEL_HEIGHT)
+		local vw = reelViewport and reelViewport.AbsoluteSize.X or 300
+		if vw <= 0 then
+			vw = 300
+		end
+		local ccCenter = math.floor(REEL_VISIBLE_CELLS / 2) * REEL_CELL_STRIDE + REEL_CELL_SIZE / 2
+		reelStrip.Position = UDim2.fromOffset(vw / 2 - ccCenter, 0)
 	end
 end
 
@@ -760,9 +794,134 @@ function GachaGUI.ShowResult(payload)
 		return
 	end
 
-	animateReel(payload.weaponId, function()
+	animateReel(payload.weaponId, payload.rarity, function()
 		showResultPanel(payload)
 	end)
+end
+
+function GachaGUI.BuildPreview(parent)
+	local previewGui = Instance.new("Frame")
+	previewGui.Name = "GachaPreview"
+	previewGui.Size = UDim2.fromScale(1, 1)
+	previewGui.BackgroundTransparency = 1
+	previewGui.Parent = parent
+
+	local prevOverlay = Instance.new("Frame")
+	prevOverlay.Name = "Overlay"
+	prevOverlay.Size = UDim2.fromScale(1, 1)
+	prevOverlay.BackgroundColor3 = Theme.BgVoid
+	prevOverlay.BackgroundTransparency = 1
+	prevOverlay.BorderSizePixel = 0
+	prevOverlay.Parent = previewGui
+
+	local prevModal = Instance.new("Frame")
+	prevModal.Name = "Modal"
+	prevModal.Size = UDim2.fromOffset(340, 200)
+	prevModal.Position = UDim2.fromScale(0.5, 0.5)
+	prevModal.AnchorPoint = Vector2.new(0.5, 0.5)
+	prevModal.BackgroundColor3 = Theme.Panel
+	prevModal.BorderSizePixel = 0
+	prevModal.BackgroundTransparency = 1
+	prevModal.ClipsDescendants = true
+	prevModal.Parent = prevOverlay
+	corner(prevModal, 16)
+
+	local prevBg = Instance.new("ImageLabel")
+	prevBg.Name = "Background"
+	prevBg.Size = UDim2.fromScale(1, 1)
+	prevBg.BackgroundTransparency = 1
+	prevBg.Image = "rbxassetid://15911859597"
+	prevBg.ScaleType = Enum.ScaleType.Crop
+	prevBg.ImageTransparency = 0.3
+	prevBg.ZIndex = 0
+	prevBg.Parent = prevModal
+	corner(prevBg, 16)
+
+	local prevStroke = Instance.new("UIStroke")
+	prevStroke.Color = Theme.NeonCyan
+	prevStroke.Thickness = 2
+	prevStroke.Transparency = 0.2
+	prevStroke.Parent = prevModal
+
+	local prevTitle = Instance.new("TextLabel")
+	prevTitle.Size = UDim2.new(1, -60, 0, 36)
+	prevTitle.Position = UDim2.fromOffset(16, 12)
+	prevTitle.BackgroundTransparency = 1
+	prevTitle.Text = "GACHA MACHINE"
+	prevTitle.TextSize = 18
+	prevTitle.Font = Theme.FontDisplay
+	prevTitle.TextColor3 = Theme.NeonCyan
+	prevTitle.TextXAlignment = Enum.TextXAlignment.Left
+	prevTitle.Parent = prevModal
+
+	local prevClose = Instance.new("TextButton")
+	prevClose.Size = UDim2.fromOffset(34, 34)
+	prevClose.Position = UDim2.new(1, -10, 0, 10)
+	prevClose.AnchorPoint = Vector2.new(1, 0)
+	prevClose.BackgroundColor3 = Theme.PanelDeep
+	prevClose.BorderSizePixel = 0
+	prevClose.Text = "X"
+	prevClose.TextSize = 16
+	prevClose.Font = Enum.Font.GothamBold
+	prevClose.TextColor3 = Theme.TextBright
+	prevClose.Parent = prevModal
+	local cc = Instance.new("UICorner")
+	cc.CornerRadius = UDim.new(1, 0)
+	cc.Parent = prevClose
+
+	local prevReel = Instance.new("Frame")
+	prevReel.Name = "ReelViewport"
+	prevReel.Size = UDim2.new(1, -40, 0, REEL_HEIGHT)
+	prevReel.Position = UDim2.fromOffset(20, 90)
+	prevReel.BackgroundColor3 = Theme.PanelDeep
+	prevReel.BackgroundTransparency = 0.3
+	prevReel.BorderSizePixel = 0
+	prevReel.ClipsDescendants = true
+	prevReel.Parent = prevModal
+	corner(prevReel, 12)
+
+	local prevStrip = Instance.new("Frame")
+	prevStrip.Name = "ReelStrip"
+	prevStrip.BackgroundTransparency = 1
+	prevStrip.Parent = prevReel
+	local previewRarities = {"Common", "Epic", "Legendary"}
+	for i = 1, REEL_VISIBLE_CELLS do
+		local wid = ALL_WEAPON_IDS[(i - 1) % #ALL_WEAPON_IDS + 1]
+		local rar = previewRarities[(i - 1) % #previewRarities + 1]
+		buildReelCell(prevStrip, wid, i, rar)
+	end
+	prevStrip.Size = UDim2.fromOffset(REEL_VISIBLE_CELLS * REEL_CELL_STRIDE, REEL_HEIGHT)
+
+	local prevSel = Instance.new("Frame")
+	prevSel.Name = "Selector"
+	prevSel.Size = UDim2.new(0, REEL_CELL_SIZE + 8, 1, 10)
+	prevSel.Position = UDim2.new(0.5, -(REEL_CELL_SIZE + 8) / 2, 0, -5)
+	prevSel.BackgroundColor3 = Theme.NeonCyan
+	prevSel.BackgroundTransparency = 0.85
+	prevSel.BorderSizePixel = 0
+	prevSel.ZIndex = 4
+	prevSel.Parent = prevReel
+	corner(prevSel, 8)
+	local prevSelStroke = Instance.new("UIStroke")
+	prevSelStroke.Color = Theme.NeonCyan
+	prevSelStroke.Thickness = 2
+	prevSelStroke.Transparency = 0.2
+	prevSelStroke.Parent = prevSel
+
+	local prevRollBtn = Instance.new("TextButton")
+	prevRollBtn.Name = "RollBtn"
+	prevRollBtn.Size = UDim2.new(1, -40, 0, 50)
+	prevRollBtn.Position = UDim2.fromOffset(20, REEL_HEIGHT + 60)
+	prevRollBtn.BackgroundColor3 = Theme.NeonLime
+	prevRollBtn.Text = "FREE SPIN!"
+	prevRollBtn.TextSize = 18
+	prevRollBtn.Font = Theme.FontDisplay
+	prevRollBtn.TextColor3 = Theme.BgVoid
+	prevRollBtn.BorderSizePixel = 0
+	prevRollBtn.Parent = prevModal
+	corner(prevRollBtn, 10)
+
+	return previewGui
 end
 
 return GachaGUI

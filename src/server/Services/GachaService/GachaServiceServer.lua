@@ -152,7 +152,18 @@ function GachaServiceServer.Init()
 	if gachaFreeSpinRE then
 		gachaFreeSpinRE.OnServerEvent:Connect(function(player)
 			local data = EconomyServiceServer.GetPlayerData(player)
-			if not data or data.hasUsedFirstRoll then
+			if not data then
+				return
+			end
+
+			if GachaConfig.DEV_FREE_ROLLS then
+				local result = executeRoll(player)
+				grantRollResult(player, result)
+				fireResult(player, result, true)
+				return
+			end
+
+			if data.hasUsedFirstRoll then
 				return
 			end
 

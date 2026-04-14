@@ -4,6 +4,7 @@
 ]]
 
 return {
+	DEV_FREE_ROLLS = true, -- set false for production
 	DEVELOPER_PRODUCT_ID = 0,
 	ROLL_ROBUX_PRICE = 75,
 

@@ -1,7 +1,8 @@
 --[[
 	DropService (server)
-	Per-match random drop system: spawns at TDM spawn markers inside
-	each match's cloned arena. Supports concurrent matches.
+	Per-match timed pickups: X/Z from Arena SpawnLocations.ItemSpawnLocations (shuffled, then cycled),
+	or random top-face points on tagged FactoryFloor if item folder is missing.
+	World Y from DropConfig. No raycasts; PivotTo / CFrame at config Y.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,8 +15,7 @@ local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 
 local DROPS_FOLDER_NAME = "Drops"
 local onPickupCallback = nil
-
--- Per-match state: matchId -> { drops, thread, running, arenaModel }
+-- matchId -> { drops, thread, running, arenaModel, spawnSlots, spawnSlotIndex }
 local matchDropData = {}
 
 local function shuffleInPlace(t)
@@ -25,19 +25,23 @@ local function shuffleInPlace(t)
 	end
 end
 
-local function getSpawnArea()
+local function getSpawnAreaPart()
 	local tagged = CollectionService:GetTagged(DropConfig.DROP_SPAWN_TAG)
 	if #tagged > 0 then
-		local part = tagged[1]
-		if part:IsA("BasePart") then
-			return part
+		local inst = tagged[1]
+		if inst:IsA("BasePart") then
+			return inst
 		end
-		local model = part:IsA("Model") and part or part:FindFirstAncestorOfClass("Model")
+		local model = inst:IsA("Model") and inst or inst:FindFirstAncestorOfClass("Model")
 		if model and model.PrimaryPart then
 			return model.PrimaryPart
 		end
 	end
-	return Workspace:FindFirstChild(DropConfig.FACTORY_FLOOR_NAME, true)
+	local found = Workspace:FindFirstChild(DropConfig.FACTORY_FLOOR_NAME, true)
+	if found and found:IsA("BasePart") then
+		return found
+	end
+	return nil
 end
 
 local function getDropsFolder()
@@ -54,18 +58,14 @@ local function countActiveOfType(activeDrops, dropTypeId)
 	local n = 0
 	for _, drop in ipairs(activeDrops) do
 		if drop.Parent and drop:GetAttribute("DropType") == dropTypeId then
-			n = n + 1
+			n += 1
 		end
 	end
 	return n
 end
 
 local function getCapForDropType(dropCfg)
-	local cap = dropCfg.maxActive
-	if cap == nil then
-		cap = DropConfig.MAX_ACTIVE_PER_TYPE
-	end
-	return cap
+	return dropCfg.maxActive ~= nil and dropCfg.maxActive or DropConfig.MAX_ACTIVE_PER_TYPE
 end
 
 local function getRandomDropType(activeDrops)
@@ -75,7 +75,7 @@ local function getRandomDropType(activeDrops)
 		local cap = getCapForDropType(drop)
 		if not cap or countActiveOfType(activeDrops, dropId) < cap then
 			local w = drop.weight or 1
-			totalWeight = totalWeight + w
+			totalWeight += w
 			table.insert(candidates, { id = dropId, weight = w })
 		end
 	end
@@ -85,7 +85,7 @@ local function getRandomDropType(activeDrops)
 	shuffleInPlace(candidates)
 	local r = math.random() * totalWeight
 	for _, entry in ipairs(candidates) do
-		r = r - entry.weight
+		r -= entry.weight
 		if r <= 0 then
 			return entry.id
 		end
@@ -93,111 +93,84 @@ local function getRandomDropType(activeDrops)
 	return candidates[#candidates].id
 end
 
-local function isPositionValid(activeDrops, pos, excludeDrop)
-	for _, drop in pairs(activeDrops) do
-		if drop ~= excludeDrop and drop.Parent then
-			local dropPos = drop:IsA("BasePart") and drop.Position or (drop.PrimaryPart and drop.PrimaryPart.Position)
-			if dropPos and (dropPos - pos).Magnitude < DropConfig.MIN_DROP_SPACING then
-				return false
-			end
-		end
-	end
-	return true
-end
-
-local function getTdmSpawnFolder(arenaModel)
+local function resolveItemSpawnFolder(arenaModel)
 	if arenaModel then
-		return arenaModel:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
+		local f = TDMConfig.getItemSpawnFolder(arenaModel)
+		if f then
+			return f
+		end
 	end
 	local arenasFolder = Workspace:FindFirstChild("ActiveArenas")
 	if arenasFolder then
 		for _, arena in ipairs(arenasFolder:GetChildren()) do
-			local tdm = arena:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
-			if tdm then
-				return tdm
+			local f = TDMConfig.getItemSpawnFolder(arena)
+			if f then
+				return f
 			end
 		end
 	end
-	return Workspace:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
+	local arena = Workspace:FindFirstChild("Arena")
+	if arena then
+		return TDMConfig.getItemSpawnFolder(arena)
+	end
+	return nil
 end
 
-local function basePartTopY(part)
-	return part.Position.Y + part.Size.Y * 0.5
-end
-
-local function getTdmSpawnMarkers(arenaModel)
-	local folder = getTdmSpawnFolder(arenaModel)
+local function collectSlotsFromItemSpawnFolder(folder)
 	if not folder then
 		return {}
 	end
-	local markers = {}
+	local slots = {}
 	for _, child in ipairs(folder:GetChildren()) do
 		if child:IsA("BasePart") then
-			table.insert(markers, child)
+			table.insert(slots, { gx = child.Position.X, gz = child.Position.Z })
 		elseif child:IsA("Model") and child.PrimaryPart then
-			table.insert(markers, child.PrimaryPart)
+			table.insert(slots, { gx = child.PrimaryPart.Position.X, gz = child.PrimaryPart.Position.Z })
 		end
 	end
-	return markers
+	return slots
 end
 
-local function findGroundPositionAtTdmSpawn(activeDrops, arenaModel)
-	local markers = getTdmSpawnMarkers(arenaModel)
-	if #markers == 0 then
-		return nil
-	end
-	local order = table.clone(markers)
-	shuffleInPlace(order)
-	for _, part in ipairs(order) do
-		if part.Parent then
-			local gx, gz = part.Position.X, part.Position.Z
-			local groundY = basePartTopY(part)
-			local samplePos = Vector3.new(gx, groundY + 0.5, gz)
-			if isPositionValid(activeDrops, samplePos, nil) then
-				return { gx = gx, gz = gz, groundY = groundY }
-			end
+local function resolveWorldY(dropType)
+	if dropType then
+		local dc = DropConfig.DROPS[dropType]
+		if dc and typeof(dc.fixedWorldY) == "number" then
+			return dc.fixedWorldY
 		end
 	end
-	for _ = 1, 24 do
-		local part = markers[math.random(1, #markers)]
-		if part.Parent then
-			local gx, gz = part.Position.X, part.Position.Z
-			local groundY = basePartTopY(part)
-			local samplePos = Vector3.new(gx, groundY + 0.5, gz)
-			if isPositionValid(activeDrops, samplePos, nil) then
-				return { gx = gx, gz = gz, groundY = groundY }
-			end
-		end
+	if typeof(DropConfig.FIXED_DROP_WORLD_Y) == "number" then
+		return DropConfig.FIXED_DROP_WORLD_Y
 	end
+	warn("[DropService] No world Y: set FIXED_DROP_WORLD_Y or per-type fixedWorldY for", dropType)
 	return nil
 end
 
-local function findGroundPosition(activeDrops, spawnArea)
-	local cf = spawnArea.CFrame
-	local size = spawnArea.Size
-	local halfX = size.X / 2 - 1
-	local halfZ = size.Z / 2 - 1
-	local topY = cf.Y + size.Y / 2
+local FALLBACK_SPAWN_POINT_COUNT = 24
 
-	for _ = 1, 20 do
+-- Shuffled { gx, gz } from ItemSpawnLocations, else random top-face points on fallback part.
+local function buildShuffledSpawnSlots(arenaModel)
+	local folder = resolveItemSpawnFolder(arenaModel)
+	local slots = collectSlotsFromItemSpawnFolder(folder)
+	if #slots > 0 then
+		shuffleInPlace(slots)
+		return slots
+	end
+	local floorPart = getSpawnAreaPart()
+	if not floorPart then
+		return {}
+	end
+	local cf = floorPart.CFrame
+	local size = floorPart.Size
+	local halfX = math.max(0.5, size.X * 0.5 - 1)
+	local halfZ = math.max(0.5, size.Z * 0.5 - 1)
+	for _ = 1, FALLBACK_SPAWN_POINT_COUNT do
 		local rx = (math.random() * 2 - 1) * halfX
 		local rz = (math.random() * 2 - 1) * halfZ
-		local pos = cf:PointToWorldSpace(Vector3.new(rx, size.Y / 2, rz))
-		pos = Vector3.new(pos.X, topY + 2, pos.Z)
-
-		local params = RaycastParams.new()
-		params.FilterDescendantsInstances = { spawnArea, getDropsFolder() }
-		params.FilterType = Enum.RaycastFilterType.Exclude
-		local result = Workspace:Raycast(pos, Vector3.new(0, -100, 0), params)
-		if result and result.Instance then
-			local groundY = result.Position.Y
-			local samplePos = Vector3.new(pos.X, groundY + 0.5, pos.Z)
-			if isPositionValid(activeDrops, samplePos, nil) then
-				return { gx = pos.X, gz = pos.Z, groundY = groundY }
-			end
-		end
+		local world = cf:PointToWorldSpace(Vector3.new(rx, size.Y * 0.5, rz))
+		table.insert(slots, { gx = world.X, gz = world.Z })
 	end
-	return nil
+	shuffleInPlace(slots)
+	return slots
 end
 
 local function resolveModelTemplate(dropType, cfg, models3D)
@@ -219,15 +192,6 @@ local function resolveModelTemplate(dropType, cfg, models3D)
 	return nil
 end
 
-local function snapModelBoundingBoxBottomToGround(model, groundY, clearanceStuds)
-	local clearance = clearanceStuds or 0
-	local cf, size = model:GetBoundingBox()
-	local bottomY = cf.Position.Y - size.Y * 0.5
-	local lift = (groundY + clearance) - bottomY
-	local pivot = model:GetPivot()
-	model:PivotTo(CFrame.new(pivot.Position + Vector3.new(0, lift, 0)) * pivot.Rotation)
-end
-
 local function placementRotationFromConfig(cfg)
 	local d = cfg.placementRotationDegrees
 	if d and typeof(d) == "Vector3" then
@@ -241,6 +205,30 @@ local function configurePickupPart(part)
 	part.CanTouch = true
 end
 
+local function applyDropPickupHighlight(root)
+	if DropConfig.DROP_PICKUP_HIGHLIGHT == false then
+		return
+	end
+	local hl = Instance.new("Highlight")
+	hl.Name = "DropPickupHighlight"
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.OutlineTransparency = 0
+	local fillT = DropConfig.DROP_HIGHLIGHT_FILL_TRANSPARENCY
+	hl.FillTransparency = typeof(fillT) == "number" and fillT or 1
+	local outline = DropConfig.DROP_HIGHLIGHT_OUTLINE_COLOR
+	hl.OutlineColor = typeof(outline) == "Color3" and outline or Color3.fromRGB(255, 250, 90)
+	if hl.FillTransparency < 1 then
+		local fillC = DropConfig.DROP_HIGHLIGHT_FILL_COLOR
+		hl.FillColor = typeof(fillC) == "Color3" and fillC or Color3.fromRGB(255, 240, 100)
+	end
+	if root:IsA("Model") then
+		hl.Parent = root
+	elseif root:IsA("BasePart") then
+		hl.Adornee = root
+		hl.Parent = root
+	end
+end
+
 local function cleanupDestroyedDrops(activeDrops)
 	for i = #activeDrops, 1, -1 do
 		if not activeDrops[i].Parent then
@@ -249,13 +237,27 @@ local function cleanupDestroyedDrops(activeDrops)
 	end
 end
 
+local function consumeNextSpawnSpot(data, dropType)
+	local worldY = resolveWorldY(dropType)
+	if typeof(worldY) ~= "number" then
+		return nil
+	end
+	local slots = data.spawnSlots
+	if not slots or #slots == 0 then
+		return nil
+	end
+	local i = data.spawnSlotIndex
+	local slot = slots[i]
+	data.spawnSlotIndex = (i % #slots) + 1
+	return { gx = slot.gx, gz = slot.gz, worldY = worldY }
+end
+
 local function spawnDrop(matchId)
 	local data = matchDropData[matchId]
 	if not data then
 		return nil
 	end
 	local activeDrops = data.drops
-	local arenaModel = data.arenaModel
 
 	cleanupDestroyedDrops(activeDrops)
 
@@ -268,18 +270,11 @@ local function spawnDrop(matchId)
 		return nil
 	end
 
-	local spot = findGroundPositionAtTdmSpawn(activeDrops, arenaModel)
-	if not spot and not arenaModel then
-		local spawnArea = getSpawnArea()
-		if spawnArea then
-			spot = findGroundPosition(activeDrops, spawnArea)
-		end
-	end
+	local spot = consumeNextSpawnSpot(data, dropType)
 	if not spot then
 		return nil
 	end
-	local gx, gz, groundY = spot.gx, spot.gz, spot.groundY
-	local placeY = groundY
+	local gx, gz, placeY = spot.gx, spot.gz, spot.worldY
 
 	local drop
 	local imports = ReplicatedStorage:FindFirstChild("Imports")
@@ -305,18 +300,19 @@ local function spawnDrop(matchId)
 			local rotX90 = CFrame.Angles(math.rad(90), 0, 0)
 			if drop:IsA("Model") then
 				drop:PivotTo(CFrame.new(gx, placeY, gz) * rotX90)
-				snapModelBoundingBoxBottomToGround(drop, placeY, cfg.groundClearanceStuds)
 			else
 				drop.CFrame = CFrame.new(gx, placeY, gz) * rotX90
 			end
 		else
-			if drop:IsA("Model") and not drop.PrimaryPart then
-				drop.PrimaryPart = drop:FindFirstChildWhichIsA("BasePart", true)
-			end
 			local rot = placementRotationFromConfig(cfg)
-			local pivotPos = Vector3.new(gx, placeY, gz)
-			drop:PivotTo(CFrame.new(pivotPos) * rot)
-			snapModelBoundingBoxBottomToGround(drop, placeY, cfg.groundClearanceStuds)
+			if drop:IsA("Model") then
+				if not drop.PrimaryPart then
+					drop.PrimaryPart = drop:FindFirstChildWhichIsA("BasePart", true)
+				end
+				drop:PivotTo(CFrame.new(gx, placeY, gz) * rot)
+			elseif drop:IsA("BasePart") then
+				drop.CFrame = CFrame.new(gx, placeY, gz) * rot
+			end
 		end
 	else
 		drop = Instance.new("Part")
@@ -327,14 +323,14 @@ local function spawnDrop(matchId)
 		drop.Material = cfg.material or Enum.Material.SmoothPlastic
 		drop.Anchored = cfg.anchored == true
 		configurePickupPart(drop)
-		local centerY = placeY + sizeVec.Y * 0.5
-		drop.CFrame = CFrame.new(gx, centerY, gz)
+		drop.CFrame = CFrame.new(gx, placeY + sizeVec.Y * 0.5, gz)
 		if not drop.Anchored then
 			drop.CustomPhysicalProperties = PhysicalProperties.new(0.5, 0.3, 0.5, 1, 1)
 		end
 		drop.Parent = getDropsFolder()
 	end
 
+	applyDropPickupHighlight(drop)
 	drop:SetAttribute("DropType", dropType)
 
 	local pickupLocked = false
@@ -348,10 +344,7 @@ local function spawnDrop(matchId)
 			return
 		end
 		local player = Players:GetPlayerFromCharacter(model)
-		if not player then
-			return
-		end
-		if not onPickupCallback then
+		if not player or not onPickupCallback then
 			return
 		end
 		pickupLocked = true
@@ -386,9 +379,9 @@ local function spawnDrop(matchId)
 end
 
 local function clearAllDrops(activeDrops)
-	for _, drop in ipairs(activeDrops) do
-		if drop and drop.Parent then
-			drop:Destroy()
+	for _, d in ipairs(activeDrops) do
+		if d and d.Parent then
+			d:Destroy()
 		end
 	end
 end
@@ -397,17 +390,18 @@ local cleanupLoopStarted = false
 
 return {
 	Init = function()
-		if not cleanupLoopStarted then
-			cleanupLoopStarted = true
-			task.spawn(function()
-				while true do
-					task.wait(5)
-					for _, data in pairs(matchDropData) do
-						cleanupDestroyedDrops(data.drops)
-					end
-				end
-			end)
+		if cleanupLoopStarted then
+			return
 		end
+		cleanupLoopStarted = true
+		task.spawn(function()
+			while true do
+				task.wait(5)
+				for _, data in pairs(matchDropData) do
+					cleanupDestroyedDrops(data.drops)
+				end
+			end
+		end)
 	end,
 
 	Start = function(matchId, arenaModel)
@@ -419,8 +413,18 @@ return {
 			arenaModel = arenaModel,
 			running = true,
 			thread = nil,
+			spawnSlots = buildShuffledSpawnSlots(arenaModel),
+			spawnSlotIndex = 1,
 		}
 		matchDropData[matchId] = data
+
+		if #data.spawnSlots == 0 then
+			warn(
+				"[DropService] No item spawn slots for match",
+				matchId,
+				"- add SpawnLocations.ItemSpawnLocations under Arena, or FactoryFloor / DropSpawnArea"
+			)
+		end
 
 		task.defer(function()
 			spawnDrop(matchId)
@@ -466,7 +470,7 @@ return {
 		local total = 0
 		for _, data in pairs(matchDropData) do
 			cleanupDestroyedDrops(data.drops)
-			total = total + #data.drops
+			total += #data.drops
 		end
 		return total
 	end,

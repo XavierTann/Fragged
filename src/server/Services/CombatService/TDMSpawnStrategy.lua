@@ -1,18 +1,16 @@
 --[[
 	TDMSpawnStrategy
-	TDM-only spawn strategy: random spawn from TDMSpawnLocations, avoids nearby enemies.
-	Modular and swappable; other modes can use different strategies.
+	TDM-only spawn strategy: random spawn from SpawnLocations.PlayerSpawnLocations (or legacy TDMSpawnLocations).
 ]]
 
 local Workspace = game:GetService("Workspace")
 
 local TDMConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.TDMConfig)
 
-local FOLDER_NAME = TDMConfig.TDM_SPAWN_FOLDER
 local SAFE_DISTANCE = TDMConfig.TDM_SAFE_DISTANCE
 local MAX_ATTEMPTS = TDMConfig.TDM_SPAWN_MAX_ATTEMPTS
 
--- Fallback positions when TDMSpawnLocations folder is empty or missing
+-- Fallback positions when player spawn folder is empty or missing
 local FALLBACK_POSITIONS = {
 	Vector3.new(35, 5, -8),
 	Vector3.new(45, 5, 8),
@@ -25,28 +23,33 @@ local FALLBACK_POSITIONS = {
 	Vector3.new(55, 5, 5),
 }
 
-local function getFolder(arenaModel)
-	if arenaModel then
-		local tdm = arenaModel:FindFirstChild(FOLDER_NAME)
-		if tdm then
-			return tdm
-		end
+local function getPlayerSpawnFolderResolved(arenaModel)
+	local f = TDMConfig.getPlayerSpawnFolder(arenaModel)
+	if f then
+		return f
 	end
 	local arenasFolder = Workspace:FindFirstChild("ActiveArenas")
 	if arenasFolder then
 		for _, arena in ipairs(arenasFolder:GetChildren()) do
-			local tdm = arena:FindFirstChild(FOLDER_NAME)
-			if tdm then
-				return tdm
+			f = TDMConfig.getPlayerSpawnFolder(arena)
+			if f then
+				return f
 			end
 		end
 	end
-	local direct = Workspace:FindFirstChild(FOLDER_NAME)
+	local arena = Workspace:FindFirstChild("Arena")
+	if arena then
+		f = TDMConfig.getPlayerSpawnFolder(arena)
+		if f then
+			return f
+		end
+	end
+	local direct = Workspace:FindFirstChild(TDMConfig.LEGACY_TDM_SPAWN_FOLDER)
 	if direct then
 		return direct
 	end
 	local folder = Instance.new("Folder")
-	folder.Name = FOLDER_NAME
+	folder.Name = TDMConfig.LEGACY_TDM_SPAWN_FOLDER
 	folder.Parent = Workspace
 	return folder
 end
@@ -76,7 +79,7 @@ local function ensureFallbackSpawns(folder)
 end
 
 local function getSpawnPoints(arenaModel)
-	local folder = getFolder(arenaModel)
+	local folder = getPlayerSpawnFolderResolved(arenaModel)
 	ensureFallbackSpawns(folder)
 	local points = {}
 	for _, child in ipairs(folder:GetChildren()) do

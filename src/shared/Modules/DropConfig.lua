@@ -1,7 +1,7 @@
 --[[
 	DropConfig
-	Random drop system: spawn rate, max drops, drop types.
-	FactoryFloor: name of Workspace part defining spawn bounds. Tag part "DropSpawnArea" as alternative.
+	Spawn rate, caps, drop types. World Y comes from FIXED_DROP_WORLD_Y or per-type fixedWorldY (no raycasts).
+	Primary X/Z: arena SpawnLocations.ItemSpawnLocations (see TDMConfig). Fallback: DropSpawnArea tag or FactoryFloor part.
 ]]
 
 return {
@@ -15,13 +15,23 @@ return {
 	-- Max active instances per drop type (e.g. 5 health + 5 rockets = up to 10 total)
 	MAX_ACTIVE_PER_TYPE = 5,
 	-- Optional per-type override: maxActive = 3
-	-- Minimum spacing between drops (studs) to avoid overlap
-	MIN_DROP_SPACING = 4,
+
+	-- Default world Y when a drop type has no fixedWorldY.
+	FIXED_DROP_WORLD_Y = 2.183,
+
+	-- Neon-style pickup outline (Highlight). Set false to disable.
+	DROP_PICKUP_HIGHLIGHT = true,
+	DROP_HIGHLIGHT_OUTLINE_COLOR = Color3.fromRGB(255, 250, 90),
+	-- 1 = outline only; lower (e.g. 0.9) adds a faint yellow fill for extra pop.
+	DROP_HIGHLIGHT_FILL_TRANSPARENCY = 1,
+	DROP_HIGHLIGHT_FILL_COLOR = Color3.fromRGB(255, 240, 100),
 
 	-- Drop types with weight for rarity among types that are under their cap (higher = more common)
 	DROPS = {
 		RocketLauncher = {
 			weight = 1,
+			-- Overrides global FIXED_DROP_WORLD_Y for this drop type only.
+			fixedWorldY = 2.1,
 			visualSize = Vector3.new(3, 1, 1),
 			visualColor = Color3.fromRGB(80, 60, 40),
 		},
@@ -29,6 +39,7 @@ return {
 		HealthPack = {
 			weight = 1,
 			modelAssetName = "HealthPack",
+			fixedWorldY = 1.8,
 			-- World rotation at pivot before ground snap. (-90,0,0) lays a Y-upright mesh flat on XZ.
 			placementRotationDegrees = Vector3.new(-90, 0, 0),
 			visualSize = Vector3.new(1.5, 0.55, 1.1),

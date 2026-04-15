@@ -71,15 +71,7 @@ local function getArenaSpawnCFrames(arenaModel)
 	if not arenaModel then
 		return {}
 	end
-	local spawnFolder = arenaModel:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
-	if not spawnFolder then
-		for _, desc in ipairs(arenaModel:GetDescendants()) do
-			if desc.Name == TDMConfig.TDM_SPAWN_FOLDER and desc:IsA("Folder") then
-				spawnFolder = desc
-				break
-			end
-		end
-	end
+	local spawnFolder = TDMConfig.getPlayerSpawnFolder(arenaModel)
 	return collectSpawnCFrames(spawnFolder)
 end
 

@@ -42,7 +42,8 @@ local function mount(parent)
 	rootFrame.Name = "CancelFireZone"
 	rootFrame.AnchorPoint = Vector2.new(1, 1)
 	rootFrame.Size = UDim2.fromOffset(156, 56)
-	rootFrame.Position = UDim2.new(1, 50, 1, -240)
+	-- Keep roughly above RotationJoystickGUI (same nudge as joystick position)
+	rootFrame.Position = UDim2.new(1, 26, 1, -266)
 	rootFrame.BackgroundTransparency = 1
 	rootFrame.BorderSizePixel = 0
 	rootFrame.Visible = false

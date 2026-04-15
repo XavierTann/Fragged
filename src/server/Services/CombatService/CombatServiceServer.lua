@@ -357,24 +357,37 @@ local function bindHandlers()
 	end)
 
 	if r.heliosCommitChargedBeamRE then
-		r.heliosCommitChargedBeamRE.OnServerEvent:Connect(function(player, shotOrigin, aimDirection)
+		r.heliosCommitChargedBeamRE.OnServerEvent:Connect(function(player, shotOrigin, aimDirection, laserGunId)
 			local state = getPlayerState(player)
 			if not state or state.matchEnded then
 				return
 			end
+			local gunId = typeof(laserGunId) == "string" and laserGunId or "HeliosThread"
+			if gunId ~= "HeliosThread" then
+				rejectFire(state, player, "InvalidWeapon", gunId, true, false)
+				return
+			end
 			if typeof(shotOrigin) ~= "Vector3" or typeof(aimDirection) ~= "Vector3" then
-				rejectFire(state, player, "InvalidArgs", "HeliosThread", true, false)
+				rejectFire(state, player, "InvalidArgs", gunId, true, false)
 				return
 			end
 			local aimUnit = validateFireAimDirection(aimDirection)
 			if not aimUnit then
-				rejectFire(state, player, "BadDirection", "HeliosThread", true, false)
+				rejectFire(state, player, "BadDirection", gunId, true, false)
 				return
 			end
-			local ok, err = CombatHeliosLaser.commitChargedBeamAfterRelease(state, player, shotOrigin, aimUnit, validateClientShotOrigin, playerOwnsGun)
+			local ok, err = CombatHeliosLaser.commitChargedBeamAfterRelease(
+				state,
+				player,
+				gunId,
+				shotOrigin,
+				aimUnit,
+				validateClientShotOrigin,
+				playerOwnsGun
+			)
 			if not ok and err then
 				local resetRate = err == "BadOrigin" or err == "BadDirection" or err == "InvalidArgs"
-				rejectFire(state, player, err, "HeliosThread", resetRate, false)
+				rejectFire(state, player, err, gunId, resetRate, false)
 			end
 		end)
 	end

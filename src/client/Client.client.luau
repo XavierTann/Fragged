@@ -61,6 +61,9 @@ ShopKeeperPromptClient.Init()
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 CombatServiceClient.Init()
 
+local HeliosLaserEffectsClient = require(Shared.Services.HeliosLaserEffectsClient)
+HeliosLaserEffectsClient.Init()
+
 local TopDownCameraService = require(Shared.Services.TopDownCameraService)
 TopDownCameraService.Init()
 

@@ -13,6 +13,17 @@ local IMPORTED_GUN_TOOL_TEMPLATE_NAMES: { [string]: { string } } = {
 		"PlasmaCarbine",
 		"plasma carbine",
 	},
+	HeliosThread = {
+		"HeliosThreadTool",
+		"Helios Thread",
+		"HeliosThread",
+		"helios thread",
+		-- Legacy mesh / display names (same weapon).
+		"GatlingLaserTool",
+		"Gatling Laser",
+		"GatlingLaser",
+		"gatling laser",
+	},
 }
 
 local function findImportedGunToolTemplate(gunId: string): Tool?

@@ -31,7 +31,7 @@ local WEAPONS = {
 	HeliosThread = {
 		category = CATEGORY.SECONDARY,
 		name = "Helios Thread",
-		desc = "Solar micro-filament burst. Fires on release for precise timing.",
+		desc = "Solar micro-filament burst. Charge on release, then sustained beam.",
 		icon = 14826766010,
 	},
 	Shotgun = {

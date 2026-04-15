@@ -1,6 +1,6 @@
 --[[
 	Direction indicator — weapon aim previews (off-axis): Rifle line beam, Shotgun sector,
-	Rocket rectangle, Helios beam corridor (flat rectangle), Grenade chain.
+	Rocket rectangle, Helios multi-strip corridor (per-column wall clip), Grenade chain.
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -13,15 +13,21 @@ local GunsConfig = require(Shared.Modules.GunsConfig)
 local RocketLauncherConfig = require(Shared.Modules.RocketLauncherConfig)
 local GrenadeTrajectoryUtils = require(Shared.Modules.GrenadeTrajectoryUtils)
 local HeliosLaserConfig = require(Shared.Modules.HeliosLaserConfig)
+local HeliosBeamColumns = require(Shared.Modules.HeliosBeamColumns)
 
 local Config = require(script.Parent.Config)
+
+local heliosAimRayParams = RaycastParams.new()
+heliosAimRayParams.FilterType = Enum.RaycastFilterType.Exclude
+heliosAimRayParams.RespectCanCollide = true
 
 local GRENADE_MAX_VERTS = GrenadeTrajectoryUtils.DEFAULT_MAX_PRE_BOUNCE_POINTS + 2
 local GRENADE_BEAM_WIDTH = 0.065
 
 local aimBeamHost = nil
 local aimRocketRect = nil
-local aimHeliosRect = nil
+local aimHeliosRibbonHost = nil
+local aimHeliosStrips = {}
 local grenadeAimHost = nil
 local grenadeChainAttachments = {}
 local grenadeChainBeams = {}
@@ -66,8 +72,10 @@ local function destroyGrenadeAimChain()
 end
 
 local function hideHeliosAimRect()
-	if aimHeliosRect then
-		aimHeliosRect.Transparency = 1
+	for _, s in ipairs(aimHeliosStrips) do
+		if s then
+			s.Transparency = 1
+		end
 	end
 end
 
@@ -80,10 +88,11 @@ local function destroyAimVisuals()
 		aimRocketRect:Destroy()
 		aimRocketRect = nil
 	end
-	if aimHeliosRect then
-		aimHeliosRect:Destroy()
-		aimHeliosRect = nil
+	if aimHeliosRibbonHost then
+		aimHeliosRibbonHost:Destroy()
+		aimHeliosRibbonHost = nil
 	end
+	aimHeliosStrips = {}
 	destroyGrenadeAimChain()
 	destroyShotgunSector()
 end
@@ -266,26 +275,32 @@ local function ensureAimRocketRect(character)
 	return p
 end
 
-local function ensureAimHeliosRect(character)
-	if aimHeliosRect and aimHeliosRect.Parent == character then
-		return aimHeliosRect
+local function ensureHeliosAimRibbon(character, stripCount)
+	if aimHeliosRibbonHost and aimHeliosRibbonHost.Parent == character and #aimHeliosStrips == stripCount then
+		return
 	end
-	if aimHeliosRect then
-		aimHeliosRect:Destroy()
-		aimHeliosRect = nil
+	if aimHeliosRibbonHost then
+		aimHeliosRibbonHost:Destroy()
+		aimHeliosRibbonHost = nil
 	end
-	local p = Instance.new("Part")
-	p.Name = "DirectionIndicator_HeliosBeamZone"
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CastShadow = false
-	p.Material = Enum.Material.Neon
-	p.Color = HeliosLaserConfig.BEAM_COLOR
-	p.Transparency = 1
-	p.Parent = character
-	aimHeliosRect = p
-	return p
+	aimHeliosStrips = {}
+	local model = Instance.new("Model")
+	model.Name = "DirectionIndicator_HeliosBeamRibbon"
+	model.Parent = character
+	for i = 1, stripCount do
+		local s = Instance.new("Part")
+		s.Name = "HeliosAimStrip_" .. i
+		s.Anchored = true
+		s.CanCollide = false
+		s.CanQuery = false
+		s.CastShadow = false
+		s.Material = Enum.Material.Neon
+		s.Color = HeliosLaserConfig.BEAM_COLOR
+		s.Transparency = 1
+		s.Parent = model
+		aimHeliosStrips[i] = s
+	end
+	aimHeliosRibbonHost = model
 end
 
 local function ensureGrenadeAimChain(character)
@@ -540,7 +555,7 @@ local function updateGrenade(ctx)
 	end
 end
 
--- Flat XZ corridor matching server spherecast width (2× radius) and max beam length.
+-- Parallel strips: each column clips at its own wall (ray preview); matches server column layout.
 local function updateHelios(ctx)
 	destroyGrenadeAimChain()
 	destroyShotgunSector()
@@ -552,28 +567,44 @@ local function updateHelios(ctx)
 		aimRocketRect.Transparency = 1
 	end
 
-	local range = HeliosLaserConfig.MAX_RANGE
-	local width = HeliosLaserConfig.BEAM_RADIUS * 2
-
 	if not ctx.showAim or ctx.smoothedAimOffsetXZ.Magnitude < 0.12 then
 		hideHeliosAimRect()
 		return
 	end
 
-	local rect = ensureAimHeliosRect(ctx.character)
 	local flat = Vector3.new(ctx.smoothedAimOffsetXZ.X, 0, ctx.smoothedAimOffsetXZ.Z)
 	local dir = flat.Unit
-	local right = Vector3.new(-dir.Z, 0, dir.X)
-	if right.Magnitude < 0.001 then
-		right = Vector3.new(1, 0, 0)
-	else
-		right = right.Unit
+	local n = math.clamp(HeliosLaserConfig.LASER_COLUMN_COUNT or 7, 1, 15)
+	heliosAimRayParams.FilterDescendantsInstances = { ctx.character }
+	local offs, lens = HeliosBeamColumns.computeRayClipLengths(
+		ctx.startPos,
+		dir,
+		HeliosLaserConfig.MAX_RANGE,
+		HeliosLaserConfig.BEAM_RADIUS,
+		n,
+		HeliosLaserConfig.COLUMN_SPREAD_FRACTION or 0.92,
+		heliosAimRayParams
+	)
+	ensureHeliosAimRibbon(ctx.character, n)
+	local right = HeliosBeamColumns.getRightUnitXZ(dir)
+	local stripW = math.max(0.12, (HeliosLaserConfig.BEAM_RADIUS * 2) / n * 1.08)
+	for i = 1, n do
+		local strip = aimHeliosStrips[i]
+		if strip then
+			local len = lens[i]
+			if typeof(len) ~= "number" or len < 0.15 then
+				strip.Transparency = 1
+			else
+				strip.Transparency = 0.44
+				strip.Size = Vector3.new(stripW, Config.ROCKET_RECT_THICKNESS, len)
+				local off = offs[i]
+				local colOrigin = ctx.startPos + right * off
+				local mid = colOrigin + dir * (len * 0.5)
+				strip.CFrame = CFrame.lookAt(mid, mid + dir)
+				strip.Color = HeliosLaserConfig.BEAM_COLOR
+			end
+		end
 	end
-	local mid = ctx.startPos + dir * (range * 0.5)
-	rect.Size = Vector3.new(width, Config.ROCKET_RECT_THICKNESS, range)
-	rect.CFrame = CFrame.fromMatrix(mid, right, Vector3.yAxis)
-	rect.Color = HeliosLaserConfig.BEAM_COLOR
-	rect.Transparency = 0.44
 end
 
 local weaponHandlers = {

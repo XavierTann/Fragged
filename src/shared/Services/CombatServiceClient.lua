@@ -10,7 +10,7 @@
 	Gunshots: local predicted sound + GunshotSpatial to other round players; all use 3D Sound on HRP or tool Handle.
 	Mobile: Primary weapons fire while aim joystick is off-axis; Secondary weapons match Grenade/Rocket
 	(fire on joystick release with last aim direction). Releasing inside the cancel zone
-	skips the shot for those weapons only. Helios Thread: release G / joystick commits a locked charge, then beam.
+	skips the shot for those weapons only. Helios Thread: release G or joystick commits a locked charge, then beam.
 	Desktop: Primary weapons on LMB; Secondary weapons match Grenade/Rocket (G key + mouse aim, no LMB).
 	Respects ammo and reload state from server to prevent spamming.
 ]]
@@ -22,6 +22,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
@@ -29,6 +30,7 @@ local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local LoadoutConfig = require(ReplicatedStorage.Shared.Modules.LoadoutConfig)
 local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
 local HeliosLaserConfig = require(ReplicatedStorage.Shared.Modules.HeliosLaserConfig)
+local HeliosBeamColumns = require(ReplicatedStorage.Shared.Modules.HeliosBeamColumns)
 
 local FireGunRE = nil
 local RequestReloadRE = nil
@@ -47,6 +49,8 @@ local HeliosCommitChargedBeamRE = nil
 local heliosClientCommitSeq = 0
 local heliosChargeSoundLoop = nil
 local heliosClientMoveSave = nil
+local laserChargeVisualSubscribers = {}
+local activeChargeLaserWeaponId = nil
 
 -- [gunId] = { ammo = number, isReloading = boolean, reloadStartedAt = number? }
 local ammoState = {}
@@ -253,8 +257,14 @@ local function preloadCombatSounds()
 	if GrenadeConfig.explosionSoundId then
 		table.insert(ids, GrenadeConfig.explosionSoundId)
 	end
+	if HeliosLaserConfig.CHARGE_BUILDUP_SOUND_ID ~= "" then
+		table.insert(ids, HeliosLaserConfig.CHARGE_BUILDUP_SOUND_ID)
+	end
 	if HeliosLaserConfig.PLACEHOLDER_CHARGE_SOUND_ID ~= "" then
 		table.insert(ids, HeliosLaserConfig.PLACEHOLDER_CHARGE_SOUND_ID)
+	end
+	if HeliosLaserConfig.LASER_BEAM_FIRE_SOUND_ID ~= "" then
+		table.insert(ids, HeliosLaserConfig.LASER_BEAM_FIRE_SOUND_ID)
 	end
 	if HeliosLaserConfig.PLACEHOLDER_FIRE_SOUND_ID ~= "" then
 		table.insert(ids, HeliosLaserConfig.PLACEHOLDER_FIRE_SOUND_ID)
@@ -608,8 +618,14 @@ local function throwGrenade(dir)
 	ThrowGrenadeRE:FireServer(dir)
 end
 
-local function isHeliosWeapon(weaponId)
+local function isChargedLaserWeapon(weaponId)
 	return weaponId == "HeliosThread"
+end
+
+local function notifyLaserChargeVisual(weaponId, phase, duration)
+	for _, cb in ipairs(laserChargeVisualSubscribers) do
+		task.defer(cb, weaponId, phase, duration)
+	end
 end
 
 local function stopHeliosChargeSoundLoop()
@@ -618,6 +634,79 @@ local function stopHeliosChargeSoundLoop()
 		heliosChargeSoundLoop:Destroy()
 		heliosChargeSoundLoop = nil
 	end
+end
+
+local function playLaserBeamFireSoundAtPosition(worldPosition)
+	if typeof(worldPosition) ~= "Vector3" then
+		return
+	end
+	local id = HeliosLaserConfig.LASER_BEAM_FIRE_SOUND_ID
+	if typeof(id) ~= "string" or id == "" then
+		return
+	end
+	local holder = Instance.new("Part")
+	holder.Name = "LaserBeamFireAudio"
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CastShadow = false
+	holder.Transparency = 1
+	holder.Size = Vector3.new(0.15, 0.15, 0.15)
+	holder.Position = worldPosition
+	holder.Parent = Workspace
+	local sound = Instance.new("Sound")
+	sound.Name = "LaserBeamFire"
+	sound.SoundId = id
+	local cfgVol = HeliosLaserConfig.LASER_BEAM_FIRE_SOUND_VOLUME
+	if typeof(cfgVol) == "number" then
+		sound.Volume = cfgVol
+	else
+		sound.Volume = 0.78
+	end
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = 10
+	sound.RollOffMaxDistance = 240
+	sound.EmitterSize = 14
+	sound.Parent = holder
+	if not sound.IsLoaded then
+		pcall(function()
+			sound.Loaded:Wait()
+		end)
+	end
+	sound:Play()
+	sound.Ended:Connect(function()
+		holder:Destroy()
+	end)
+	Debris:AddItem(holder, 25)
+end
+
+local function scheduleHeliosBeamFadeDestroy(part, pointLight)
+	if not part or not part:IsA("BasePart") then
+		return
+	end
+	local cfg = HeliosLaserConfig
+	local peak = typeof(cfg.BEAM_GLOW_TIME) == "number" and cfg.BEAM_GLOW_TIME or 0.12
+	local fade = typeof(cfg.BEAM_FADE_OUT_TIME) == "number" and cfg.BEAM_FADE_OUT_TIME or 0.5
+	peak = math.max(0, peak)
+	fade = math.max(0.05, fade)
+	task.delay(peak, function()
+		if not part.Parent then
+			return
+		end
+		local ti = TweenInfo.new(fade, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local goals = { Transparency = 1 }
+		local twPart = TweenService:Create(part, ti, goals)
+		twPart:Play()
+		if pointLight and pointLight.Parent == part and pointLight:IsA("PointLight") then
+			local twLight = TweenService:Create(pointLight, ti, { Brightness = 0, Range = 0 })
+			twLight:Play()
+		end
+		twPart.Completed:Once(function()
+			if part.Parent then
+				part:Destroy()
+			end
+		end)
+	end)
 end
 
 local function spawnHeliosBeamVisual(origin, dirUnit, length)
@@ -644,7 +733,45 @@ local function spawnHeliosBeamVisual(origin, dirUnit, length)
 	light.Range = thick * 4
 	light.Color = cfg.BEAM_COLOR
 	light.Parent = p
-	Debris:AddItem(p, cfg.BEAM_GLOW_TIME)
+	scheduleHeliosBeamFadeDestroy(p, light)
+end
+
+-- One strip per lateral column; each length clips at that column's first wall (server-matched layout).
+local function spawnHeliosBeamRibbon(origin, dirUnit, columnOffsets, columnLengths)
+	local n = #columnOffsets
+	if n ~= #columnLengths or n < 1 then
+		return
+	end
+	local cfg = HeliosLaserConfig
+	local right = HeliosBeamColumns.getRightUnitXZ(dirUnit)
+	local u = dirUnit.Unit
+	local stripSize = math.max(0.22, cfg.BEAM_THICKNESS_STUDS / n * 1.06)
+	for i = 1, n do
+		local len = columnLengths[i]
+		local off = columnOffsets[i]
+		if typeof(len) == "number" and len > 0.2 and typeof(off) == "number" then
+			local colOrigin = origin + right * off
+			local mid = colOrigin + u * (len * 0.5)
+			local p = Instance.new("Part")
+			p.Name = "HeliosBeamFX"
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CastShadow = false
+			p.Material = Enum.Material.Neon
+			p.Color = cfg.BEAM_COLOR
+			p.Size = Vector3.new(stripSize, stripSize, len)
+			p.CFrame = CFrame.lookAt(mid, mid + u)
+			p.Transparency = 0.2
+			p.Parent = Workspace
+			local light = Instance.new("PointLight")
+			light.Brightness = 1.4
+			light.Range = stripSize * 5
+			light.Color = cfg.BEAM_COLOR
+			light.Parent = p
+			scheduleHeliosBeamFadeDestroy(p, light)
+		end
+	end
 end
 
 local function clearHeliosClientMovementLock()
@@ -673,17 +800,21 @@ local function applyHeliosClientMovementLock()
 end
 
 local function invalidateHeliosClientCommit()
+	if activeChargeLaserWeaponId then
+		notifyLaserChargeVisual(activeChargeLaserWeaponId, "cancel", nil)
+		activeChargeLaserWeaponId = nil
+	end
 	stopHeliosChargeSoundLoop()
 	heliosClientCommitSeq += 1
 	clearHeliosClientMovementLock()
 end
 
--- Release commits aim + movement lock; server fires beam after CHARGE_DURATION (same aim).
+-- Release commits aim + movement lock; server fires beam after weapon-specific charge (same aim).
 local function commitHeliosChargedBeamClient(aimDirOptional)
 	if not shootingEnabled or not HeliosCommitChargedBeamRE then
 		return
 	end
-	if not isHeliosWeapon(currentWeapon) then
+	if not isChargedLaserWeapon(currentWeapon) then
 		return
 	end
 	if not canFire() then
@@ -704,31 +835,59 @@ local function commitHeliosChargedBeamClient(aimDirOptional)
 	if heliosClientMoveSave then
 		return
 	end
+	local weaponAtCommit = currentWeapon
+	local chargeDur = HeliosLaserConfig.CHARGE_DURATION
 	heliosClientCommitSeq += 1
 	local mySeq = heliosClientCommitSeq
 	lastFiredAt = os.clock()
+	activeChargeLaserWeaponId = weaponAtCommit
 	applyHeliosClientMovementLock()
 	stopHeliosChargeSoundLoop()
-	local id = HeliosLaserConfig.PLACEHOLDER_CHARGE_SOUND_ID
-	if typeof(id) == "string" and id ~= "" then
+	notifyLaserChargeVisual(weaponAtCommit, "start", chargeDur)
+	local buildupId = HeliosLaserConfig.CHARGE_BUILDUP_SOUND_ID
+	if typeof(buildupId) == "string" and buildupId ~= "" then
 		local root = character:FindFirstChild("HumanoidRootPart")
 		if root then
 			local sound = Instance.new("Sound")
-			sound.SoundId = id
-			sound.Looped = true
-			sound.Volume = 0.5
+			sound.Name = "LaserChargeBuildup"
+			sound.SoundId = buildupId
+			sound.Looped = false
+			sound.Volume = 0.55
 			sound.RollOffMode = Enum.RollOffMode.InverseTapered
 			sound.RollOffMinDistance = 6
 			sound.RollOffMaxDistance = 80
 			sound.Parent = root
-			sound:Play()
+			local dur = chargeDur
+			local function applySpeedAndPlay()
+				if not sound.Parent then
+					return
+				end
+				local tl = sound.TimeLength
+				if typeof(dur) == "number" and dur > 0 and tl > 0 then
+					local mn = HeliosLaserConfig.CHARGE_BUILDUP_PLAYBACK_SPEED_MIN or 0.25
+					local mx = HeliosLaserConfig.CHARGE_BUILDUP_PLAYBACK_SPEED_MAX or 8
+					sound.PlaybackSpeed = math.clamp(tl / dur, mn, mx)
+				else
+					sound.PlaybackSpeed = 1
+				end
+				sound:Play()
+			end
+			if sound.IsLoaded then
+				applySpeedAndPlay()
+			else
+				sound.Loaded:Once(applySpeedAndPlay)
+			end
 			heliosChargeSoundLoop = sound
 		end
 	end
-	HeliosCommitChargedBeamRE:FireServer(shotOrigin, dir)
-	task.delay(HeliosLaserConfig.CHARGE_DURATION, function()
+	HeliosCommitChargedBeamRE:FireServer(shotOrigin, dir, weaponAtCommit)
+	task.delay(chargeDur, function()
 		if heliosClientCommitSeq ~= mySeq then
 			return
+		end
+		notifyLaserChargeVisual(weaponAtCommit, "end", nil)
+		if activeChargeLaserWeaponId == weaponAtCommit then
+			activeChargeLaserWeaponId = nil
 		end
 		clearHeliosClientMovementLock()
 		stopHeliosChargeSoundLoop()
@@ -760,7 +919,7 @@ local function onInputEndedDesktop(input, gameProcessed)
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
-		if isHeliosWeapon(currentWeapon) then
+		if isChargedLaserWeapon(currentWeapon) then
 			commitHeliosChargedBeamClient()
 		end
 	end
@@ -782,7 +941,7 @@ local function onInputBegan(input, gameProcessed)
 	end
 	-- G: Helios commits on release only (see InputEnded). Other secondaries fire on press.
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
-		if isHeliosWeapon(currentWeapon) then
+		if isChargedLaserWeapon(currentWeapon) then
 			return
 		end
 		if isReleaseToFireWeapon(currentWeapon) then
@@ -920,15 +1079,22 @@ return {
 			playLocalGrenadeExplosionVFX(serverCenter, radius, explosionSoundId)
 		end)
 
-		heliosLaserVfxRE.OnClientEvent:Connect(function(_shooterUserId, origin, directionUnit, beamLength)
-			if typeof(origin) ~= "Vector3" or typeof(directionUnit) ~= "Vector3" or typeof(beamLength) ~= "number" then
+		heliosLaserVfxRE.OnClientEvent:Connect(function(_shooterUserId, origin, directionUnit, columnOffsets, columnLengths)
+			if typeof(origin) ~= "Vector3" or typeof(directionUnit) ~= "Vector3" then
 				return
 			end
 			local u = directionUnit.Unit
 			if u.Magnitude < 0.99 then
 				return
 			end
-			spawnHeliosBeamVisual(origin, u, beamLength)
+			playLaserBeamFireSoundAtPosition(origin)
+			if typeof(columnOffsets) == "table" and typeof(columnLengths) == "table" then
+				spawnHeliosBeamRibbon(origin, u, columnOffsets, columnLengths)
+				return
+			end
+			if typeof(columnOffsets) == "number" then
+				spawnHeliosBeamVisual(origin, u, columnOffsets)
+			end
 		end)
 
 		gunshotSpatialRE.OnClientEvent:Connect(function(shooterUserId, gunId)
@@ -954,6 +1120,10 @@ return {
 				lastFiredAt = 0
 			end
 			if gunId == "HeliosThread" then
+				if activeChargeLaserWeaponId == gunId then
+					notifyLaserChargeVisual(gunId, "cancel", nil)
+					activeChargeLaserWeaponId = nil
+				end
 				stopHeliosChargeSoundLoop()
 				clearHeliosClientMovementLock()
 				heliosClientCommitSeq += 1
@@ -1004,7 +1174,7 @@ return {
 				if not isReleaseToFireWeapon(currentWeapon) then
 					return
 				end
-				if isHeliosWeapon(currentWeapon) then
+				if isChargedLaserWeapon(currentWeapon) then
 					commitHeliosChargedBeamClient(worldDir)
 					return
 				end
@@ -1171,4 +1341,8 @@ return {
 
 	-- World-space unit direction on XZ from mouse vs character; optional minGroundSeparation (studs on XZ)
 	GetAimDirectionXZ = getAimDirectionFromMouse,
+
+	SubscribeLaserChargeVisual = function(callback)
+		table.insert(laserChargeVisualSubscribers, callback)
+	end,
 }

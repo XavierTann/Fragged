@@ -116,6 +116,9 @@ LeaveMatchGUI.Init()
 local GachaGUI = require(Shared.UI.GachaGUI)
 GachaGUI.Init()
 
+local LobbyMenuDockGUI = require(Shared.UI.LobbyMenuDockGUI)
+LobbyMenuDockGUI.Init()
+
 local GachaServiceClient = require(Shared.Services.GachaServiceClient)
 GachaServiceClient.Init()
 

@@ -78,6 +78,43 @@ local function buildLeaderboardData(state)
 	return bluePlayers, redPlayers
 end
 
+local function freezeMovementForLeaderboard(state)
+	state.leaderboardMovementSave = {}
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p and p.Parent then
+			local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+			if hum and not state.leaderboardMovementSave[p.UserId] then
+				state.leaderboardMovementSave[p.UserId] = {
+					WalkSpeed = hum.WalkSpeed,
+					JumpHeight = hum.JumpHeight,
+					AutoRotate = hum.AutoRotate,
+				}
+				hum.WalkSpeed = 0
+				hum.JumpHeight = 0
+				hum.AutoRotate = false
+			end
+		end
+	end
+end
+
+local function unfreezeLeaderboardMovement(state)
+	if not state.leaderboardMovementSave then
+		return
+	end
+	for _, p in ipairs(state.currentRoundPlayers) do
+		local saved = state.leaderboardMovementSave[p.UserId]
+		if saved and p and p.Parent then
+			local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum.WalkSpeed = saved.WalkSpeed
+				hum.JumpHeight = saved.JumpHeight
+				hum.AutoRotate = saved.AutoRotate
+			end
+		end
+	end
+	state.leaderboardMovementSave = nil
+end
+
 local function endMatch(state, winningTeam)
 	if state.matchEnded then
 		return
@@ -110,7 +147,9 @@ local function endMatch(state, winningTeam)
 			r.matchEndedRE:FireClient(p, payload)
 		end
 	end
+	freezeMovementForLeaderboard(state)
 	task.delay(TDMConfig.LEADERBOARD_DURATION, function()
+		unfreezeLeaderboardMovement(state)
 		state.currentRoundPlayers = {}
 		if state.onRoundEndCallback then
 			local cb = state.onRoundEndCallback

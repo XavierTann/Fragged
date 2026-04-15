@@ -64,6 +64,10 @@ CombatServiceClient.Init()
 local TopDownCameraService = require(Shared.Services.TopDownCameraService)
 TopDownCameraService.Init()
 
+LobbyServiceClient.OnTeleportToArena(function()
+	TopDownCameraService.ArenaEntranceCameraReset()
+end)
+
 local RotationJoystickGUI = require(Shared.UI.RotationJoystickGUI)
 RotationJoystickGUI.Init()
 
@@ -124,7 +128,12 @@ local wasInArena = false
 local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	local combatHud = inArena and not postMatchLeaderboard
 	CombatServiceClient.SetShootingEnabled(combatHud)
-	TopDownCameraService.SetEnabled(combatHud)
+	TopDownCameraService.SetEnabled(inArena)
+	if inArena then
+		TopDownCameraService.SetFollowFrozen(postMatchLeaderboard)
+	else
+		TopDownCameraService.SetFollowFrozen(false)
+	end
 	DirectionIndicatorClient.SetEnabled(combatHud)
 	if hideLeaderboardOverlay then
 		LeaderboardGUI.Hide()
@@ -161,7 +170,9 @@ end
 
 CombatServiceClient.SubscribeMatchEnded(function(payload)
 	postMatchLeaderboard = true
-	TopDownCameraService.SetEnabled(false)
+	CombatServiceClient.SetShootingEnabled(false)
+	TopDownCameraService.SetEnabled(true)
+	TopDownCameraService.SetFollowFrozen(true)
 	DirectionIndicatorClient.SetEnabled(false)
 	RotationJoystickGUI.Hide()
 	LoadoutGUI.Hide()

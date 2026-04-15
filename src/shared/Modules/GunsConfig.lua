@@ -4,7 +4,7 @@
 	 reloadTime: seconds to reload when magazine empty
 ]]
 
-return {
+local GunsConfig = {
 	Rifle = {
 		name = "Rifle",
 		bulletSpeed = 1000,
@@ -51,11 +51,10 @@ return {
 	HeliosThread = {
 		name = "Helios Thread",
 		bulletSpeed = 300,
-		damage = 14,
 		fireRate = 0.08,
 		bulletSize = Vector3.new(0.32, 0.32, 1.0),
 		bulletColor = Color3.fromRGB(120, 240, 255),
-		magazineSize = 32,
+		magazineSize = 6,
 		reloadTime = 2.4,
 		gunshotSoundId = "rbxassetid://139083804782836",
 		reloadSoundId = "rbxassetid://140301163976554",
@@ -73,3 +72,8 @@ return {
 		reloadSoundId = "rbxassetid://140301163976554",
 	},
 }
+
+-- Helios laser hit uses this value (4× default primary); keep in sync if Rifle damage changes.
+GunsConfig.HeliosThread.damage = GunsConfig.Rifle.damage * 4
+
+return GunsConfig

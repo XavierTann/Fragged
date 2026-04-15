@@ -76,11 +76,15 @@ local RELEASE_TO_FIRE_WEAPONS = {
 	Shotgun = true,
 	Grenade = true,
 	RocketLauncher = true,
+	HeliosThread = true,
 }
 
 local weaponEquipCount = {} -- weaponId -> number of times equipped
 
 local function getFireModeText(weaponId)
+	if weaponId == "HeliosThread" then
+		return "Release to charge — locked, then beam", Color3.fromRGB(200, 170, 0)
+	end
 	if RELEASE_TO_FIRE_WEAPONS[weaponId] then
 		return "Release to Fire", Color3.fromRGB(200, 170, 0)
 	end

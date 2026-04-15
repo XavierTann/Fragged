@@ -55,6 +55,8 @@ local function ensureRemotes()
 	remotes.killNotificationRE = getOrCreate(CombatConfig.REMOTES.KILL_NOTIFICATION)
 	remotes.gunshotSpatialRE = getOrCreate(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
 	remotes.grenadeExplosionFXRE = getOrCreate(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
+	remotes.heliosCommitChargedBeamRE = getOrCreate(CombatConfig.REMOTES.HELIOS_COMMIT_CHARGED_BEAM)
+	remotes.heliosLaserVfxRE = getOrCreate(CombatConfig.REMOTES.HELIOS_LASER_VFX)
 	return remotes
 end
 
@@ -165,6 +167,23 @@ local function broadcastGunshotSpatial(state, shooterUserId, gunId)
 	end
 end
 
+local function broadcastHeliosLaserVFX(state, shooterUserId, origin, directionUnit, beamLength)
+	if not remotes.heliosLaserVfxRE then
+		return
+	end
+	if typeof(shooterUserId) ~= "number" or typeof(origin) ~= "Vector3" then
+		return
+	end
+	if typeof(directionUnit) ~= "Vector3" or typeof(beamLength) ~= "number" then
+		return
+	end
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p and p.Parent then
+			remotes.heliosLaserVfxRE:FireClient(p, shooterUserId, origin, directionUnit, beamLength)
+		end
+	end
+end
+
 local function broadcastGrenadeExplosionFX(state, worldPosition, radius, explosionSoundId, throwerUserId)
 	if not remotes.grenadeExplosionFXRE then
 		return
@@ -193,4 +212,5 @@ return {
 	sendEliminationNotice = sendEliminationNotice,
 	broadcastGunshotSpatial = broadcastGunshotSpatial,
 	broadcastGrenadeExplosionFX = broadcastGrenadeExplosionFX,
+	broadcastHeliosLaserVFX = broadcastHeliosLaserVFX,
 }

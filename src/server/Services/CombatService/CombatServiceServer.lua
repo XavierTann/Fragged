@@ -23,6 +23,7 @@ local CombatBullets = require(script.Parent.CombatBullets)
 local CombatGrenades = require(script.Parent.CombatGrenades)
 local CombatRockets = require(script.Parent.CombatRockets)
 local CombatTDM = require(script.Parent.CombatTDM)
+local CombatHeliosLaser = require(script.Parent.CombatHeliosLaser)
 local WeaponInventoryServer = require(script.Parent.WeaponInventoryServer)
 local WeaponToolServer = require(script.Parent.WeaponToolServer)
 local HistoryBuffer = require(script.Parent.HistoryBuffer)
@@ -203,6 +204,11 @@ local function bindHandlers()
 			return
 		end
 
+		if gunId == "HeliosThread" then
+			rejectFire(state, player, "HeliosUseLaser", gunId, false)
+			return
+		end
+
 		local aimUnit = validateFireAimDirection(aimDirection)
 		if not aimUnit then
 			rejectFire(state, player, "BadDirection", gunId, true)
@@ -349,6 +355,29 @@ local function bindHandlers()
 			CombatRemotes.sendAmmoState(state, player, gunId, newAmmo, false)
 		end
 	end)
+
+	if r.heliosCommitChargedBeamRE then
+		r.heliosCommitChargedBeamRE.OnServerEvent:Connect(function(player, shotOrigin, aimDirection)
+			local state = getPlayerState(player)
+			if not state or state.matchEnded then
+				return
+			end
+			if typeof(shotOrigin) ~= "Vector3" or typeof(aimDirection) ~= "Vector3" then
+				rejectFire(state, player, "InvalidArgs", "HeliosThread", true, false)
+				return
+			end
+			local aimUnit = validateFireAimDirection(aimDirection)
+			if not aimUnit then
+				rejectFire(state, player, "BadDirection", "HeliosThread", true, false)
+				return
+			end
+			local ok, err = CombatHeliosLaser.commitChargedBeamAfterRelease(state, player, shotOrigin, aimUnit, validateClientShotOrigin, playerOwnsGun)
+			if not ok and err then
+				local resetRate = err == "BadOrigin" or err == "BadDirection" or err == "InvalidArgs"
+				rejectFire(state, player, err, "HeliosThread", resetRate, false)
+			end
+		end)
+	end
 
 	r.requestReloadRE.OnServerEvent:Connect(function(player, gunId)
 		local state = getPlayerState(player)
@@ -676,6 +705,7 @@ return {
 			return
 		end
 		for _, p in ipairs(state.currentRoundPlayers) do
+			CombatHeliosLaser.cancelActiveCommitForPlayer(state, p)
 			playerToMatchId[p.UserId] = nil
 		end
 		matchStates[matchId] = nil
@@ -697,6 +727,7 @@ return {
 		if not state or state.matchEnded then
 			return false
 		end
+		CombatHeliosLaser.cancelActiveCommitForPlayer(state, player)
 		local uid = player.UserId
 		local found = false
 		local remaining = {}

@@ -26,5 +26,8 @@ return function()
 		rocketCount = {},
 		rocketRegenTimes = {},
 		reloadEndAt = {},
+		-- Helios release-commit: per-user invalidation token + movement lock snapshot while charging to beam.
+		heliosCommitSeq = {},
+		heliosMovementSave = {},
 	}
 end

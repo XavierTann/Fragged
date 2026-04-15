@@ -1,6 +1,6 @@
 --[[
 	Direction indicator — weapon aim previews (off-axis): Rifle line beam, Shotgun sector,
-	Rocket rectangle, Grenade chain.
+	Rocket rectangle, Helios beam corridor (flat rectangle), Grenade chain.
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -12,6 +12,7 @@ local RotationJoystickGUI = require(Shared.UI.RotationJoystickGUI)
 local GunsConfig = require(Shared.Modules.GunsConfig)
 local RocketLauncherConfig = require(Shared.Modules.RocketLauncherConfig)
 local GrenadeTrajectoryUtils = require(Shared.Modules.GrenadeTrajectoryUtils)
+local HeliosLaserConfig = require(Shared.Modules.HeliosLaserConfig)
 
 local Config = require(script.Parent.Config)
 
@@ -20,6 +21,7 @@ local GRENADE_BEAM_WIDTH = 0.065
 
 local aimBeamHost = nil
 local aimRocketRect = nil
+local aimHeliosRect = nil
 local grenadeAimHost = nil
 local grenadeChainAttachments = {}
 local grenadeChainBeams = {}
@@ -63,6 +65,12 @@ local function destroyGrenadeAimChain()
 	grenadeChainBeams = {}
 end
 
+local function hideHeliosAimRect()
+	if aimHeliosRect then
+		aimHeliosRect.Transparency = 1
+	end
+end
+
 local function destroyAimVisuals()
 	if aimBeamHost then
 		aimBeamHost:Destroy()
@@ -71,6 +79,10 @@ local function destroyAimVisuals()
 	if aimRocketRect then
 		aimRocketRect:Destroy()
 		aimRocketRect = nil
+	end
+	if aimHeliosRect then
+		aimHeliosRect:Destroy()
+		aimHeliosRect = nil
 	end
 	destroyGrenadeAimChain()
 	destroyShotgunSector()
@@ -254,6 +266,28 @@ local function ensureAimRocketRect(character)
 	return p
 end
 
+local function ensureAimHeliosRect(character)
+	if aimHeliosRect and aimHeliosRect.Parent == character then
+		return aimHeliosRect
+	end
+	if aimHeliosRect then
+		aimHeliosRect:Destroy()
+		aimHeliosRect = nil
+	end
+	local p = Instance.new("Part")
+	p.Name = "DirectionIndicator_HeliosBeamZone"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = HeliosLaserConfig.BEAM_COLOR
+	p.Transparency = 1
+	p.Parent = character
+	aimHeliosRect = p
+	return p
+end
+
 local function ensureGrenadeAimChain(character)
 	if grenadeAimHost and grenadeAimHost.Parent == character then
 		return
@@ -339,6 +373,8 @@ local function getAimOffsetTargetXZ(weapon)
 		spanLength = getRocketAimRange()
 	elseif weapon == "Shotgun" then
 		spanLength = getShotgunAimRange()
+	elseif weapon == "HeliosThread" then
+		spanLength = HeliosLaserConfig.MAX_RANGE
 	end
 
 	if UserInputService.TouchEnabled then
@@ -366,6 +402,7 @@ local function hideAllOverlays()
 	if aimRocketRect then
 		aimRocketRect.Transparency = 1
 	end
+	hideHeliosAimRect()
 	destroyGrenadeAimChain()
 	destroyShotgunSector()
 end
@@ -373,6 +410,7 @@ end
 local function updateRifle(ctx)
 	destroyGrenadeAimChain()
 	destroyShotgunSector()
+	hideHeliosAimRect()
 	local beamHost = ensureAimBeamHost(ctx.character)
 	local beam = beamHost:FindFirstChild("AimDirectionBeam")
 	local att0 = beamHost:FindFirstChild("AimLineStart")
@@ -411,6 +449,7 @@ end
 local function updateRocketLauncher(ctx)
 	destroyGrenadeAimChain()
 	destroyShotgunSector()
+	hideHeliosAimRect()
 	local rect = ensureAimRocketRect(ctx.character)
 	local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
 	if beam then
@@ -438,6 +477,7 @@ end
 
 local function updateShotgun(ctx)
 	destroyGrenadeAimChain()
+	hideHeliosAimRect()
 	local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
 	if beam then
 		beam.Enabled = false
@@ -478,6 +518,7 @@ end
 
 local function updateGrenade(ctx)
 	destroyShotgunSector()
+	hideHeliosAimRect()
 	local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
 	if beam then
 		beam.Enabled = false
@@ -499,10 +540,46 @@ local function updateGrenade(ctx)
 	end
 end
 
+-- Flat XZ corridor matching server spherecast width (2× radius) and max beam length.
+local function updateHelios(ctx)
+	destroyGrenadeAimChain()
+	destroyShotgunSector()
+	local beam = aimBeamHost and aimBeamHost:FindFirstChild("AimDirectionBeam")
+	if beam then
+		beam.Enabled = false
+	end
+	if aimRocketRect then
+		aimRocketRect.Transparency = 1
+	end
+
+	local range = HeliosLaserConfig.MAX_RANGE
+	local width = HeliosLaserConfig.BEAM_RADIUS * 2
+
+	if not ctx.showAim or ctx.smoothedAimOffsetXZ.Magnitude < 0.12 then
+		hideHeliosAimRect()
+		return
+	end
+
+	local rect = ensureAimHeliosRect(ctx.character)
+	local flat = Vector3.new(ctx.smoothedAimOffsetXZ.X, 0, ctx.smoothedAimOffsetXZ.Z)
+	local dir = flat.Unit
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	if right.Magnitude < 0.001 then
+		right = Vector3.new(1, 0, 0)
+	else
+		right = right.Unit
+	end
+	local mid = ctx.startPos + dir * (range * 0.5)
+	rect.Size = Vector3.new(width, Config.ROCKET_RECT_THICKNESS, range)
+	rect.CFrame = CFrame.fromMatrix(mid, right, Vector3.yAxis)
+	rect.Color = HeliosLaserConfig.BEAM_COLOR
+	rect.Transparency = 0.44
+end
+
 local weaponHandlers = {
 	Rifle = updateRifle,
 	PlasmaCarbine = updateRifle,
-	HeliosThread = updateRifle,
+	HeliosThread = updateHelios,
 	PrismRipper = updateRifle,
 	Shotgun = updateShotgun,
 	RocketLauncher = updateRocketLauncher,

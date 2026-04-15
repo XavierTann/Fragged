@@ -10,6 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CreditsConfig = require(Shared.Modules.CreditsConfig)
 local ShopCatalog = require(Shared.Modules.ShopCatalog)
 local CombatConfig = require(Shared.Modules.CombatConfig)
+local LoadoutConfig = require(Shared.Modules.LoadoutConfig)
 
 local WeaponInventoryServer = require(script.Parent.Parent.CombatService.WeaponInventoryServer)
 local WeaponToolServer = require(script.Parent.Parent.CombatService.WeaponToolServer)
@@ -204,6 +205,28 @@ local function fireSync(player: Player)
 	syncRE:FireClient(player, buildSyncPayload(data))
 end
 
+local function grantHeliosAndEquipSecondary(player: Player)
+	local data = getOrLoad(player)
+	if not ownsGun(data, "HeliosThread") then
+		table.insert(data.ownedShopGuns, "HeliosThread")
+		cache[player.UserId] = data
+		WeaponInventoryServer.addWeapon(player, "HeliosThread")
+		WeaponToolServer.giveGunToolIfMissing(player, "HeliosThread")
+		if store then
+			savePlayer(player.UserId, data)
+		end
+	end
+	local LoadoutServiceServer = require(script.Parent.Parent.LoadoutService.LoadoutServiceServer)
+	local lo = LoadoutServiceServer.GetLoadout(player)
+	local primary = lo.primary
+	if not LoadoutConfig:isPrimaryWeapon(primary) then
+		primary = LoadoutConfig.DEFAULT.primary
+	end
+	if not LoadoutServiceServer.SetLoadout(player, primary, "HeliosThread") then
+		LoadoutServiceServer.SetLoadout(player, LoadoutConfig.DEFAULT.primary, "HeliosThread")
+	end
+end
+
 local function preparePlayerEconomy(player: Player)
 	local data = getOrLoad(player)
 	if CreditsConfig.GRANT_TEST_CREDITS == true then
@@ -212,6 +235,10 @@ local function preparePlayerEconomy(player: Player)
 	end
 	applyOwnedGunsToInventory(player, data)
 	fireSync(player)
+	if CreditsConfig.AUTO_OWN_HELIOS_AND_EQUIP_SECONDARY == true then
+		grantHeliosAndEquipSecondary(player)
+		fireSync(player)
+	end
 end
 
 local EconomyServiceServer = {}

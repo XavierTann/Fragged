@@ -22,6 +22,7 @@ local currentDirection = Vector2.zero
 local isActive = false
 local touchStartPos = Vector2.zero
 local onReleaseCallbacks = {}
+local onEngageCallbacks = {}
 local thumbStartPos = Vector2.zero
 local lastProcessedTouchPos = nil -- reject InputChanged from other finger ( sudden jumps )
 local activeTouchInput = nil -- touch that started on our joystick (for correlating InputEnded)
@@ -211,6 +212,9 @@ local function initJoystick(parent)
 		currentDirection = clampToCircle(thumbStartPos, touchStartPos, joystickRadiusPx)
 		updateThumbPosition(currentDirection)
 		refreshCancelFireFromJoystick()
+		for _, cb in ipairs(onEngageCallbacks) do
+			task.defer(cb)
+		end
 	end
 
 	backgroundFrame.InputBegan:Connect(onBackgroundInputBegan)
@@ -261,6 +265,10 @@ return {
 	-- Called when joystick returns to center (finger lifted). Args: worldDir, releaseInsideCancelZone
 	SubscribeOnRelease = function(callback)
 		table.insert(onReleaseCallbacks, callback)
+	end,
+	-- Finger first touches the aim joystick (mobile). Optional hooks for weapons that care about engage.
+	SubscribeOnEngage = function(callback)
+		table.insert(onEngageCallbacks, callback)
 	end,
 	-- When true, enables cancel-on-release (strip visible only while aim is off-axis).
 	SetCancelFireZoneActive = function(active)

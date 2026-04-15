@@ -10,7 +10,7 @@
 	Gunshots: local predicted sound + GunshotSpatial to other round players; all use 3D Sound on HRP or tool Handle.
 	Mobile: Primary weapons fire while aim joystick is off-axis; Secondary weapons match Grenade/Rocket
 	(fire on joystick release with last aim direction). Releasing inside the cancel zone
-	skips the shot for those weapons only.
+	skips the shot for those weapons only. Helios Thread: release G / joystick commits a locked charge, then beam.
 	Desktop: Primary weapons on LMB; Secondary weapons match Grenade/Rocket (G key + mouse aim, no LMB).
 	Respects ammo and reload state from server to prevent spamming.
 ]]
@@ -28,6 +28,7 @@ local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local LoadoutConfig = require(ReplicatedStorage.Shared.Modules.LoadoutConfig)
 local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
+local HeliosLaserConfig = require(ReplicatedStorage.Shared.Modules.HeliosLaserConfig)
 
 local FireGunRE = nil
 local RequestReloadRE = nil
@@ -39,7 +40,13 @@ local shootingEnabled = false
 local serverTimeOffset = 0
 local currentWeapon = "Rifle"
 local inputConnection = nil
+local inputEndedConnection = nil
 local renderSteppedConnection = nil
+local HeliosCommitChargedBeamRE = nil
+-- Bumped on each new Helios commit or cancel so delayed client cleanup does not fight newer state.
+local heliosClientCommitSeq = 0
+local heliosChargeSoundLoop = nil
+local heliosClientMoveSave = nil
 
 -- [gunId] = { ammo = number, isReloading = boolean, reloadStartedAt = number? }
 local ammoState = {}
@@ -245,6 +252,12 @@ local function preloadCombatSounds()
 	end
 	if GrenadeConfig.explosionSoundId then
 		table.insert(ids, GrenadeConfig.explosionSoundId)
+	end
+	if HeliosLaserConfig.PLACEHOLDER_CHARGE_SOUND_ID ~= "" then
+		table.insert(ids, HeliosLaserConfig.PLACEHOLDER_CHARGE_SOUND_ID)
+	end
+	if HeliosLaserConfig.PLACEHOLDER_FIRE_SOUND_ID ~= "" then
+		table.insert(ids, HeliosLaserConfig.PLACEHOLDER_FIRE_SOUND_ID)
 	end
 	local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 	if RocketLauncherConfig.throwSoundId then
@@ -595,9 +608,136 @@ local function throwGrenade(dir)
 	ThrowGrenadeRE:FireServer(dir)
 end
 
+local function isHeliosWeapon(weaponId)
+	return weaponId == "HeliosThread"
+end
+
+local function stopHeliosChargeSoundLoop()
+	if heliosChargeSoundLoop then
+		heliosChargeSoundLoop:Stop()
+		heliosChargeSoundLoop:Destroy()
+		heliosChargeSoundLoop = nil
+	end
+end
+
+local function spawnHeliosBeamVisual(origin, dirUnit, length)
+	if typeof(length) ~= "number" or length < 0.5 then
+		return
+	end
+	local cfg = HeliosLaserConfig
+	local thick = cfg.BEAM_THICKNESS_STUDS
+	local mid = origin + dirUnit * (length * 0.5)
+	local p = Instance.new("Part")
+	p.Name = "HeliosBeamFX"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = cfg.BEAM_COLOR
+	p.Size = Vector3.new(thick, thick, length)
+	p.CFrame = CFrame.lookAt(mid, mid + dirUnit)
+	p.Transparency = 0.2
+	p.Parent = Workspace
+	local light = Instance.new("PointLight")
+	light.Brightness = 2
+	light.Range = thick * 4
+	light.Color = cfg.BEAM_COLOR
+	light.Parent = p
+	Debris:AddItem(p, cfg.BEAM_GLOW_TIME)
+end
+
+local function clearHeliosClientMovementLock()
+	if not heliosClientMoveSave then
+		return
+	end
+	local hum = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if hum and heliosClientMoveSave.WalkSpeed ~= nil then
+		hum.WalkSpeed = heliosClientMoveSave.WalkSpeed
+	end
+	heliosClientMoveSave = nil
+end
+
+local function applyHeliosClientMovementLock()
+	if heliosClientMoveSave then
+		return
+	end
+	local hum = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	heliosClientMoveSave = {
+		WalkSpeed = hum.WalkSpeed,
+	}
+	hum.WalkSpeed = 0
+end
+
+local function invalidateHeliosClientCommit()
+	stopHeliosChargeSoundLoop()
+	heliosClientCommitSeq += 1
+	clearHeliosClientMovementLock()
+end
+
+-- Release commits aim + movement lock; server fires beam after CHARGE_DURATION (same aim).
+local function commitHeliosChargedBeamClient(aimDirOptional)
+	if not shootingEnabled or not HeliosCommitChargedBeamRE then
+		return
+	end
+	if not isHeliosWeapon(currentWeapon) then
+		return
+	end
+	if not canFire() then
+		return
+	end
+	local character = Players.LocalPlayer.Character
+	local dir = aimDirOptional or getAimDirectionFromMouse()
+	if not dir or not character then
+		return
+	end
+	local shotOrigin = getShotOriginForDirection(character, dir)
+	if not shotOrigin then
+		return
+	end
+	if not canFireByRate() then
+		return
+	end
+	if heliosClientMoveSave then
+		return
+	end
+	heliosClientCommitSeq += 1
+	local mySeq = heliosClientCommitSeq
+	lastFiredAt = os.clock()
+	applyHeliosClientMovementLock()
+	stopHeliosChargeSoundLoop()
+	local id = HeliosLaserConfig.PLACEHOLDER_CHARGE_SOUND_ID
+	if typeof(id) == "string" and id ~= "" then
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if root then
+			local sound = Instance.new("Sound")
+			sound.SoundId = id
+			sound.Looped = true
+			sound.Volume = 0.5
+			sound.RollOffMode = Enum.RollOffMode.InverseTapered
+			sound.RollOffMinDistance = 6
+			sound.RollOffMaxDistance = 80
+			sound.Parent = root
+			sound:Play()
+			heliosChargeSoundLoop = sound
+		end
+	end
+	HeliosCommitChargedBeamRE:FireServer(shotOrigin, dir)
+	task.delay(HeliosLaserConfig.CHARGE_DURATION, function()
+		if heliosClientCommitSeq ~= mySeq then
+			return
+		end
+		clearHeliosClientMovementLock()
+		stopHeliosChargeSoundLoop()
+	end)
+end
+
+-- Secondaries (including Helios): no auto-fire from aim joystick each frame; mobile uses joystick release / cancel zone.
 local function isReleaseToFireWeapon(weaponId)
-	return weaponId == "Grenade" or weaponId == "RocketLauncher"
-		or LoadoutConfig:isSecondaryWeapon(weaponId)
+	return weaponId == "Grenade" or weaponId == "RocketLauncher" or LoadoutConfig:isSecondaryWeapon(weaponId)
 end
 
 local function onRenderStepped()
@@ -611,6 +751,18 @@ local function onRenderStepped()
 	local dir = RotationJoystickGUI.GetWorldDirectionXZ()
 	if dir then
 		fireInDirection(dir)
+	end
+end
+
+-- G key release (desktop): Helios commits charged beam; other release-style weapons fire on press (handled in Began).
+local function onInputEndedDesktop(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
+		if isHeliosWeapon(currentWeapon) then
+			commitHeliosChargedBeamClient()
+		end
 	end
 end
 
@@ -628,8 +780,11 @@ local function onInputBegan(input, gameProcessed)
 		end
 		return
 	end
-	-- Release-to-fire weapons: G key (desktop only; mobile uses joystick release)
+	-- G: Helios commits on release only (see InputEnded). Other secondaries fire on press.
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.G then
+		if isHeliosWeapon(currentWeapon) then
+			return
+		end
 		if isReleaseToFireWeapon(currentWeapon) then
 			local dir = getAimDirectionFromMouse()
 			if dir then
@@ -676,9 +831,14 @@ end
 local function setShootingEnabled(enabled)
 	shootingEnabled = enabled
 	lastFiredAt = 0
+	invalidateHeliosClientCommit()
 	if inputConnection then
 		inputConnection:Disconnect()
 		inputConnection = nil
+	end
+	if inputEndedConnection then
+		inputEndedConnection:Disconnect()
+		inputEndedConnection = nil
 	end
 	if renderSteppedConnection then
 		renderSteppedConnection:Disconnect()
@@ -689,6 +849,7 @@ local function setShootingEnabled(enabled)
 		renderSteppedConnection = RunService.RenderStepped:Connect(onRenderStepped)
 		if not UserInputService.TouchEnabled then
 			inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
+			inputEndedConnection = UserInputService.InputEnded:Connect(onInputEndedDesktop)
 		end
 	else
 		unequipCombatTools()
@@ -713,6 +874,8 @@ return {
 		wireHideOwnReplicatedBullets()
 		local folder = ReplicatedStorage:WaitForChild(CombatConfig.REMOTE_FOLDER_NAME)
 		FireGunRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN)
+		HeliosCommitChargedBeamRE = folder:WaitForChild(CombatConfig.REMOTES.HELIOS_COMMIT_CHARGED_BEAM)
+		local heliosLaserVfxRE = folder:WaitForChild(CombatConfig.REMOTES.HELIOS_LASER_VFX)
 		RequestReloadRE = folder:WaitForChild(CombatConfig.REMOTES.REQUEST_RELOAD)
 		local fireGunRejectedRE = folder:WaitForChild(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
 		AmmoStateRE = folder:WaitForChild(CombatConfig.REMOTES.AMMO_STATE)
@@ -757,6 +920,17 @@ return {
 			playLocalGrenadeExplosionVFX(serverCenter, radius, explosionSoundId)
 		end)
 
+		heliosLaserVfxRE.OnClientEvent:Connect(function(_shooterUserId, origin, directionUnit, beamLength)
+			if typeof(origin) ~= "Vector3" or typeof(directionUnit) ~= "Vector3" or typeof(beamLength) ~= "number" then
+				return
+			end
+			local u = directionUnit.Unit
+			if u.Magnitude < 0.99 then
+				return
+			end
+			spawnHeliosBeamVisual(origin, u, beamLength)
+		end)
+
 		gunshotSpatialRE.OnClientEvent:Connect(function(shooterUserId, gunId)
 			if typeof(shooterUserId) ~= "number" or typeof(gunId) ~= "string" then
 				return
@@ -775,8 +949,14 @@ return {
 			end
 		end)
 
-		fireGunRejectedRE.OnClientEvent:Connect(function(_reason, _gunId, resetClientFireRate)
+		fireGunRejectedRE.OnClientEvent:Connect(function(_reason, gunId, resetClientFireRate)
 			if resetClientFireRate then
+				lastFiredAt = 0
+			end
+			if gunId == "HeliosThread" then
+				stopHeliosChargeSoundLoop()
+				clearHeliosClientMovementLock()
+				heliosClientCommitSeq += 1
 				lastFiredAt = 0
 			end
 		end)
@@ -822,6 +1002,10 @@ return {
 					return
 				end
 				if not isReleaseToFireWeapon(currentWeapon) then
+					return
+				end
+				if isHeliosWeapon(currentWeapon) then
+					commitHeliosChargedBeamClient(worldDir)
 					return
 				end
 				if currentWeapon == "Grenade" then
@@ -913,6 +1097,7 @@ return {
 	RequestReload = requestReload,
 
 	SetCurrentWeapon = function(gunId)
+		invalidateHeliosClientCommit()
 		currentWeapon = gunId or "Rifle"
 		if not equipCurrentWeapon() then
 			task.defer(function()

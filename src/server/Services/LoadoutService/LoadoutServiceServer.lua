@@ -68,6 +68,17 @@ function LoadoutServiceServer.GetLoadout(player)
 	}
 end
 
+function LoadoutServiceServer.SetLoadout(player, primary, secondary)
+	if not validateLoadout(player, primary, secondary) then
+		return false
+	end
+	playerLoadouts[player.UserId] = {
+		primary = primary,
+		secondary = secondary,
+	}
+	return true
+end
+
 function LoadoutServiceServer.Init()
 	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
 	if not folder then

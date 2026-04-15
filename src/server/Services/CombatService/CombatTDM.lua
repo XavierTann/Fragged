@@ -9,6 +9,7 @@ local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUti
 local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 local TDMSpawnStrategy = require(script.Parent.TDMSpawnStrategy)
 local CombatRemotes = require(script.Parent.CombatRemotes)
+local CombatHeliosLaser = require(script.Parent.CombatHeliosLaser)
 local EconomyServiceServer = require(script.Parent.Parent.EconomyService.EconomyServiceServer)
 
 local function getTDMContext(state)
@@ -120,6 +121,11 @@ local function endMatch(state, winningTeam)
 		return
 	end
 	state.matchEnded = true
+	for _, p in ipairs(state.currentRoundPlayers) do
+		if p and p.Parent then
+			CombatHeliosLaser.cancelActiveCommitForPlayer(state, p)
+		end
+	end
 	print("[Combat] TDM match ended. Winning team: " .. TeamDisplayUtils.displayName(winningTeam))
 	for _, conn in pairs(state.diedConnections) do
 		if conn and conn.Disconnect then
@@ -184,6 +190,7 @@ local function onPlayerDied(state, deadPlayer)
 	if state.matchEnded then
 		return
 	end
+	CombatHeliosLaser.cancelActiveCommitForPlayer(state, deadPlayer)
 	local uid = deadPlayer.UserId
 	state.playerDeaths[uid] = (state.playerDeaths[uid] or 0) + 1
 	local humanoid = deadPlayer.Character and deadPlayer.Character:FindFirstChildOfClass("Humanoid")

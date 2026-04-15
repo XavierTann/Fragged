@@ -44,6 +44,10 @@ return {
 		LOADOUT_SELECT = "LoadoutSelect", -- Client -> Server: { primary = string, secondary = string }
 		-- Lag compensation time sync (RemoteFunction: client invokes, server returns os.clock())
 		TIME_SYNC = "CombatTimeSync",
+		-- Helios Thread: release commits aim, server locks movement, beam after charge delay
+		HELIOS_COMMIT_CHARGED_BEAM = "HeliosCommitChargedBeam",
+		-- Server -> clients in round: beam VFX (origin, direction unit, length studs)
+		HELIOS_LASER_VFX = "HeliosLaserVFX",
 		LEAVE_MATCH = "LeaveMatch", -- Client -> Server: voluntary forfeit, return to lobby
 		-- Gacha system
 		GACHA_RESULT = "GachaResult", -- Server -> Client: { weaponId, rarity, permanent, rounds, isFree }

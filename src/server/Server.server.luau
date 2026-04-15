@@ -15,9 +15,13 @@ local DropService = Services:WaitForChild("DropService"):WaitForChild("DropServi
 local CharacterService = Services:WaitForChild("CharacterService"):WaitForChild("CharacterServiceServer")
 local LoadoutService = Services:WaitForChild("LoadoutService"):WaitForChild("LoadoutServiceServer")
 local GachaService = Services:WaitForChild("GachaService"):WaitForChild("GachaServiceServer")
+local ArenaService = Services:WaitForChild("ArenaService"):WaitForChild("ArenaServiceServer")
+local MatchService = Services:WaitForChild("MatchService"):WaitForChild("MatchServiceServer")
+local PadQueueService = Services:WaitForChild("PadQueueService"):WaitForChild("PadQueueServiceServer")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CombatConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("CombatConfig"))
+local LobbyConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules"):WaitForChild("LobbyConfig"))
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
@@ -27,6 +31,9 @@ local CharacterServiceModule = require(CharacterService)
 local LoadoutServiceModule = require(LoadoutService)
 local GachaServiceModule = require(GachaService)
 local WeaponInventoryServer = require(Services:WaitForChild("CombatService"):WaitForChild("WeaponInventoryServer"))
+local ArenaServiceModule = require(ArenaService)
+local MatchServiceModule = require(MatchService)
+local PadQueueServiceModule = require(PadQueueService)
 
 CharacterServiceModule.Init()
 CombatServiceModule.Init()
@@ -59,15 +66,7 @@ DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 end)
 DropServiceModule.Init()
 
-LobbyServiceModule.Init(function(players, playerTeamsMap)
-	DropServiceModule.Start()
-	CombatServiceModule.StartRound(players, function()
-		DropServiceModule.Stop()
-		for _, p in ipairs(players) do
-			LobbyServiceModule.ReturnPlayerToLobby(p)
-		end
-	end, playerTeamsMap)
-end)
+LobbyServiceModule.Init(nil)
 
 do
 	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
@@ -91,6 +90,8 @@ do
 		leaveCooldowns[player.UserId] = now
 		local removed = CombatServiceModule.RemovePlayerFromRound(player)
 		if removed then
+			MatchServiceModule.RemovePlayerFromMatch(player)
+			PadQueueServiceModule.ClearPlayerArenaPhase(player)
 			LobbyServiceModule.ReturnPlayerToLobby(player)
 		end
 	end)
@@ -98,5 +99,32 @@ do
 		leaveCooldowns[player.UserId] = nil
 	end)
 end
+
+-- ── Multi-arena instancing system (SpawnPads1, SpawnPads2, …) ──
+ArenaServiceModule.Init()
+
+MatchServiceModule.Init({
+	onRoundStart = function(match)
+		for _, p in ipairs(match.players) do
+			LobbyServiceModule.SetPlayerPhase(p.UserId, LobbyConfig.PHASE.ARENA)
+		end
+		DropServiceModule.Start(match.matchId, match.arenaModel)
+		CombatServiceModule.StartRound(match.players, function()
+			DropServiceModule.Stop(match.matchId)
+			CombatServiceModule.CleanupMatchState(match.matchId)
+			PadQueueServiceModule.ClearMatchPlayers(match.players)
+			MatchServiceModule.EndMatch(match.matchId)
+		end, match.playerTeamsMap, match.matchId, match.arenaModel)
+	end,
+	onRoundEnd = function(_match)
+	end,
+})
+
+PadQueueServiceModule.Init(function(padFolderName, players, playerTeamsMap)
+	local match = MatchServiceModule.CreateMatch(padFolderName, players, playerTeamsMap)
+	if match then
+		MatchServiceModule.StartMatch(match.matchId)
+	end
+end)
 
 print("Server startup complete.")

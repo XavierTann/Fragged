@@ -35,7 +35,7 @@ local function bindRemoteHandlers()
 		LobbyPadZones.clearPadOccupantForUser(player.UserId)
 		LobbyQueue.maybeCancelCountdown(state, remotes)
 		remotes.TeleportToLobby:FireClient(player)
-		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+		LobbySpawns.teleportPlayerTo(player, LobbyConfig.LOBBY_SPAWN_NAME)
 		remotes.LobbyState:FireClient(player, LobbyQueue.buildStateForPlayer(state, remotes, player))
 		LobbyQueue.broadcastStateToWaiting(state, remotes)
 	end)
@@ -61,7 +61,7 @@ local function setupPlayerSpawn()
 			local phase = state.playerPhase[player.UserId] or LobbyConfig.PHASE.LOBBY
 			if phase == LobbyConfig.PHASE.LOBBY then
 				task.defer(function()
-					LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+					LobbySpawns.teleportPlayerTo(player, LobbyConfig.LOBBY_SPAWN_NAME)
 				end)
 			end
 		end)
@@ -69,7 +69,7 @@ local function setupPlayerSpawn()
 			local phase = state.playerPhase[player.UserId] or LobbyConfig.PHASE.LOBBY
 			if phase == LobbyConfig.PHASE.LOBBY then
 				task.defer(function()
-					LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+					LobbySpawns.teleportPlayerTo(player, LobbyConfig.LOBBY_SPAWN_NAME)
 				end)
 			end
 		end
@@ -77,7 +77,7 @@ local function setupPlayerSpawn()
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.defer(function()
 			if player.Character and (not state.playerPhase[player.UserId] or state.playerPhase[player.UserId] == LobbyConfig.PHASE.LOBBY) then
-				LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+				LobbySpawns.teleportPlayerTo(player, LobbyConfig.LOBBY_SPAWN_NAME)
 			end
 		end)
 	end
@@ -102,11 +102,15 @@ return {
 	ReturnPlayerToLobby = function(player)
 		state.playerPhase[player.UserId] = LobbyConfig.PHASE.LOBBY
 		remotes.TeleportToLobby:FireClient(player)
-		LobbySpawns.teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+		LobbySpawns.teleportPlayerTo(player, LobbyConfig.LOBBY_SPAWN_NAME)
 		remotes.LobbyState:FireClient(player, LobbyQueue.buildStateForPlayer(state, remotes, player))
 	end,
 
 	GetPhase = function(userId)
 		return state.playerPhase[userId] or LobbyConfig.PHASE.LOBBY
+	end,
+
+	SetPlayerPhase = function(userId, phase)
+		state.playerPhase[userId] = phase
 	end,
 }

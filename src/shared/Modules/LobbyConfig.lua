@@ -45,13 +45,8 @@ return {
 		ARENA = "Arena",
 	},
 
-	-- Workspace folder: SpawnLocations (LobbySpawnLocation, BlueTeamSpawnLocation, RedTeamSpawnLocation)
-	SPAWNS_FOLDER_NAME = "SpawnLocations",
-	SPAWN_NAMES = {
-		LOBBY = "LobbySpawnLocation",
-		RED_TEAM = "RedTeamSpawnLocation",
-		BLUE_TEAM = "BlueTeamSpawnLocation",
-	},
+	-- Lobby spawn is directly under Workspace as "LobbySpawnLocation"
+	LOBBY_SPAWN_NAME = "LobbySpawnLocation",
 
 	-- Workspace/Lobby/SpawnPads — direct child Models with these exact names
 	LOBBY_PADS_FOLDER_PATH = { "Lobby", "SpawnPads" },

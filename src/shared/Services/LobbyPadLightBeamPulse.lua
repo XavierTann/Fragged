@@ -1,6 +1,7 @@
 --[[
 	LobbyPadLightBeamPulse (client)
-	Pulses Transparency on every part named LightBeam under BluePad/RedPad models in Lobby/SpawnPads.
+	Pulses Transparency on every part named LightBeam under BluePad/RedPad models
+	in all Lobby/SpawnPadsN folders.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -9,21 +10,23 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
 
--- BaseParts named LightBeam under pad models
 local beams = {}
-local folderConn = {}
+local folderConns = {}
 local renderConn = nil
 local rebuildScheduled = false
 
-local function getSpawnPadsFolder()
-	local inst = Workspace
-	for _, name in ipairs(LobbyConfig.LOBBY_PADS_FOLDER_PATH) do
-		inst = inst:FindFirstChild(name)
-		if not inst then
-			return nil
+local function getAllSpawnPadsFolders()
+	local lobby = Workspace:FindFirstChild("Lobby")
+	if not lobby then
+		return {}
+	end
+	local results = {}
+	for _, child in ipairs(lobby:GetChildren()) do
+		if child:IsA("Folder") and child.Name:match("^SpawnPads%d+$") then
+			table.insert(results, child)
 		end
 	end
-	return inst
+	return results
 end
 
 local function isPadModel(model)
@@ -33,15 +36,14 @@ end
 
 local function rebuildBeamList()
 	table.clear(beams)
-	local folder = getSpawnPadsFolder()
-	if not folder then
-		return
-	end
-	for _, child in ipairs(folder:GetChildren()) do
-		if isPadModel(child) then
-			for _, d in ipairs(child:GetDescendants()) do
-				if d.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME and d:IsA("BasePart") then
-					beams[#beams + 1] = d
+	local folders = getAllSpawnPadsFolders()
+	for _, folder in ipairs(folders) do
+		for _, child in ipairs(folder:GetChildren()) do
+			if isPadModel(child) then
+				for _, d in ipairs(child:GetDescendants()) do
+					if d.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME and d:IsA("BasePart") then
+						beams[#beams + 1] = d
+					end
 				end
 			end
 		end
@@ -59,37 +61,31 @@ local function scheduleRebuild()
 	end)
 end
 
-local function disconnectFolder()
-	for _, c in ipairs(folderConn) do
+local function disconnectFolders()
+	for _, c in ipairs(folderConns) do
 		c:Disconnect()
 	end
-	table.clear(folderConn)
+	table.clear(folderConns)
 end
 
-local function watchFolder(folder)
-	disconnectFolder()
+local function watchFolders()
+	disconnectFolders()
 	rebuildBeamList()
-	folderConn[#folderConn + 1] = folder.ChildAdded:Connect(scheduleRebuild)
-	folderConn[#folderConn + 1] = folder.ChildRemoved:Connect(scheduleRebuild)
-	folderConn[#folderConn + 1] = folder.DescendantAdded:Connect(function(inst)
-		if inst.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME and inst:IsA("BasePart") then
-			scheduleRebuild()
-		end
-	end)
-	folderConn[#folderConn + 1] = folder.DescendantRemoving:Connect(function(inst)
-		if inst.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME then
-			scheduleRebuild()
-		end
-	end)
-end
-
-local function tryBindSpawnPadsFolder()
-	local folder = getSpawnPadsFolder()
-	if folder then
-		watchFolder(folder)
-		return true
+	local folders = getAllSpawnPadsFolders()
+	for _, folder in ipairs(folders) do
+		table.insert(folderConns, folder.ChildAdded:Connect(scheduleRebuild))
+		table.insert(folderConns, folder.ChildRemoved:Connect(scheduleRebuild))
+		table.insert(folderConns, folder.DescendantAdded:Connect(function(inst)
+			if inst.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME and inst:IsA("BasePart") then
+				scheduleRebuild()
+			end
+		end))
+		table.insert(folderConns, folder.DescendantRemoving:Connect(function(inst)
+			if inst.Name == LobbyConfig.LOBBY_LIGHTBEAM_PART_NAME then
+				scheduleRebuild()
+			end
+		end))
 	end
-	return false
 end
 
 local function onRenderStepped()
@@ -113,18 +109,26 @@ return {
 		if renderConn then
 			return
 		end
-		if not tryBindSpawnPadsFolder() then
+		local folders = getAllSpawnPadsFolders()
+		if #folders > 0 then
+			watchFolders()
+		else
 			task.spawn(function()
-				local inst = Workspace
-				for _, name in ipairs(LobbyConfig.LOBBY_PADS_FOLDER_PATH) do
-					inst = inst:WaitForChild(name, 60)
-					if not inst then
-						return
+				local lobby = Workspace:WaitForChild("Lobby", 60)
+				if not lobby then
+					return
+				end
+				local found = false
+				for _, child in ipairs(lobby:GetChildren()) do
+					if child:IsA("Folder") and child.Name:match("^SpawnPads%d+$") then
+						found = true
+						break
 					end
 				end
-				if inst then
-					watchFolder(inst)
+				if not found then
+					lobby.ChildAdded:Wait()
 				end
+				watchFolders()
 			end)
 		end
 		renderConn = RunService.RenderStepped:Connect(onRenderStepped)

@@ -1,6 +1,8 @@
 --[[
 	CombatRemotes
 	Remote creation and client communication (ammo, team score).
+	Remotes are stored at module level (shared across all matches).
+	Functions still receive per-match state for player lists / game data.
 ]]
 
 local Players = game:GetService("Players")
@@ -8,7 +10,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 
-local function ensureRemotes(state)
+local remotes = {}
+
+local function ensureRemotes()
 	local folder = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
 	if not folder then
 		folder = Instance.new("Folder")
@@ -33,61 +37,64 @@ local function ensureRemotes(state)
 		end
 		return r
 	end
-	state.fireGunRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN)
-	state.requestReloadRE = getOrCreate(CombatConfig.REMOTES.REQUEST_RELOAD)
-	state.ammoStateRE = getOrCreate(CombatConfig.REMOTES.AMMO_STATE)
-	state.throwGrenadeRE = getOrCreate(CombatConfig.REMOTES.THROW_GRENADE)
-	state.matchEndedRE = getOrCreate(CombatConfig.REMOTES.MATCH_ENDED)
-	state.teamScoreUpdateRE = getOrCreate(CombatConfig.REMOTES.TEAM_SCORE_UPDATE)
-	state.grenadeStateRE = getOrCreate(CombatConfig.REMOTES.GRENADE_STATE)
-	state.rocketStateRE = getOrCreate(CombatConfig.REMOTES.ROCKET_STATE)
-	state.throwRocketRE = getOrCreate(CombatConfig.REMOTES.THROW_ROCKET)
-	state.weaponInventoryRE = getOrCreate(CombatConfig.REMOTES.WEAPON_INVENTORY)
-	state.playerDiedRE = getOrCreate(CombatConfig.REMOTES.PLAYER_DIED)
-	state.teamAssignmentRE = getOrCreate(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
-	state.fireGunRejectedRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
-	state.getLiveLeaderboardRF = getOrCreateRemoteFunction(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
-	state.damageNumberRE = getOrCreate(CombatConfig.REMOTES.DAMAGE_NUMBER)
-	state.killNotificationRE = getOrCreate(CombatConfig.REMOTES.KILL_NOTIFICATION)
-	state.gunshotSpatialRE = getOrCreate(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
-	state.grenadeExplosionFXRE = getOrCreate(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
+	remotes.fireGunRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN)
+	remotes.requestReloadRE = getOrCreate(CombatConfig.REMOTES.REQUEST_RELOAD)
+	remotes.ammoStateRE = getOrCreate(CombatConfig.REMOTES.AMMO_STATE)
+	remotes.throwGrenadeRE = getOrCreate(CombatConfig.REMOTES.THROW_GRENADE)
+	remotes.matchEndedRE = getOrCreate(CombatConfig.REMOTES.MATCH_ENDED)
+	remotes.teamScoreUpdateRE = getOrCreate(CombatConfig.REMOTES.TEAM_SCORE_UPDATE)
+	remotes.grenadeStateRE = getOrCreate(CombatConfig.REMOTES.GRENADE_STATE)
+	remotes.rocketStateRE = getOrCreate(CombatConfig.REMOTES.ROCKET_STATE)
+	remotes.throwRocketRE = getOrCreate(CombatConfig.REMOTES.THROW_ROCKET)
+	remotes.weaponInventoryRE = getOrCreate(CombatConfig.REMOTES.WEAPON_INVENTORY)
+	remotes.playerDiedRE = getOrCreate(CombatConfig.REMOTES.PLAYER_DIED)
+	remotes.teamAssignmentRE = getOrCreate(CombatConfig.REMOTES.TEAM_ASSIGNMENT)
+	remotes.fireGunRejectedRE = getOrCreate(CombatConfig.REMOTES.FIRE_GUN_REJECTED)
+	remotes.getLiveLeaderboardRF = getOrCreateRemoteFunction(CombatConfig.REMOTES.GET_LIVE_LEADERBOARD)
+	remotes.damageNumberRE = getOrCreate(CombatConfig.REMOTES.DAMAGE_NUMBER)
+	remotes.killNotificationRE = getOrCreate(CombatConfig.REMOTES.KILL_NOTIFICATION)
+	remotes.gunshotSpatialRE = getOrCreate(CombatConfig.REMOTES.GUNSHOT_SPATIAL)
+	remotes.grenadeExplosionFXRE = getOrCreate(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
+	return remotes
 end
 
-local function sendAmmoState(state, player, gunId, ammoCount, isReloading)
-	if state.ammoStateRE then
-		state.ammoStateRE:FireClient(player, gunId, ammoCount, isReloading)
+local function getRemotes()
+	return remotes
+end
+
+local function sendAmmoState(_state, player, gunId, ammoCount, isReloading)
+	if remotes.ammoStateRE then
+		remotes.ammoStateRE:FireClient(player, gunId, ammoCount, isReloading)
 	end
 end
 
--- reason: string (e.g. InvalidArgs, WeaponNotOwned, NotEquipped, BadOrigin, BadDirection, Cooldown, Reloading, EmptyMag).
--- resetClientFireRate: if true, client clears local lastFiredAt so mispredicted shots do not block the next press.
-local function sendFireGunRejected(state, player, reason, gunId, resetClientFireRate)
-	if state.fireGunRejectedRE then
-		state.fireGunRejectedRE:FireClient(player, reason, gunId, resetClientFireRate == true)
+local function sendFireGunRejected(_state, player, reason, gunId, resetClientFireRate)
+	if remotes.fireGunRejectedRE then
+		remotes.fireGunRejectedRE:FireClient(player, reason, gunId, resetClientFireRate == true)
 	end
 end
 
-local function sendGrenadeState(state, player, grenadeCount)
-	if state.grenadeStateRE then
-		state.grenadeStateRE:FireClient(player, grenadeCount)
+local function sendGrenadeState(_state, player, grenadeCount)
+	if remotes.grenadeStateRE then
+		remotes.grenadeStateRE:FireClient(player, grenadeCount)
 	end
 end
 
-local function sendRocketState(state, player, rocketCount)
-	if state.rocketStateRE then
-		state.rocketStateRE:FireClient(player, rocketCount)
+local function sendRocketState(_state, player, rocketCount)
+	if remotes.rocketStateRE then
+		remotes.rocketStateRE:FireClient(player, rocketCount)
 	end
 end
 
-local function firePlayerDied(state, player, respawnDelaySeconds)
-	if state.playerDiedRE then
-		state.playerDiedRE:FireClient(player, respawnDelaySeconds)
+local function firePlayerDied(_state, player, respawnDelaySeconds)
+	if remotes.playerDiedRE then
+		remotes.playerDiedRE:FireClient(player, respawnDelaySeconds)
 	end
 end
 
-local function sendTeamAssignment(state, player, myTeam, playerTeams)
-	if state.teamAssignmentRE then
-		state.teamAssignmentRE:FireClient(player, myTeam, playerTeams)
+local function sendTeamAssignment(_state, player, myTeam, playerTeams)
+	if remotes.teamAssignmentRE then
+		remotes.teamAssignmentRE:FireClient(player, myTeam, playerTeams)
 	end
 end
 
@@ -104,64 +111,62 @@ local function worldPositionAboveHead(character)
 	return base + Vector3.new(0, 0.75, 0)
 end
 
--- Floating damage numbers for the attacker only (exact damage dealt).
-local function notifyAttackerDamage(state, attackerUserId, victimCharacter, damage)
+local function notifyAttackerDamage(_state, attackerUserId, victimCharacter, damage)
 	if damage <= 0 or not attackerUserId then
 		return
 	end
 	local attacker = Players:GetPlayerByUserId(attackerUserId)
-	if not attacker or not attacker.Parent or not state.damageNumberRE then
+	if not attacker or not attacker.Parent or not remotes.damageNumberRE then
 		return
 	end
 	local pos = worldPositionAboveHead(victimCharacter)
 	if not pos then
 		return
 	end
-	state.damageNumberRE:FireClient(attacker, damage, pos)
+	remotes.damageNumberRE:FireClient(attacker, damage, pos)
 end
 
-local function sendEliminationNotice(state, killerUserId, victimPlayer)
+local function sendEliminationNotice(_state, killerUserId, victimPlayer)
 	if not killerUserId or not victimPlayer or not victimPlayer.Parent then
 		return
 	end
 	local killer = Players:GetPlayerByUserId(killerUserId)
-	if not killer or not killer.Parent or not state.killNotificationRE then
+	if not killer or not killer.Parent or not remotes.killNotificationRE then
 		return
 	end
 	local name = victimPlayer.DisplayName
 	if name == "" then
 		name = victimPlayer.Name
 	end
-	state.killNotificationRE:FireClient(killer, name)
+	remotes.killNotificationRE:FireClient(killer, name)
 end
 
 local function broadcastTeamScore(state)
-	if not state.teamScoreUpdateRE then
+	if not remotes.teamScoreUpdateRE then
 		return
 	end
 	local blueKills = state.teamKills.Blue or 0
 	local redKills = state.teamKills.Red or 0
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent then
-			state.teamScoreUpdateRE:FireClient(p, blueKills, redKills)
+			remotes.teamScoreUpdateRE:FireClient(p, blueKills, redKills)
 		end
 	end
 end
 
--- Other clients play spatial gunshot on the shooter's character; shooter already hears predicted local sound.
 local function broadcastGunshotSpatial(state, shooterUserId, gunId)
-	if not state.gunshotSpatialRE or not shooterUserId or typeof(gunId) ~= "string" then
+	if not remotes.gunshotSpatialRE or not shooterUserId or typeof(gunId) ~= "string" then
 		return
 	end
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent and p.UserId ~= shooterUserId then
-			state.gunshotSpatialRE:FireClient(p, shooterUserId, gunId)
+			remotes.gunshotSpatialRE:FireClient(p, shooterUserId, gunId)
 		end
 	end
 end
 
 local function broadcastGrenadeExplosionFX(state, worldPosition, radius, explosionSoundId, throwerUserId)
-	if not state.grenadeExplosionFXRE then
+	if not remotes.grenadeExplosionFXRE then
 		return
 	end
 	if typeof(worldPosition) ~= "Vector3" or typeof(radius) ~= "number" then
@@ -169,13 +174,14 @@ local function broadcastGrenadeExplosionFX(state, worldPosition, radius, explosi
 	end
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent then
-			state.grenadeExplosionFXRE:FireClient(p, worldPosition, radius, explosionSoundId, throwerUserId)
+			remotes.grenadeExplosionFXRE:FireClient(p, worldPosition, radius, explosionSoundId, throwerUserId)
 		end
 	end
 end
 
 return {
 	ensureRemotes = ensureRemotes,
+	getRemotes = getRemotes,
 	sendAmmoState = sendAmmoState,
 	sendFireGunRejected = sendFireGunRejected,
 	sendGrenadeState = sendGrenadeState,

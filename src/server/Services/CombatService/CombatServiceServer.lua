@@ -1,9 +1,8 @@
 --[[
 	CombatService (server)
 	Shooting (visible bullets), health, round end. Server-authoritative.
-	FireGun: validate round membership, weapon inventory, equipped Tool, ammo/cooldown/reload,
-	client shot origin vs HRP+aim*forward (SHOT_ORIGIN_FORWARD_STUDS for guns; grenades use GRENADE_SHOT_ORIGIN_FORWARD_STUDS), then spawn.
-	Init() sets up remotes and handlers. StartRound(players, onRoundEnd) is called when arena round starts.
+	Supports multiple concurrent matches via per-match CombatState instances.
+	Remote handlers dispatch to the correct match state via playerToMatchId.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -38,25 +37,27 @@ local historyBuffer = HistoryBuffer.new(LagCompConfig.HISTORY_DURATION_SECONDS)
 local COLLISION_GROUP_WALLS = "CombatWalls"
 local COLLISION_GROUP_GRENADES = "Grenades"
 
--- Client-reported origin must be near server-expected point (root + aim * SHOT_ORIGIN_FORWARD_STUDS).
 local FIRE_ORIGIN_MAX_ERROR_STUDS = 6
 local FIRE_ORIGIN_MAX_DISTANCE_FROM_ROOT_STUDS = 14
--- Aim must be a valid horizontal-ish world direction (matches client XZ aim, blocks degenerate axes).
 local FIRE_AIM_MIN_HORIZONTAL = 0.08
 local FIRE_AIM_MAX_VERTICAL_ABS = 0.95
 
-local state = CombatState()
+-- ── Per-match state management ──
 
-local function playerInActiveRound(player)
-	for _, p in ipairs(state.currentRoundPlayers) do
-		if p == player then
-			return true
-		end
+local matchStates = {}       -- matchId -> CombatState
+local playerToMatchId = {}   -- userId -> matchId
+
+local function getPlayerState(player)
+	local mId = playerToMatchId[player.UserId]
+	if not mId then
+		return nil, nil
 	end
-	return false
+	return matchStates[mId], mId
 end
 
-local function sendAuthoritativeAmmoForGun(player, gunId)
+-- ── Helpers (unchanged logic, now dispatch via getPlayerState) ──
+
+local function sendAuthoritativeAmmoForGun(state, player, gunId)
 	local uid = player.UserId
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	state.ammoInMagazine[uid] = state.ammoInMagazine[uid] or {}
@@ -94,7 +95,6 @@ local function validateClientShotOrigin(rootPos, shotOrigin, aimUnit)
 	return (shotOrigin - expected).Magnitude <= FIRE_ORIGIN_MAX_ERROR_STUDS
 end
 
--- Returns unit direction or nil if out of bounds / non-finite.
 local function validateFireAimDirection(aimDirection)
 	if typeof(aimDirection) ~= "Vector3" or not isFiniteVector3(aimDirection) or aimDirection.Magnitude < 0.01 then
 		return nil
@@ -112,10 +112,10 @@ local function validateFireAimDirection(aimDirection)
 	return u
 end
 
-local function rejectFire(player, reason, gunId, resetClientFireRate, sendAmmo)
+local function rejectFire(state, player, reason, gunId, resetClientFireRate, sendAmmo)
 	CombatRemotes.sendFireGunRejected(state, player, reason, gunId, resetClientFireRate == true)
 	if sendAmmo ~= false and gunId and GunsConfig[gunId] then
-		sendAuthoritativeAmmoForGun(player, gunId)
+		sendAuthoritativeAmmoForGun(state, player, gunId)
 	end
 end
 
@@ -181,12 +181,14 @@ local function setupBulletBlockerWalls()
 	CollectionService:GetInstanceAddedSignal(CombatConfig.BULLET_BLOCKER_TAG):Connect(assignToWallGroup)
 end
 
+-- ── Remote handlers (dispatch to per-match state) ──
+
 local function bindHandlers()
-	state.fireGunRE.OnServerEvent:Connect(function(player, a, b, c, d)
-		if state.matchEnded then
-			return
-		end
-		if not playerInActiveRound(player) then
+	local r = CombatRemotes.getRemotes()
+
+	r.fireGunRE.OnServerEvent:Connect(function(player, a, b, c, d)
+		local state = getPlayerState(player)
+		if not state or state.matchEnded then
 			return
 		end
 
@@ -203,33 +205,33 @@ local function bindHandlers()
 
 		local aimUnit = validateFireAimDirection(aimDirection)
 		if not aimUnit then
-			rejectFire(player, "BadDirection", gunId, true)
+			rejectFire(state, player, "BadDirection", gunId, true)
 			return
 		end
 
 		if not playerOwnsGun(player, gunId) then
-			rejectFire(player, "WeaponNotOwned", gunId, true)
+			rejectFire(state, player, "WeaponNotOwned", gunId, true)
 			return
 		end
 
 		local character = player.Character
 		if not character or not character:FindFirstChild("HumanoidRootPart") then
-			rejectFire(player, "NoCharacter", gunId, true)
+			rejectFire(state, player, "NoCharacter", gunId, true)
 			return
 		end
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if not humanoid or humanoid.Health <= 0 then
-			rejectFire(player, "Dead", gunId, true)
+			rejectFire(state, player, "Dead", gunId, true)
 			return
 		end
 		if not characterHasGunEquipped(character, gunId) then
-			rejectFire(player, "NotEquipped", gunId, true)
+			rejectFire(state, player, "NotEquipped", gunId, true)
 			return
 		end
 
 		local root = character.HumanoidRootPart
 		if not validateClientShotOrigin(root.Position, shotOrigin, aimUnit) then
-			rejectFire(player, "BadOrigin", gunId, true)
+			rejectFire(state, player, "BadOrigin", gunId, true)
 			return
 		end
 
@@ -239,7 +241,7 @@ local function bindHandlers()
 
 		local last = state.lastFiredAt[uid] or 0
 		if now - last < gun.fireRate then
-			rejectFire(player, "Cooldown", gunId, false)
+			rejectFire(state, player, "Cooldown", gunId, false)
 			return
 		end
 
@@ -252,7 +254,7 @@ local function bindHandlers()
 		end
 
 		if state.reloadEndAt[uid][gunId] and now < state.reloadEndAt[uid][gunId] then
-			rejectFire(player, "Reloading", gunId, false)
+			rejectFire(state, player, "Reloading", gunId, false)
 			return
 		end
 
@@ -260,16 +262,15 @@ local function bindHandlers()
 			if not state.reloadEndAt[uid][gunId] then
 				state.reloadEndAt[uid][gunId] = now + (gun.reloadTime or 1.5)
 			end
-			rejectFire(player, "EmptyMag", gunId, false)
+			rejectFire(state, player, "EmptyMag", gunId, false)
 			return
 		end
 
-		-- Validate fire timestamp for lag compensation
 		local rewindSeconds = 0
 		if fireTime then
 			local rw, reason = RewindHitDetection.validateFireTime(fireTime, now)
 			if not rw then
-				rejectFire(player, reason, gunId, true)
+				rejectFire(state, player, reason, gunId, true)
 				return
 			end
 			rewindSeconds = rw
@@ -349,11 +350,9 @@ local function bindHandlers()
 		end
 	end)
 
-	state.requestReloadRE.OnServerEvent:Connect(function(player, gunId)
-		if state.matchEnded then
-			return
-		end
-		if not playerInActiveRound(player) then
+	r.requestReloadRE.OnServerEvent:Connect(function(player, gunId)
+		local state = getPlayerState(player)
+		if not state or state.matchEnded then
 			return
 		end
 		if typeof(gunId) ~= "string" then
@@ -394,11 +393,9 @@ local function bindHandlers()
 		CombatRemotes.sendAmmoState(state, player, gunId, ammo, true)
 	end)
 
-	state.throwGrenadeRE.OnServerEvent:Connect(function(player, aimDirection)
-		if state.matchEnded then
-			return
-		end
-		if not playerInActiveRound(player) then
+	r.throwGrenadeRE.OnServerEvent:Connect(function(player, aimDirection)
+		local state = getPlayerState(player)
+		if not state or state.matchEnded then
 			return
 		end
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
@@ -429,11 +426,9 @@ local function bindHandlers()
 		CombatGrenades.spawnGrenade(state, player, startPos, aimDirection)
 	end)
 
-	state.throwRocketRE.OnServerEvent:Connect(function(player, shotOrigin, aimDirection, fireTime)
-		if state.matchEnded then
-			return
-		end
-		if not playerInActiveRound(player) then
+	r.throwRocketRE.OnServerEvent:Connect(function(player, shotOrigin, aimDirection, fireTime)
+		local state = getPlayerState(player)
+		if not state or state.matchEnded then
 			return
 		end
 		if not aimDirection or typeof(aimDirection) ~= "Vector3" or aimDirection.Magnitude < 0.01 then
@@ -532,8 +527,9 @@ local function bindHandlers()
 		end
 	end)
 
-	state.getLiveLeaderboardRF.OnServerInvoke = function(player)
-		if state.matchEnded or not playerInActiveRound(player) then
+	r.getLiveLeaderboardRF.OnServerInvoke = function(player)
+		local state = getPlayerState(player)
+		if not state or state.matchEnded then
 			return nil
 		end
 		local bluePlayers, redPlayers = CombatTDM.buildLeaderboardData(state)
@@ -565,28 +561,43 @@ end
 
 local function startHistoryRecording()
 	RunService.Heartbeat:Connect(function(_dt)
-		if #state.currentRoundPlayers > 0 then
-			historyBuffer:record(state.currentRoundPlayers, os.clock())
+		for _, ms in pairs(matchStates) do
+			if #ms.currentRoundPlayers > 0 then
+				historyBuffer:record(ms.currentRoundPlayers, os.clock())
+			end
 		end
 	end)
 end
 
+local function startReloadLoopForAllMatches()
+	RunService.Heartbeat:Connect(function()
+		for _, ms in pairs(matchStates) do
+			CombatAmmo.processReloads(ms)
+		end
+	end)
+end
+
+-- ── Public API ──
+
 return {
 	Init = function()
-		state = CombatState()
 		setupWallCollisionGroups()
 		setupBulletBlockerWalls()
-		CombatRemotes.ensureRemotes(state)
+		CombatRemotes.ensureRemotes()
 		setupTimeSyncRemote()
 		bindHandlers()
-		CombatAmmo.startReloadLoop(state)
+		startReloadLoopForAllMatches()
 		startHistoryRecording()
 	end,
 
-	StartRound = function(players, onRoundEnd, playerTeamsMap)
-		historyBuffer:clearAll()
+	StartRound = function(players, onRoundEnd, playerTeamsMap, matchId, arenaModel)
+		local state = CombatState()
+		state.matchId = matchId
+		state.arenaModel = arenaModel
 		state.onRoundEndCallback = onRoundEnd
 		state.matchEnded = false
+		matchStates[matchId] = state
+
 		state.currentRoundPlayers = {}
 		state.playerTeams = {}
 		state.teamKills = { Blue = 0, Red = 0 }
@@ -595,6 +606,7 @@ return {
 		state.playerAssists = {}
 		for i, p in ipairs(players) do
 			state.currentRoundPlayers[#state.currentRoundPlayers + 1] = p
+			playerToMatchId[p.UserId] = matchId
 			local assigned = playerTeamsMap and playerTeamsMap[p.UserId]
 			if assigned ~= "Blue" and assigned ~= "Red" then
 				assigned = (i % 2 == 1) and "Blue" or "Red"
@@ -607,10 +619,8 @@ return {
 			CombatAmmo.initPlayerGrenades(state, p.UserId)
 			local loadout = LoadoutServiceServer.GetLoadout(p)
 			WeaponInventoryServer.setWeapons(p, {
-				loadout.primary, loadout.secondary, "Grenade", "RocketLauncher",
+				loadout.primary, loadout.secondary, "Grenade",
 			})
-			CombatAmmo.initPlayerRockets(state, p.UserId)
-			giveRocketLauncherTool(p)
 			giveShopGunTools(p)
 			local cf = TDMSpawnStrategy.getSpawnCFrame(p, CombatTDM.getTDMContext(state))
 			local character = p.Character
@@ -660,7 +670,22 @@ return {
 		end
 	end,
 
+	CleanupMatchState = function(matchId)
+		local state = matchStates[matchId]
+		if not state then
+			return
+		end
+		for _, p in ipairs(state.currentRoundPlayers) do
+			playerToMatchId[p.UserId] = nil
+		end
+		matchStates[matchId] = nil
+	end,
+
 	InitRocketsForPlayer = function(player)
+		local state = getPlayerState(player)
+		if not state then
+			return
+		end
 		CombatAmmo.initPlayerRockets(state, player.UserId)
 		CombatRemotes.sendRocketState(state, player, state.rocketCount[player.UserId] or 0)
 	end,
@@ -668,7 +693,8 @@ return {
 	GiveRocketLauncherTool = giveRocketLauncherTool,
 
 	RemovePlayerFromRound = function(player)
-		if state.matchEnded then
+		local state = getPlayerState(player)
+		if not state or state.matchEnded then
 			return false
 		end
 		local uid = player.UserId
@@ -685,6 +711,7 @@ return {
 			return false
 		end
 		state.currentRoundPlayers = remaining
+		playerToMatchId[uid] = nil
 
 		if state.diedConnections[uid] then
 			state.diedConnections[uid]:Disconnect()

@@ -1,5 +1,5 @@
 --[[
-	Client-side gacha service: ProximityPrompt on Workspace.Gacha.GachaCounter,
+	Client-side gacha service: ProximityPrompt on Workspace.Lobby.Gacha.GachaCounter,
 	free spin detection, and roll result forwarding to GachaGUI.
 ]]
 
@@ -36,12 +36,17 @@ local function updatePromptText()
 	end
 end
 
-local function findGachaCounter(): BasePart?
-	local gachaFolder = Workspace:FindFirstChild("Gacha")
+local function findGachaCounterPart(): BasePart?
+	local lobby = Workspace:FindFirstChild("Lobby")
+	local gachaFolder = lobby and lobby:FindFirstChild("Gacha")
 	if gachaFolder then
 		local counter = gachaFolder:FindFirstChild("GachaCounter")
-		if counter and counter:IsA("BasePart") then
-			return counter
+		if counter then
+			if counter:IsA("BasePart") then
+				return counter
+			elseif counter:IsA("Model") then
+				return counter.PrimaryPart or counter:FindFirstChildWhichIsA("BasePart", true)
+			end
 		end
 	end
 	return nil
@@ -84,21 +89,26 @@ function GachaServiceClient.Init()
 	end)
 
 	task.spawn(function()
-		local counter = findGachaCounter()
-		if not counter then
-			local gachaFolder = Workspace:WaitForChild("Gacha", 120)
+		local counterPart = findGachaCounterPart()
+		if not counterPart then
+			local lobby = Workspace:WaitForChild("Lobby", 120)
+			local gachaFolder = lobby and lobby:WaitForChild("Gacha", 120)
 			if gachaFolder then
-				counter = gachaFolder:FindFirstChild("GachaCounter") or gachaFolder:WaitForChild("GachaCounter", 120)
-				if counter and not counter:IsA("BasePart") then
-					counter = nil
+				local counterInst = gachaFolder:FindFirstChild("GachaCounter") or gachaFolder:WaitForChild("GachaCounter", 120)
+				if counterInst then
+					if counterInst:IsA("BasePart") then
+						counterPart = counterInst
+					elseif counterInst:IsA("Model") then
+						counterPart = counterInst.PrimaryPart or counterInst:FindFirstChildWhichIsA("BasePart", true)
+					end
 				end
 			end
 		end
-		if not counter then
-			warn("[GachaServiceClient] Workspace.Gacha.GachaCounter not found.")
+		if not counterPart then
+			warn("[GachaServiceClient] Workspace.Lobby.Gacha.GachaCounter not found.")
 			return
 		end
-		wireProximityPrompt(counter)
+		wireProximityPrompt(counterPart)
 	end)
 
 	ShopEconomyClient.Subscribe(function()

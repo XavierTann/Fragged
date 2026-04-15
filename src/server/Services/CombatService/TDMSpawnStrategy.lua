@@ -8,7 +8,6 @@ local Workspace = game:GetService("Workspace")
 
 local TDMConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.TDMConfig)
 
-local PARENT_FOLDER_NAME = TDMConfig.TDM_SPAWN_PARENT
 local FOLDER_NAME = TDMConfig.TDM_SPAWN_FOLDER
 local SAFE_DISTANCE = TDMConfig.TDM_SAFE_DISTANCE
 local MAX_ATTEMPTS = TDMConfig.TDM_SPAWN_MAX_ATTEMPTS
@@ -26,19 +25,29 @@ local FALLBACK_POSITIONS = {
 	Vector3.new(55, 5, 5),
 }
 
-local function getFolder()
-	local parent = Workspace:FindFirstChild(PARENT_FOLDER_NAME)
-	if not parent then
-		parent = Instance.new("Folder")
-		parent.Name = PARENT_FOLDER_NAME
-		parent.Parent = Workspace
+local function getFolder(arenaModel)
+	if arenaModel then
+		local tdm = arenaModel:FindFirstChild(FOLDER_NAME)
+		if tdm then
+			return tdm
+		end
 	end
-	local folder = parent:FindFirstChild(FOLDER_NAME)
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = FOLDER_NAME
-		folder.Parent = parent
+	local arenasFolder = Workspace:FindFirstChild("ActiveArenas")
+	if arenasFolder then
+		for _, arena in ipairs(arenasFolder:GetChildren()) do
+			local tdm = arena:FindFirstChild(FOLDER_NAME)
+			if tdm then
+				return tdm
+			end
+		end
 	end
+	local direct = Workspace:FindFirstChild(FOLDER_NAME)
+	if direct then
+		return direct
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = FOLDER_NAME
+	folder.Parent = Workspace
 	return folder
 end
 
@@ -66,8 +75,8 @@ local function ensureFallbackSpawns(folder)
 	end
 end
 
-local function getSpawnPoints()
-	local folder = getFolder()
+local function getSpawnPoints(arenaModel)
+	local folder = getFolder(arenaModel)
 	ensureFallbackSpawns(folder)
 	local points = {}
 	for _, child in ipairs(folder:GetChildren()) do
@@ -127,15 +136,16 @@ end
 
 --[[
 	@param player Player
-	@param context { playerTeams: { [userId]: team }, currentRoundPlayers: Player[] }
+	@param context { playerTeams, currentRoundPlayers, arenaModel? }
 	@return CFrame
 ]]
 local function getSpawnCFrame(player, context)
 	local playerTeams = context and context.playerTeams or {}
 	local currentRoundPlayers = context and context.currentRoundPlayers or {}
+	local arenaModel = context and context.arenaModel or nil
 	local playerTeam = playerTeams[player.UserId]
 
-	local points = getSpawnPoints()
+	local points = getSpawnPoints(arenaModel)
 	if #points == 0 then
 		return CFrame.new(0, 10, 0)
 	end

@@ -87,15 +87,18 @@ local function cleanupFolderIfEmpty()
 end
 
 -- ── Pad resolution helpers ──
-local function resolvePadsFolder()
-	local parent = Workspace
-	for _, segment in ipairs(LobbyConfig.LOBBY_PADS_FOLDER_PATH) do
-		parent = parent:FindFirstChild(segment)
-		if not parent then
-			return nil
+local function resolveAllPadsFolders()
+	local lobby = Workspace:FindFirstChild("Lobby")
+	if not lobby then
+		return {}
+	end
+	local results = {}
+	for _, child in ipairs(lobby:GetChildren()) do
+		if child:IsA("Folder") and child.Name:match("^SpawnPads%d+$") then
+			table.insert(results, child)
 		end
 	end
-	return parent
+	return results
 end
 
 local function getPadCenter(model)
@@ -116,13 +119,26 @@ local function choosePadTeam()
 end
 
 local function getTargetPad()
-	local padsFolder = resolvePadsFolder()
-	if not padsFolder then
-		return nil
-	end
 	local team = choosePadTeam()
 	local padName = team == "Blue" and LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME or LobbyConfig.LOBBY_RED_PAD_MODEL_NAME
-	return padsFolder:FindFirstChild(padName)
+	local folders = resolveAllPadsFolders()
+	local bestPad = nil
+	local bestDist = math.huge
+	local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	for _, folder in ipairs(folders) do
+		local pad = folder:FindFirstChild(padName)
+		if pad then
+			if not hrp then
+				return pad
+			end
+			local dist = (pad:GetPivot().Position - hrp.Position).Magnitude
+			if dist < bestDist then
+				bestDist = dist
+				bestPad = pad
+			end
+		end
+	end
+	return bestPad
 end
 
 -- ── Permanent pad billboards ──
@@ -130,39 +146,38 @@ local function createPadBillboards()
 	if #padBillboards > 0 then
 		return
 	end
-	local padsFolder = resolvePadsFolder()
-	if not padsFolder then
-		return
-	end
-	for _, padName in ipairs({ LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME, LobbyConfig.LOBBY_RED_PAD_MODEL_NAME }) do
-		local pad = padsFolder:FindFirstChild(padName)
-		if pad then
-			local part = pad.PrimaryPart or pad:FindFirstChildWhichIsA("BasePart", true)
-			if part then
-				local bbg = Instance.new("BillboardGui")
-				bbg.Name = "PadJoinLabel"
-				bbg.Size = UDim2.fromOffset(180, 36)
-				bbg.StudsOffset = Vector3.new(0, 14, 0)
-				bbg.AlwaysOnTop = true
-				bbg.Adornee = part
-				bbg.Parent = part
+	local folders = resolveAllPadsFolders()
+	for _, padsFolder in ipairs(folders) do
+		for _, padName in ipairs({ LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME, LobbyConfig.LOBBY_RED_PAD_MODEL_NAME }) do
+			local pad = padsFolder:FindFirstChild(padName)
+			if pad then
+				local part = pad.PrimaryPart or pad:FindFirstChildWhichIsA("BasePart", true)
+				if part then
+					local bbg = Instance.new("BillboardGui")
+					bbg.Name = "PadJoinLabel"
+					bbg.Size = UDim2.fromOffset(180, 36)
+					bbg.StudsOffset = Vector3.new(0, 14, 0)
+					bbg.AlwaysOnTop = true
+					bbg.Adornee = part
+					bbg.Parent = part
 
-				local label = Instance.new("TextLabel")
-				label.Size = UDim2.fromScale(1, 1)
-				label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
-				label.BackgroundTransparency = 0.35
-				label.BorderSizePixel = 0
-				label.Text = "Join a game here!"
-				label.TextColor3 = Color3.fromRGB(255, 255, 255)
-				label.TextSize = 16
-				label.Font = Enum.Font.GothamBold
-				label.Parent = bbg
+					local label = Instance.new("TextLabel")
+					label.Size = UDim2.fromScale(1, 1)
+					label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
+					label.BackgroundTransparency = 0.35
+					label.BorderSizePixel = 0
+					label.Text = "Join a game here!"
+					label.TextColor3 = Color3.fromRGB(255, 255, 255)
+					label.TextSize = 16
+					label.Font = Enum.Font.GothamBold
+					label.Parent = bbg
 
-				local corner = Instance.new("UICorner")
-				corner.CornerRadius = UDim.new(0, 8)
-				corner.Parent = label
+					local corner = Instance.new("UICorner")
+					corner.CornerRadius = UDim.new(0, 8)
+					corner.Parent = label
 
-				table.insert(padBillboards, bbg)
+					table.insert(padBillboards, bbg)
+				end
 			end
 		end
 	end
@@ -259,17 +274,16 @@ local function showPadArrows()
 	if #padArrowParts > 0 then
 		return
 	end
-	local padsFolder = resolvePadsFolder()
-	if not padsFolder then
-		return
-	end
-	local bluePad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME)
-	local redPad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_RED_PAD_MODEL_NAME)
-	if bluePad then
-		createPadArrow(bluePad, COLOR_BLUE)
-	end
-	if redPad then
-		createPadArrow(redPad, COLOR_RED)
+	local folders = resolveAllPadsFolders()
+	for _, padsFolder in ipairs(folders) do
+		local bluePad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME)
+		local redPad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_RED_PAD_MODEL_NAME)
+		if bluePad then
+			createPadArrow(bluePad, COLOR_BLUE)
+		end
+		if redPad then
+			createPadArrow(redPad, COLOR_RED)
+		end
 	end
 	startPadAnimation()
 end
@@ -579,11 +593,22 @@ local function findShopKeeper()
 end
 
 local function findGachaCounter()
-	local gachaFolder = Workspace:WaitForChild("Gacha", 15)
+	local lobby = Workspace:WaitForChild("Lobby", 15)
+	if not lobby then
+		return nil
+	end
+	local gachaFolder = lobby:WaitForChild("Gacha", 15)
 	if not gachaFolder then
 		return nil
 	end
-	return gachaFolder:WaitForChild("GachaCounter", 10)
+	local counter = gachaFolder:WaitForChild("GachaCounter", 10)
+	if not counter then
+		return nil
+	end
+	if counter:IsA("Model") then
+		return counter.PrimaryPart or counter:FindFirstChildWhichIsA("BasePart", true)
+	end
+	return counter
 end
 
 local function findWeaponStorage()

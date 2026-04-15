@@ -1,7 +1,7 @@
 --[[
 	DropService (server)
-	Random drop system: spawns at TDM spawn markers (Workspace/SpawnLocations/TDMSpawnLocations),
-	with fallback to FactoryFloor raycast. Pickup logic delegates to callback.
+	Per-match random drop system: spawns at TDM spawn markers inside
+	each match's cloned arena. Supports concurrent matches.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,9 +13,10 @@ local DropConfig = require(ReplicatedStorage.Shared.Modules.DropConfig)
 local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 
 local DROPS_FOLDER_NAME = "Drops"
-local activeDrops = {}
-local spawnConnection = nil
 local onPickupCallback = nil
+
+-- Per-match state: matchId -> { drops, thread, running, arenaModel }
+local matchDropData = {}
 
 local function shuffleInPlace(t)
 	for i = #t, 2, -1 do
@@ -49,7 +50,7 @@ local function getDropsFolder()
 	return folder
 end
 
-local function countActiveOfType(dropTypeId)
+local function countActiveOfType(activeDrops, dropTypeId)
 	local n = 0
 	for _, drop in ipairs(activeDrops) do
 		if drop.Parent and drop:GetAttribute("DropType") == dropTypeId then
@@ -67,14 +68,12 @@ local function getCapForDropType(dropCfg)
 	return cap
 end
 
--- Picks among types that are under their per-type cap; nil if every type is at cap.
--- Candidates are shuffled each roll so spawn order is not tied to table / pairs iteration order.
-local function getRandomDropType()
+local function getRandomDropType(activeDrops)
 	local candidates = {}
 	local totalWeight = 0
 	for dropId, drop in pairs(DropConfig.DROPS) do
 		local cap = getCapForDropType(drop)
-		if not cap or countActiveOfType(dropId) < cap then
+		if not cap or countActiveOfType(activeDrops, dropId) < cap then
 			local w = drop.weight or 1
 			totalWeight = totalWeight + w
 			table.insert(candidates, { id = dropId, weight = w })
@@ -94,7 +93,7 @@ local function getRandomDropType()
 	return candidates[#candidates].id
 end
 
-local function isPositionValid(pos, excludeDrop)
+local function isPositionValid(activeDrops, pos, excludeDrop)
 	for _, drop in pairs(activeDrops) do
 		if drop ~= excludeDrop and drop.Parent then
 			local dropPos = drop:IsA("BasePart") and drop.Position or (drop.PrimaryPart and drop.PrimaryPart.Position)
@@ -106,22 +105,28 @@ local function isPositionValid(pos, excludeDrop)
 	return true
 end
 
-local function getTdmSpawnFolder()
-	local parent = Workspace:FindFirstChild(TDMConfig.TDM_SPAWN_PARENT)
-	if not parent then
-		return nil
+local function getTdmSpawnFolder(arenaModel)
+	if arenaModel then
+		return arenaModel:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
 	end
-	return parent:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
+	local arenasFolder = Workspace:FindFirstChild("ActiveArenas")
+	if arenasFolder then
+		for _, arena in ipairs(arenasFolder:GetChildren()) do
+			local tdm = arena:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
+			if tdm then
+				return tdm
+			end
+		end
+	end
+	return Workspace:FindFirstChild(TDMConfig.TDM_SPAWN_FOLDER)
 end
 
--- Top surface of spawn marker (XZ center); same idea as player spawn footing on the part.
 local function basePartTopY(part)
 	return part.Position.Y + part.Size.Y * 0.5
 end
 
--- Collect TDMSpawnLocation* BaseParts / Models under TDMSpawnLocations (e.g. .../TDMSpawnLocation1..8).
-local function getTdmSpawnMarkers()
-	local folder = getTdmSpawnFolder()
+local function getTdmSpawnMarkers(arenaModel)
+	local folder = getTdmSpawnFolder(arenaModel)
 	if not folder then
 		return {}
 	end
@@ -136,10 +141,8 @@ local function getTdmSpawnMarkers()
 	return markers
 end
 
--- TDM spawn markers: try every marker once in random order (avoids hammering occupied slots),
--- then random retries for MIN_DROP_SPACING. Returns gx, gz, groundY (surface to place on).
-local function findGroundPositionAtTdmSpawn()
-	local markers = getTdmSpawnMarkers()
+local function findGroundPositionAtTdmSpawn(activeDrops, arenaModel)
+	local markers = getTdmSpawnMarkers(arenaModel)
 	if #markers == 0 then
 		return nil
 	end
@@ -150,7 +153,7 @@ local function findGroundPositionAtTdmSpawn()
 			local gx, gz = part.Position.X, part.Position.Z
 			local groundY = basePartTopY(part)
 			local samplePos = Vector3.new(gx, groundY + 0.5, gz)
-			if isPositionValid(samplePos, nil) then
+			if isPositionValid(activeDrops, samplePos, nil) then
 				return { gx = gx, gz = gz, groundY = groundY }
 			end
 		end
@@ -161,7 +164,7 @@ local function findGroundPositionAtTdmSpawn()
 			local gx, gz = part.Position.X, part.Position.Z
 			local groundY = basePartTopY(part)
 			local samplePos = Vector3.new(gx, groundY + 0.5, gz)
-			if isPositionValid(samplePos, nil) then
+			if isPositionValid(activeDrops, samplePos, nil) then
 				return { gx = gx, gz = gz, groundY = groundY }
 			end
 		end
@@ -169,7 +172,7 @@ local function findGroundPositionAtTdmSpawn()
 	return nil
 end
 
-local function findGroundPosition(spawnArea)
+local function findGroundPosition(activeDrops, spawnArea)
 	local cf = spawnArea.CFrame
 	local size = spawnArea.Size
 	local halfX = size.X / 2 - 1
@@ -189,7 +192,7 @@ local function findGroundPosition(spawnArea)
 		if result and result.Instance then
 			local groundY = result.Position.Y
 			local samplePos = Vector3.new(pos.X, groundY + 0.5, pos.Z)
-			if isPositionValid(samplePos, nil) then
+			if isPositionValid(activeDrops, samplePos, nil) then
 				return { gx = pos.X, gz = pos.Z, groundY = groundY }
 			end
 		end
@@ -216,7 +219,6 @@ local function resolveModelTemplate(dropType, cfg, models3D)
 	return nil
 end
 
--- After pivot + rotation, shift model along world Y so AABB bottom matches ground + clearance (no local-Y drift).
 local function snapModelBoundingBoxBottomToGround(model, groundY, clearanceStuds)
 	local clearance = clearanceStuds or 0
 	local cf, size = model:GetBoundingBox()
@@ -234,13 +236,12 @@ local function placementRotationFromConfig(cfg)
 	return CFrame.new()
 end
 
--- No physical blocking; CanTouch keeps Touched firing for pickup when CanCollide is false.
 local function configurePickupPart(part)
 	part.CanCollide = false
 	part.CanTouch = true
 end
 
-local function cleanupDestroyedDrops()
+local function cleanupDestroyedDrops(activeDrops)
 	for i = #activeDrops, 1, -1 do
 		if not activeDrops[i].Parent then
 			table.remove(activeDrops, i)
@@ -248,10 +249,17 @@ local function cleanupDestroyedDrops()
 	end
 end
 
-local function spawnDrop()
-	cleanupDestroyedDrops()
+local function spawnDrop(matchId)
+	local data = matchDropData[matchId]
+	if not data then
+		return nil
+	end
+	local activeDrops = data.drops
+	local arenaModel = data.arenaModel
 
-	local dropType = getRandomDropType()
+	cleanupDestroyedDrops(activeDrops)
+
+	local dropType = getRandomDropType(activeDrops)
 	if not dropType then
 		return nil
 	end
@@ -260,13 +268,12 @@ local function spawnDrop()
 		return nil
 	end
 
-	local spot = findGroundPositionAtTdmSpawn()
-	if not spot then
+	local spot = findGroundPositionAtTdmSpawn(activeDrops, arenaModel)
+	if not spot and not arenaModel then
 		local spawnArea = getSpawnArea()
-		if not spawnArea then
-			return nil
+		if spawnArea then
+			spot = findGroundPosition(activeDrops, spawnArea)
 		end
-		spot = findGroundPosition(spawnArea)
 	end
 	if not spot then
 		return nil
@@ -378,41 +385,15 @@ local function spawnDrop()
 	return drop
 end
 
-local running = false
-local cleanupLoopStarted = false
-
-local function clearAllDrops()
+local function clearAllDrops(activeDrops)
 	for _, drop in ipairs(activeDrops) do
 		if drop and drop.Parent then
 			drop:Destroy()
 		end
 	end
-	activeDrops = {}
 end
 
-local function startSpawnLoop()
-	if spawnConnection then
-		return
-	end
-	running = true
-	spawnConnection = task.spawn(function()
-		while running do
-			task.wait(DropConfig.SPAWN_INTERVAL_SECONDS or 15)
-			if running then
-				spawnDrop()
-			end
-		end
-	end)
-end
-
-local function stopSpawnLoop()
-	running = false
-	if spawnConnection then
-		task.cancel(spawnConnection)
-		spawnConnection = nil
-	end
-	clearAllDrops()
-end
+local cleanupLoopStarted = false
 
 return {
 	Init = function()
@@ -421,30 +402,72 @@ return {
 			task.spawn(function()
 				while true do
 					task.wait(5)
-					cleanupDestroyedDrops()
+					for _, data in pairs(matchDropData) do
+						cleanupDestroyedDrops(data.drops)
+					end
 				end
 			end)
 		end
 	end,
 
-	Start = function()
-		stopSpawnLoop()
+	Start = function(matchId, arenaModel)
+		if matchDropData[matchId] then
+			return
+		end
+		local data = {
+			drops = {},
+			arenaModel = arenaModel,
+			running = true,
+			thread = nil,
+		}
+		matchDropData[matchId] = data
+
 		task.defer(function()
-			spawnDrop()
+			spawnDrop(matchId)
 		end)
-		startSpawnLoop()
+
+		data.thread = task.spawn(function()
+			while data.running do
+				task.wait(DropConfig.SPAWN_INTERVAL_SECONDS or 15)
+				if data.running then
+					spawnDrop(matchId)
+				end
+			end
+		end)
 	end,
 
-	Stop = function()
-		stopSpawnLoop()
+	Stop = function(matchId)
+		local data = matchDropData[matchId]
+		if not data then
+			return
+		end
+		data.running = false
+		if data.thread then
+			task.cancel(data.thread)
+			data.thread = nil
+		end
+		clearAllDrops(data.drops)
+		matchDropData[matchId] = nil
 	end,
 
 	SetPickupCallback = function(cb)
 		onPickupCallback = cb
 	end,
 
-	GetActiveDropsCount = function()
-		cleanupDestroyedDrops()
-		return #activeDrops
+	GetActiveDropsCount = function(matchId)
+		if matchId then
+			local data = matchDropData[matchId]
+			if data then
+				cleanupDestroyedDrops(data.drops)
+				return #data.drops
+			end
+			return 0
+		end
+		local total = 0
+		for _, data in pairs(matchDropData) do
+			cleanupDestroyedDrops(data.drops)
+			total = total + #data.drops
+		end
+		return total
 	end,
 }

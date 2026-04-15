@@ -1,46 +1,19 @@
 --[[
 	LobbySpawns
 	Spawn locations and player teleportation.
+	LobbySpawnLocation now lives directly under Workspace.
 ]]
 
 local Workspace = game:GetService("Workspace")
 
 local LobbyConfig = require(game:GetService("ReplicatedStorage").Shared.Modules.LobbyConfig)
 
-local SPAWN_OFFSETS = {
-	[LobbyConfig.SPAWN_NAMES.LOBBY] = Vector3.new(20, 5, 0),
-	[LobbyConfig.SPAWN_NAMES.RED_TEAM] = Vector3.new(35, 5, -8),
-	[LobbyConfig.SPAWN_NAMES.BLUE_TEAM] = Vector3.new(45, 5, 8),
-}
-
-local function getSpawnsFolder()
-	local folder = Workspace:FindFirstChild(LobbyConfig.SPAWNS_FOLDER_NAME)
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = LobbyConfig.SPAWNS_FOLDER_NAME
-		folder.Parent = Workspace
-		for name, offset in pairs(SPAWN_OFFSETS) do
-			local spawn = Instance.new("SpawnLocation")
-			spawn.Name = name
-			spawn.Size = Vector3.new(6, 1, 6)
-			spawn.Position = offset
-			spawn.Anchored = true
-			spawn.Transparency = 1
-			spawn.CanCollide = true
-			spawn.Neutral = true
-			spawn.Enabled = (name == LobbyConfig.SPAWN_NAMES.LOBBY)
-			spawn.Parent = folder
-		end
-	end
-	return folder
+local function getLobbySpawn()
+	return Workspace:FindFirstChild(LobbyConfig.LOBBY_SPAWN_NAME)
 end
 
 local function getSpawnCFrame(spawnName)
-	local folder = getSpawnsFolder()
-	if not folder then
-		return CFrame.new(0, 10, 0)
-	end
-	local spawn = folder:FindFirstChild(spawnName)
+	local spawn = Workspace:FindFirstChild(spawnName)
 	if not spawn then
 		return CFrame.new(0, 10, 0)
 	end
@@ -67,11 +40,7 @@ local function teleportPlayerTo(player, spawnName)
 end
 
 local function configureSpawnLocations()
-	local folder = getSpawnsFolder()
-	if not folder then
-		return
-	end
-	local lobbySpawn = folder:FindFirstChild(LobbyConfig.SPAWN_NAMES.LOBBY)
+	local lobbySpawn = getLobbySpawn()
 	if lobbySpawn and lobbySpawn:IsA("SpawnLocation") then
 		lobbySpawn.Neutral = true
 		lobbySpawn.Enabled = true
@@ -79,7 +48,7 @@ local function configureSpawnLocations()
 end
 
 return {
-	getSpawnsFolder = getSpawnsFolder,
+	getLobbySpawn = getLobbySpawn,
 	getSpawnCFrame = getSpawnCFrame,
 	teleportPlayerTo = teleportPlayerTo,
 	configureSpawnLocations = configureSpawnLocations,

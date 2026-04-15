@@ -15,6 +15,7 @@ local function getTDMContext(state)
 	return {
 		playerTeams = state.playerTeams,
 		currentRoundPlayers = state.currentRoundPlayers,
+		arenaModel = state.arenaModel,
 	}
 end
 
@@ -97,15 +98,16 @@ local function endMatch(state, winningTeam)
 	state.characterAddedConnections = {}
 	EconomyServiceServer.ApplyMatchEndRewards(state.currentRoundPlayers, winningTeam, state.playerTeams)
 	local bluePlayers, redPlayers = buildLeaderboardData(state)
+	local r = CombatRemotes.getRemotes()
 	for _, p in ipairs(state.currentRoundPlayers) do
-		if p and p.Parent and state.matchEndedRE then
+		if p and p.Parent and r.matchEndedRE then
 			local payload = {
 				winningTeam = winningTeam,
 				myTeam = state.playerTeams[p.UserId] or "Blue",
 				bluePlayers = bluePlayers,
 				redPlayers = redPlayers,
 			}
-			state.matchEndedRE:FireClient(p, payload)
+			r.matchEndedRE:FireClient(p, payload)
 		end
 	end
 	task.delay(TDMConfig.LEADERBOARD_DURATION, function()

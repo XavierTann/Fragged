@@ -369,7 +369,7 @@ local function addPlayerToTeamQueue(state, remotes, teleportPlayerTo, player, te
 	if not skipTeleport then
 		remotes.TeleportToWaiting:FireClient(player)
 		if teleportPlayerTo then
-			teleportPlayerTo(player, LobbyConfig.SPAWN_NAMES.LOBBY)
+			teleportPlayerTo(player, LobbyConfig.LOBBY_SPAWN_NAME)
 		end
 	end
 	remotes.LobbyState:FireClient(player, buildStateForPlayer(state, remotes, player))

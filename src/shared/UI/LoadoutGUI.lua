@@ -35,6 +35,7 @@ local savedJumpHeight = nil
 local loadoutRE = nil
 
 local LoadoutGUI = {}
+local onCloseCallbacks = {}
 
 local ICON_SIZE = 56
 local ICON_GAP = 8
@@ -723,9 +724,19 @@ function LoadoutGUI.Hide()
 	if not gui then
 		return
 	end
+	local wasVisible = visible
 	visible = false
 	gui.Enabled = false
 	restoreMovement()
+	if wasVisible then
+		for _, cb in ipairs(onCloseCallbacks) do
+			task.spawn(cb)
+		end
+	end
+end
+
+function LoadoutGUI.SubscribeOnClose(cb)
+	table.insert(onCloseCallbacks, cb)
 end
 
 function LoadoutGUI.IsVisible()

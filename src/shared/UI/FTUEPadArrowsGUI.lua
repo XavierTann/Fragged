@@ -1,8 +1,13 @@
 --[[
-	FTUEPadArrowsGUI
-	First-time user experience: 3D floating arrows above lobby pads + a flashing
-	PLAY button at the bottom of the screen. The button teleports the player to
-	whichever pad needs players. Everything hides after the first completed match.
+	FTUEPadArrowsGUI — Multi-stage first-time user experience.
+
+	Stages (sequential, each advances on the relevant close/action):
+	1. PRE_MATCH  — Yellow ground arrows → pad needing players + floating pad arrows + PLAY button
+	2. SHOP       — After first match: arrows → shop + "Buy weapons here!" billboard
+	3. GACHA      — After shop close: arrows → gacha + "Try your luck here!" billboard
+	4. LOADOUT    — After gacha close: arrows → weapon storage + "Equip your weapons and skins here!" billboard
+	5. RETURN_PAD — After loadout close: arrows → pad + "Try your new weapon or skin in another match!" billboard
+	6. DONE       — FTUE complete, nothing shown
 ]]
 
 local Players = game:GetService("Players")
@@ -16,25 +21,54 @@ local LobbyConfig = require(Shared.Modules.LobbyConfig)
 local LobbyServiceClient = require(Shared.Services.LobbyServiceClient)
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 local ShopGUI = require(Shared.UI.Shop.ShopGUI)
+local GachaGUI = require(Shared.UI.GachaGUI)
+local LoadoutGUI = require(Shared.UI.LoadoutGUI)
 
 local LocalPlayer = Players.LocalPlayer
 
+-- ── Stages ──
+local STAGE = {
+	PRE_MATCH  = 1,
+	SHOP       = 2,
+	GACHA      = 3,
+	LOADOUT    = 4,
+	RETURN_PAD = 5,
+	DONE       = 6,
+}
+
+local currentStage = STAGE.PRE_MATCH
+local pendingStage = nil
+local stageShowing = false
+local initialized = false
+
+-- ── Visual constants ──
 local COLOR_BLUE = Color3.fromRGB(100, 170, 255)
 local COLOR_RED = Color3.fromRGB(255, 80, 90)
+local COLOR_GOLD = Color3.fromRGB(255, 255, 0)
 local ARROW_HEIGHT_ABOVE_PAD = 12
 local BOB_AMPLITUDE = 1.5
 local BOB_SPEED = 2.2
 local ROTATE_SPEED = 1.4
+local GROUND_ARROW_COUNT = 5
+local GROUND_ARROW_SPACING = 8
 
-local arrowParts = {}
-local heartbeatConn = nil
-local hasCompletedFirstMatch = false
+-- ── State ──
+local ftueFolder = nil
+local padArrowParts = {}
+local padHeartbeatConn = nil
 local screenGui = nil
 local playBtn = nil
 local playBtnFlashTween = nil
-local initialized = false
 
-local ftueFolder = nil
+local groundArrowParts = {}
+local groundBillboard = nil
+local groundHeartbeatConn = nil
+local groundTargetPos = nil
+
+-- ── Permanent pad billboards (always visible in lobby) ──
+local padBillboards = {}
+
+-- ── FTUE Folder management ──
 local function getFTUEFolder()
 	if ftueFolder and ftueFolder.Parent then
 		return ftueFolder
@@ -52,6 +86,7 @@ local function cleanupFolderIfEmpty()
 	end
 end
 
+-- ── Pad resolution helpers ──
 local function resolvePadsFolder()
 	local parent = Workspace
 	for _, segment in ipairs(LobbyConfig.LOBBY_PADS_FOLDER_PATH) do
@@ -67,7 +102,83 @@ local function getPadCenter(model)
 	return model:GetPivot().Position
 end
 
-local function createArrow(padModel, color)
+local function choosePadTeam()
+	local state = LobbyServiceClient.GetState()
+	if not state then
+		return "Blue"
+	end
+	local blueCount = state.waitingCountBlue or 0
+	local redCount = state.waitingCountRed or 0
+	if blueCount <= redCount then
+		return "Blue"
+	end
+	return "Red"
+end
+
+local function getTargetPad()
+	local padsFolder = resolvePadsFolder()
+	if not padsFolder then
+		return nil
+	end
+	local team = choosePadTeam()
+	local padName = team == "Blue" and LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME or LobbyConfig.LOBBY_RED_PAD_MODEL_NAME
+	return padsFolder:FindFirstChild(padName)
+end
+
+-- ── Permanent pad billboards ──
+local function createPadBillboards()
+	if #padBillboards > 0 then
+		return
+	end
+	local padsFolder = resolvePadsFolder()
+	if not padsFolder then
+		return
+	end
+	for _, padName in ipairs({ LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME, LobbyConfig.LOBBY_RED_PAD_MODEL_NAME }) do
+		local pad = padsFolder:FindFirstChild(padName)
+		if pad then
+			local part = pad.PrimaryPart or pad:FindFirstChildWhichIsA("BasePart", true)
+			if part then
+				local bbg = Instance.new("BillboardGui")
+				bbg.Name = "PadJoinLabel"
+				bbg.Size = UDim2.fromOffset(180, 36)
+				bbg.StudsOffset = Vector3.new(0, 14, 0)
+				bbg.AlwaysOnTop = true
+				bbg.Adornee = part
+				bbg.Parent = part
+
+				local label = Instance.new("TextLabel")
+				label.Size = UDim2.fromScale(1, 1)
+				label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
+				label.BackgroundTransparency = 0.35
+				label.BorderSizePixel = 0
+				label.Text = "Join a game here!"
+				label.TextColor3 = Color3.fromRGB(255, 255, 255)
+				label.TextSize = 16
+				label.Font = Enum.Font.GothamBold
+				label.Parent = bbg
+
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0, 8)
+				corner.Parent = label
+
+				table.insert(padBillboards, bbg)
+			end
+		end
+	end
+end
+
+local function destroyPadBillboards()
+	for _, bbg in ipairs(padBillboards) do
+		if bbg and bbg.Parent then
+			bbg:Destroy()
+		end
+	end
+	padBillboards = {}
+end
+
+-- ── 3D pad arrows (floating wedges above pads) ──
+local function createPadArrow(padModel, color)
 	local basePos = getPadCenter(padModel) + Vector3.new(0, ARROW_HEIGHT_ABOVE_PAD, 0)
 
 	local arrow = Instance.new("Part")
@@ -110,17 +221,17 @@ local function createArrow(padModel, color)
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = label
 
-	table.insert(arrowParts, { part = arrow, basePos = basePos })
+	table.insert(padArrowParts, { part = arrow, basePos = basePos })
 end
 
-local function startAnimation()
-	if heartbeatConn then
+local function startPadAnimation()
+	if padHeartbeatConn then
 		return
 	end
 	local t = 0
-	heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+	padHeartbeatConn = RunService.Heartbeat:Connect(function(dt)
 		t = t + dt
-		for _, data in ipairs(arrowParts) do
+		for _, data in ipairs(padArrowParts) do
 			local yOff = math.sin(t * BOB_SPEED) * BOB_AMPLITUDE
 			local angle = t * ROTATE_SPEED
 			data.part.CFrame = CFrame.new(data.basePos + Vector3.new(0, yOff, 0))
@@ -130,37 +241,40 @@ local function startAnimation()
 	end)
 end
 
-local function stopAnimation()
-	if heartbeatConn then
-		heartbeatConn:Disconnect()
-		heartbeatConn = nil
+local function destroyPadArrows()
+	if padHeartbeatConn then
+		padHeartbeatConn:Disconnect()
+		padHeartbeatConn = nil
 	end
-end
-
-local function destroyArrows()
-	stopAnimation()
-	for _, data in ipairs(arrowParts) do
+	for _, data in ipairs(padArrowParts) do
 		if data.part and data.part.Parent then
 			data.part:Destroy()
 		end
 	end
-	arrowParts = {}
+	padArrowParts = {}
 	cleanupFolderIfEmpty()
 end
 
-local function choosePadTeam()
-	local state = LobbyServiceClient.GetState()
-	if not state then
-		return "Blue"
+local function showPadArrows()
+	if #padArrowParts > 0 then
+		return
 	end
-	local blueCount = state.waitingCountBlue or 0
-	local redCount = state.waitingCountRed or 0
-	if blueCount <= redCount then
-		return "Blue"
+	local padsFolder = resolvePadsFolder()
+	if not padsFolder then
+		return
 	end
-	return "Red"
+	local bluePad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME)
+	local redPad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_RED_PAD_MODEL_NAME)
+	if bluePad then
+		createPadArrow(bluePad, COLOR_BLUE)
+	end
+	if redPad then
+		createPadArrow(redPad, COLOR_RED)
+	end
+	startPadAnimation()
 end
 
+-- ── PLAY button ──
 local function teleportToPad()
 	local character = LocalPlayer.Character
 	if not character then
@@ -170,13 +284,7 @@ local function teleportToPad()
 	if not hrp then
 		return
 	end
-	local padsFolder = resolvePadsFolder()
-	if not padsFolder then
-		return
-	end
-	local team = choosePadTeam()
-	local padName = team == "Blue" and LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME or LobbyConfig.LOBBY_RED_PAD_MODEL_NAME
-	local pad = padsFolder:FindFirstChild(padName)
+	local pad = getTargetPad()
 	if not pad then
 		return
 	end
@@ -262,10 +370,7 @@ local function createPlayButton()
 	stroke.Transparency = 0.5
 	stroke.Parent = playBtn
 
-	playBtn.Activated:Connect(function()
-		teleportToPad()
-	end)
-
+	playBtn.Activated:Connect(teleportToPad)
 	startPlayBtnFlash()
 end
 
@@ -278,28 +383,30 @@ local function destroyPlayButton()
 	end
 end
 
--- ── Shop arrows (phase 2: after first match) ──
-local COLOR_GOLD = Color3.fromRGB(255, 255, 0)
-local SHOP_ARROW_COUNT = 5
-local SHOP_ARROW_SPACING = 8
-local shopArrowParts = {}
-local shopBillboard = nil
-local shopArrowHeartbeat = nil
-local hasShownShopArrows = false
-
-local function findShopKeeper()
-	local lobby = Workspace:WaitForChild("Lobby", 15)
-	if not lobby then
-		return nil
+-- ── Generic ground arrow trail (reused for all post-match stages) ──
+local function hideGroundArrows()
+	if groundHeartbeatConn then
+		groundHeartbeatConn:Disconnect()
+		groundHeartbeatConn = nil
 	end
-	local gunShop = lobby:WaitForChild("GunShop", 10)
-	if not gunShop then
-		return nil
+	for _, p in ipairs(groundArrowParts) do
+		if p and p.Parent then
+			p:Destroy()
+		end
 	end
-	return gunShop:WaitForChild("ShopKeeper", 10)
+	groundArrowParts = {}
+	if groundBillboard then
+		groundBillboard:Destroy()
+		groundBillboard = nil
+	end
+	groundTargetPos = nil
+	cleanupFolderIfEmpty()
 end
 
 local function getModelPosition(model)
+	if typeof(model) == "Instance" and model:IsA("BasePart") then
+		return model.Position
+	end
 	if model.PrimaryPart then
 		return model.PrimaryPart.Position
 	end
@@ -311,55 +418,23 @@ local function getModelPosition(model)
 end
 
 local function getModelBasePart(model)
+	if typeof(model) == "Instance" and model:IsA("BasePart") then
+		return model
+	end
 	if model.PrimaryPart then
 		return model.PrimaryPart
 	end
 	return model:FindFirstChildWhichIsA("BasePart", true)
 end
 
-local function hideShopArrows()
-	if shopArrowHeartbeat then
-		shopArrowHeartbeat:Disconnect()
-		shopArrowHeartbeat = nil
-	end
-	for _, p in ipairs(shopArrowParts) do
-		if p and p.Parent then
-			p:Destroy()
-		end
-	end
-	shopArrowParts = {}
-	if shopBillboard then
-		shopBillboard:Destroy()
-		shopBillboard = nil
-	end
-	cleanupFolderIfEmpty()
-end
+local function showGroundArrows(targetInstance, billboardText)
+	hideGroundArrows()
 
-local shopTargetPos = nil
-local shopGroundY = nil
-
-local function showShopArrows()
-	if hasShownShopArrows then
+	if not targetInstance then
 		return
 	end
-	hideShopArrows()
 
-	local keeper = findShopKeeper()
-	if not keeper then
-		return
-	end
-	shopTargetPos = getModelPosition(keeper)
-
-	local lowestY = shopTargetPos.Y
-	for _, desc in ipairs(keeper:GetDescendants()) do
-		if desc:IsA("BasePart") then
-			local bottomY = desc.Position.Y - desc.Size.Y * 0.5
-			if bottomY < lowestY then
-				lowestY = bottomY
-			end
-		end
-	end
-	shopGroundY = lowestY
+	groundTargetPos = getModelPosition(targetInstance)
 
 	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 	character:WaitForChild("HumanoidRootPart", 10)
@@ -371,9 +446,9 @@ local function showShopArrows()
 		return
 	end
 
-	for i = 1, SHOP_ARROW_COUNT do
+	for _ = 1, GROUND_ARROW_COUNT do
 		local arrow = arrowTemplate:Clone()
-		arrow.Name = "FTUEShopArrow"
+		arrow.Name = "FTUEGroundArrow"
 		arrow.Parent = getFTUEFolder()
 
 		for _, desc in ipairs(arrow:GetDescendants()) do
@@ -389,60 +464,62 @@ local function showShopArrows()
 			end
 		end
 
-		table.insert(shopArrowParts, arrow)
+		table.insert(groundArrowParts, arrow)
 	end
 
-	local basePart = getModelBasePart(keeper)
-	if basePart then
-		shopBillboard = Instance.new("BillboardGui")
-		shopBillboard.Name = "FTUEShopLabel"
-		shopBillboard.Size = UDim2.fromOffset(240, 40)
-		shopBillboard.StudsOffset = Vector3.new(0, 6, 0)
-		shopBillboard.AlwaysOnTop = true
-		shopBillboard.Adornee = basePart
-		shopBillboard.Parent = basePart
+	if billboardText then
+		local basePart = getModelBasePart(targetInstance)
+		if basePart then
+			groundBillboard = Instance.new("BillboardGui")
+			groundBillboard.Name = "FTUEBillboard"
+			groundBillboard.Size = UDim2.fromOffset(260, 40)
+			groundBillboard.StudsOffset = Vector3.new(0, 6, 0)
+			groundBillboard.AlwaysOnTop = true
+			groundBillboard.Adornee = basePart
+			groundBillboard.Parent = basePart
 
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.fromScale(1, 1)
-		label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
-		label.BackgroundTransparency = 0.35
-		label.BorderSizePixel = 0
-		label.Text = "Buy weapons here!"
-		label.TextColor3 = Color3.fromRGB(255, 255, 255)
-		label.TextSize = 15
-		label.Font = Enum.Font.GothamBold
-		label.Parent = shopBillboard
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.fromScale(1, 1)
+			label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
+			label.BackgroundTransparency = 0.35
+			label.BorderSizePixel = 0
+			label.Text = billboardText
+			label.TextColor3 = Color3.fromRGB(255, 255, 255)
+			label.TextSize = 15
+			label.Font = Enum.Font.GothamBold
+			label.Parent = groundBillboard
 
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
-		corner.Parent = label
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = label
+		end
 	end
 
 	local t = 0
-	shopArrowHeartbeat = RunService.Heartbeat:Connect(function(dt)
+	groundHeartbeatConn = RunService.Heartbeat:Connect(function(dt)
 		t = t + dt
 		local pulse = 0.1 + math.abs(math.sin(t * 2.5)) * 0.3
 
 		local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-		if not hrp or not shopTargetPos then
+		if not hrp or not groundTargetPos then
 			return
 		end
 
-		local groundY = shopGroundY or shopTargetPos.Y
-		local from = Vector3.new(hrp.Position.X, groundY, hrp.Position.Z)
-		local to = Vector3.new(shopTargetPos.X, groundY, shopTargetPos.Z)
+		local gY = hrp.Position.Y - 3
+		local from = Vector3.new(hrp.Position.X, gY, hrp.Position.Z)
+		local to = Vector3.new(groundTargetPos.X, gY, groundTargetPos.Z)
 		local dir = to - from
 		local dist = dir.Magnitude
 
-		local function setArrowTransparency(obj, t)
+		local function setArrowTransparency(obj, tr)
 			if obj:IsA("Model") then
 				for _, part in ipairs(obj:GetDescendants()) do
 					if part:IsA("BasePart") then
-						part.Transparency = t
+						part.Transparency = tr
 					end
 				end
 			elseif obj:IsA("BasePart") then
-				obj.Transparency = t
+				obj.Transparency = tr
 			end
 		end
 
@@ -455,7 +532,7 @@ local function showShopArrows()
 		end
 
 		if dist < 2 then
-			for _, p in ipairs(shopArrowParts) do
+			for _, p in ipairs(groundArrowParts) do
 				if p and p.Parent then
 					setArrowTransparency(p, 1)
 				end
@@ -468,12 +545,12 @@ local function showShopArrows()
 		local layFlat = CFrame.Angles(0, math.rad(-90), 0) * CFrame.Angles(math.rad(90), 0, 0)
 		local tiltForward = CFrame.Angles(0, 0, 0)
 		local modelFix = tiltForward * layFlat
-		local visibleCount = math.clamp(math.floor(dist / SHOP_ARROW_SPACING), 1, SHOP_ARROW_COUNT)
+		local visibleCount = math.clamp(math.floor(dist / GROUND_ARROW_SPACING), 1, GROUND_ARROW_COUNT)
 
-		for i, p in ipairs(shopArrowParts) do
+		for i, p in ipairs(groundArrowParts) do
 			if p and p.Parent then
 				if i <= visibleCount then
-					local offset = i * SHOP_ARROW_SPACING
+					local offset = i * GROUND_ARROW_SPACING
 					if offset > dist - 2 then
 						offset = dist - 2
 					end
@@ -488,6 +565,238 @@ local function showShopArrows()
 	end)
 end
 
+-- ── Target finders ──
+local function findShopKeeper()
+	local lobby = Workspace:WaitForChild("Lobby", 15)
+	if not lobby then
+		return nil
+	end
+	local gunShop = lobby:WaitForChild("GunShop", 10)
+	if not gunShop then
+		return nil
+	end
+	return gunShop:WaitForChild("ShopKeeper", 10)
+end
+
+local function findGachaCounter()
+	local gachaFolder = Workspace:WaitForChild("Gacha", 15)
+	if not gachaFolder then
+		return nil
+	end
+	return gachaFolder:WaitForChild("GachaCounter", 10)
+end
+
+local function findWeaponStorage()
+	local lobby = Workspace:WaitForChild("Lobby", 15)
+	if not lobby then
+		return nil
+	end
+	local gunShop = lobby:WaitForChild("GunShop", 10)
+	if not gunShop then
+		return nil
+	end
+	return gunShop:WaitForChild("WeaponStorage", 10)
+end
+
+-- ── PRE_MATCH ground arrows → pad ──
+local preMatchGroundConn = nil
+local preMatchGroundParts = {}
+
+local function hidePreMatchGroundArrows()
+	if preMatchGroundConn then
+		preMatchGroundConn:Disconnect()
+		preMatchGroundConn = nil
+	end
+	for _, p in ipairs(preMatchGroundParts) do
+		if p and p.Parent then
+			p:Destroy()
+		end
+	end
+	preMatchGroundParts = {}
+	cleanupFolderIfEmpty()
+end
+
+local function showPreMatchGroundArrows()
+	hidePreMatchGroundArrows()
+
+	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	character:WaitForChild("HumanoidRootPart", 10)
+
+	local modelsFolder = ReplicatedStorage:FindFirstChild("Imports")
+		and ReplicatedStorage.Imports:FindFirstChild("3DModels")
+	local arrowTemplate = modelsFolder and modelsFolder:FindFirstChild("Arrow")
+	if not arrowTemplate then
+		return
+	end
+
+	for _ = 1, GROUND_ARROW_COUNT do
+		local arrow = arrowTemplate:Clone()
+		arrow.Name = "FTUEPadGroundArrow"
+		arrow.Parent = getFTUEFolder()
+
+		for _, desc in ipairs(arrow:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				desc.Anchored = true
+				desc.CanCollide = false
+				desc.CanTouch = false
+				desc.CanQuery = false
+				desc.Color = COLOR_GOLD
+				desc.Material = Enum.Material.Neon
+			elseif desc:IsA("GuiObject") then
+				desc.BackgroundTransparency = 1
+			end
+		end
+
+		table.insert(preMatchGroundParts, arrow)
+	end
+
+	local t = 0
+	preMatchGroundConn = RunService.Heartbeat:Connect(function(dt)
+		t = t + dt
+		local pulse = 0.1 + math.abs(math.sin(t * 2.5)) * 0.3
+
+		local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			return
+		end
+
+		local pad = getTargetPad()
+		if not pad then
+			return
+		end
+
+		local padPos = getPadCenter(pad)
+		local gY = hrp.Position.Y - 3
+		local from = Vector3.new(hrp.Position.X, gY, hrp.Position.Z)
+		local to = Vector3.new(padPos.X, gY, padPos.Z)
+		local dir = to - from
+		local dist = dir.Magnitude
+
+		local function setArrowTransparency(obj, tr)
+			if obj:IsA("Model") then
+				for _, part in ipairs(obj:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.Transparency = tr
+					end
+				end
+			elseif obj:IsA("BasePart") then
+				obj.Transparency = tr
+			end
+		end
+
+		local function setArrowCFrame(obj, cf)
+			if obj:IsA("Model") then
+				obj:PivotTo(cf)
+			elseif obj:IsA("BasePart") then
+				obj.CFrame = cf
+			end
+		end
+
+		if dist < 2 then
+			for _, p in ipairs(preMatchGroundParts) do
+				if p and p.Parent then
+					setArrowTransparency(p, 1)
+				end
+			end
+			return
+		end
+
+		local unit = dir.Unit
+		local lookCF = CFrame.lookAt(Vector3.zero, unit)
+		local layFlat = CFrame.Angles(0, math.rad(-90), 0) * CFrame.Angles(math.rad(90), 0, 0)
+		local modelFix = layFlat
+		local visibleCount = math.clamp(math.floor(dist / GROUND_ARROW_SPACING), 1, GROUND_ARROW_COUNT)
+
+		for i, p in ipairs(preMatchGroundParts) do
+			if p and p.Parent then
+				if i <= visibleCount then
+					local offset = i * GROUND_ARROW_SPACING
+					if offset > dist - 2 then
+						offset = dist - 2
+					end
+					local pos = from + unit * offset + Vector3.new(0, 0.2, 0)
+					setArrowCFrame(p, CFrame.new(pos) * lookCF * modelFix)
+					setArrowTransparency(p, pulse)
+				else
+					setArrowTransparency(p, 1)
+				end
+			end
+		end
+	end)
+end
+
+-- ── Stage transitions ──
+local function hideFTUE()
+	stageShowing = false
+	destroyPadArrows()
+	hideGroundArrows()
+	hidePreMatchGroundArrows()
+end
+
+local function hideEverything()
+	hideFTUE()
+	destroyPlayButton()
+	destroyPadBillboards()
+end
+
+local advanceToStage
+
+local function showStage(stage)
+	hideFTUE()
+	currentStage = stage
+	stageShowing = true
+
+	if stage == STAGE.PRE_MATCH then
+		showPadArrows()
+		task.spawn(showPreMatchGroundArrows)
+
+	elseif stage == STAGE.SHOP then
+		task.spawn(function()
+			local keeper = findShopKeeper()
+			if keeper and currentStage == STAGE.SHOP then
+				showGroundArrows(keeper, "Buy weapons here!")
+			end
+		end)
+
+	elseif stage == STAGE.GACHA then
+		task.spawn(function()
+			local counter = findGachaCounter()
+			if counter and currentStage == STAGE.GACHA then
+				showGroundArrows(counter, "Try your luck here!")
+			end
+		end)
+
+	elseif stage == STAGE.LOADOUT then
+		task.spawn(function()
+			local storage = findWeaponStorage()
+			if storage and currentStage == STAGE.LOADOUT then
+				showGroundArrows(storage, "Equip your weapons and skins here!")
+			end
+		end)
+
+	elseif stage == STAGE.RETURN_PAD then
+		showPadArrows()
+		task.spawn(showPreMatchGroundArrows)
+		for _, data in ipairs(padArrowParts) do
+			local bbg = data.part:FindFirstChild("ArrowLabel")
+			if bbg then
+				local lbl = bbg:FindFirstChildWhichIsA("TextLabel")
+				if lbl then
+					lbl.Text = "Try your new weapon or skin in another match!"
+					lbl.TextSize = 12
+				end
+				bbg.Size = UDim2.fromOffset(260, 36)
+			end
+		end
+
+	end
+end
+
+advanceToStage = function(stage)
+	showStage(stage)
+end
+
+-- ── Public API ──
 local FTUEPadArrowsGUI = {}
 
 function FTUEPadArrowsGUI.Init()
@@ -497,13 +806,35 @@ function FTUEPadArrowsGUI.Init()
 	initialized = true
 
 	CombatServiceClient.SubscribeMatchEnded(function()
-		hasCompletedFirstMatch = true
-		FTUEPadArrowsGUI.Hide()
+		if currentStage == STAGE.PRE_MATCH then
+			pendingStage = STAGE.SHOP
+		elseif currentStage == STAGE.RETURN_PAD then
+			pendingStage = STAGE.DONE
+		end
 	end)
 
 	ShopGUI.SubscribeOnOpen(function()
-		hasShownShopArrows = true
-		hideShopArrows()
+		if currentStage == STAGE.SHOP then
+			hideGroundArrows()
+		end
+	end)
+
+	ShopGUI.SubscribeOnClose(function()
+		if currentStage == STAGE.SHOP then
+			advanceToStage(STAGE.GACHA)
+		end
+	end)
+
+	GachaGUI.SubscribeOnClose(function()
+		if currentStage == STAGE.GACHA then
+			advanceToStage(STAGE.LOADOUT)
+		end
+	end)
+
+	LoadoutGUI.SubscribeOnClose(function()
+		if currentStage == STAGE.LOADOUT then
+			advanceToStage(STAGE.RETURN_PAD)
+		end
 	end)
 
 	LobbyServiceClient.Subscribe(function(state)
@@ -511,46 +842,50 @@ function FTUEPadArrowsGUI.Init()
 			return
 		end
 		if state.phase == LobbyConfig.PHASE.ARENA or state.phase == LobbyConfig.PHASE.WAITING_LOBBY then
-			FTUEPadArrowsGUI.Hide()
-			hideShopArrows()
+			hideEverything()
 		elseif state.phase == LobbyConfig.PHASE.LOBBY then
-			if not hasCompletedFirstMatch then
-				FTUEPadArrowsGUI.Show()
-			end
-			if not hasShownShopArrows then
-				task.spawn(showShopArrows)
+			if state.queuedTeam then
+				hideEverything()
+			else
+				if pendingStage then
+					local next = pendingStage
+					pendingStage = nil
+					advanceToStage(next)
+				end
+				createPlayButton()
+				createPadBillboards()
+				if currentStage ~= STAGE.DONE and not stageShowing then
+					showStage(currentStage)
+				end
 			end
 		end
 	end)
 
-	FTUEPadArrowsGUI.Show()
-	task.spawn(showShopArrows)
+	LobbyServiceClient.OnTeleportToArena(function()
+		hideEverything()
+	end)
+
+	LobbyServiceClient.OnTeleportToWaiting(function()
+		hideEverything()
+	end)
+
+	createPlayButton()
+	createPadBillboards()
+	if currentStage == STAGE.PRE_MATCH then
+		showStage(STAGE.PRE_MATCH)
+	end
 end
 
 function FTUEPadArrowsGUI.Show()
-	if hasCompletedFirstMatch then
-		return
-	end
-	if #arrowParts == 0 then
-		local padsFolder = resolvePadsFolder()
-		if padsFolder then
-			local bluePad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME)
-			local redPad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_RED_PAD_MODEL_NAME)
-			if bluePad then
-				createArrow(bluePad, COLOR_BLUE)
-			end
-			if redPad then
-				createArrow(redPad, COLOR_RED)
-			end
-			startAnimation()
-		end
-	end
 	createPlayButton()
+	createPadBillboards()
+	if currentStage ~= STAGE.DONE then
+		showStage(currentStage)
+	end
 end
 
 function FTUEPadArrowsGUI.Hide()
-	destroyArrows()
-	destroyPlayButton()
+	hideEverything()
 end
 
 return FTUEPadArrowsGUI

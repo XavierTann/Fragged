@@ -42,6 +42,7 @@ local reelConnection = nil
 local freeSpinRequester = nil
 
 local GachaGUI = {}
+local onCloseCallbacks = {}
 
 local RARITY_COLORS = {}
 for _, r in ipairs(GachaConfig.RARITIES) do
@@ -770,11 +771,21 @@ function GachaGUI.Hide()
 	if not gui then
 		return
 	end
+	local wasVisible = visible
 	visible = false
 	rolling = false
 	gui.Enabled = false
 	stopReelConnection()
 	restoreMovement()
+	if wasVisible then
+		for _, cb in ipairs(onCloseCallbacks) do
+			task.spawn(cb)
+		end
+	end
+end
+
+function GachaGUI.SubscribeOnClose(cb)
+	table.insert(onCloseCallbacks, cb)
 end
 
 function GachaGUI.IsVisible()

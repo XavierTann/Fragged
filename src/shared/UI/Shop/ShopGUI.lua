@@ -23,6 +23,7 @@ local coinOverride: number? = nil
 
 local shopUiEnabled = false
 local onOpenCallbacks = {}
+local onCloseCallbacks = {}
 local savedWalkSpeed: number? = nil
 local savedJumpHeight: number? = nil
 
@@ -179,7 +180,17 @@ function ShopGUI.SubscribeOnOpen(cb)
 end
 
 function ShopGUI.Hide()
+	local wasOpen = shopUiEnabled
 	setShopUiEnabled(false)
+	if wasOpen then
+		for _, cb in ipairs(onCloseCallbacks) do
+			task.spawn(cb)
+		end
+	end
+end
+
+function ShopGUI.SubscribeOnClose(cb)
+	table.insert(onCloseCallbacks, cb)
 end
 
 return ShopGUI

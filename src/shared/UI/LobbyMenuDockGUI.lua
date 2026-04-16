@@ -19,7 +19,8 @@ local LABEL_TEXT_COLOR = Color3.new(0, 0, 0)
 local LABEL_TEXT_SIZE = 10
 -- Slightly wider than icon + padding so short labels (e.g. "Loadout") do not over-truncate.
 local PANEL_WIDTH = math.max(ICON_DIAMETER + PANEL_PADDING * 2, 52)
-local DOCK_EDGE_INSET = 10
+-- Flush to right; negative offset moves panel up from vertical center.
+local DOCK_VERTICAL_OFFSET = -30
 
 local Players = game:GetService("Players")
 
@@ -161,7 +162,7 @@ function LobbyMenuDockGUI.Init()
 	dockFrame = Instance.new("Frame")
 	dockFrame.Name = "DockPanel"
 	dockFrame.AnchorPoint = Vector2.new(1, 0.5)
-	dockFrame.Position = UDim2.new(1, -DOCK_EDGE_INSET, 0.5, 0)
+	dockFrame.Position = UDim2.new(1, 0, 0.5, DOCK_VERTICAL_OFFSET)
 	dockFrame.Size = UDim2.fromOffset(PANEL_WIDTH, 0)
 	dockFrame.AutomaticSize = Enum.AutomaticSize.Y
 	dockFrame.BackgroundColor3 = PANEL_BG

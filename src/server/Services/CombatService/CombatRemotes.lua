@@ -149,9 +149,10 @@ local function broadcastTeamScore(state)
 	end
 	local blueKills = state.teamKills.Blue or 0
 	local redKills = state.teamKills.Red or 0
+	local killLimit = state.killLimit or 0
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent then
-			remotes.teamScoreUpdateRE:FireClient(p, blueKills, redKills)
+			remotes.teamScoreUpdateRE:FireClient(p, blueKills, redKills, killLimit)
 		end
 	end
 end

@@ -17,7 +17,7 @@ local TDMConfig = require(Shared.Modules.TDMConfig)
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 local LeaderboardGUI = require(Shared.UI.LeaderboardGUI)
 
-local KILL_LIMIT = TDMConfig.KILL_LIMIT
+local currentKillLimit = TDMConfig.KILL_LIMIT
 
 local tdmScoreFrame = nil
 local blueScoreLabel = nil
@@ -176,14 +176,17 @@ local function ensureRefs()
 	return true
 end
 
-local function updateScore(blueKills, redKills)
+local function updateScore(blueKills, redKills, killLimit)
 	if not ensureRefs() then
 		return
 	end
 	blueKills = blueKills or 0
 	redKills = redKills or 0
-	blueScoreLabel.Text = tostring(blueKills) .. "/" .. tostring(KILL_LIMIT)
-	redScoreLabel.Text = tostring(redKills) .. "/" .. tostring(KILL_LIMIT)
+	if typeof(killLimit) == "number" and killLimit > 0 then
+		currentKillLimit = killLimit
+	end
+	blueScoreLabel.Text = tostring(blueKills) .. "/" .. tostring(currentKillLimit)
+	redScoreLabel.Text = tostring(redKills) .. "/" .. tostring(currentKillLimit)
 end
 
 local function init()

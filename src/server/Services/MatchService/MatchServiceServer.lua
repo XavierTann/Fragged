@@ -103,7 +103,7 @@ local function teleportPlayerToLobby(player)
 	end
 end
 
-function MatchServiceServer.CreateMatch(padFolderName, players, playerTeamsMap)
+function MatchServiceServer.CreateMatch(padFolderName, players, playerTeamsMap, modeConfig)
 	local matchId = generateMatchId()
 
 	local match = {
@@ -111,6 +111,7 @@ function MatchServiceServer.CreateMatch(padFolderName, players, playerTeamsMap)
 		padFolderName = padFolderName,
 		players = players,
 		playerTeamsMap = playerTeamsMap or {},
+		modeConfig = modeConfig or {},
 		state = MATCH_STATE.WAITING,
 		arenaModel = nil,
 	}

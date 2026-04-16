@@ -14,6 +14,7 @@ local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
+local TDMConfig = require(ReplicatedStorage.Shared.Modules.TDMConfig)
 local TDMSpawnStrategy = require(script.Parent.TDMSpawnStrategy)
 
 local CombatState = require(script.Parent.CombatState)
@@ -632,10 +633,12 @@ return {
 		startHistoryRecording()
 	end,
 
-	StartRound = function(players, onRoundEnd, playerTeamsMap, matchId, arenaModel)
+	StartRound = function(players, onRoundEnd, playerTeamsMap, matchId, arenaModel, modeConfig)
 		local state = CombatState()
 		state.matchId = matchId
 		state.arenaModel = arenaModel
+		state.modeConfig = modeConfig or {}
+		state.killLimit = (modeConfig and modeConfig.killLimit) or TDMConfig.KILL_LIMIT
 		state.onRoundEndCallback = onRoundEnd
 		state.matchEnded = false
 		matchStates[matchId] = state

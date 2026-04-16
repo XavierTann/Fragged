@@ -1,12 +1,17 @@
 --[[
 	PadQueueService (server)
-	Discovers every SpawnPadsN folder under Workspace.Lobby, creates a fully
-	independent queue per folder. Each folder has its own blue/red queues,
-	countdown, and match trigger — folders never share players.
+	Discovers arena mode folders under Workspace.Lobby.ArenaZone.ArenaPads.
+	Each folder (e.g. 1v1ArenaPad, 2v2ArenaPad, ..., 6v6ArenaPad) has its own
+	blue/red queues, countdown, and match trigger.
+	Team size is parsed from the mode name: "3v3ArenaPad" -> teamSize 3.
+
+	Each folder contains:
+	  BlueTeamPad, RedTeamPad   — Models players stand on to queue
+	  BlueTeamScreen, RedTeamScreen — Models with Part > SurfaceGui > Frame
 
 	Heartbeat polls each folder's pads to auto-queue/dequeue players.
-	When a folder's queue conditions are met, fires the onMatchReady callback.
-	Fires LobbyState / countdown / teleport remotes so the client stays in sync.
+	When a folder's queue conditions are met, fires the onMatchReady callback
+	with the resolved ArenaModeConfig for that mode.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -15,9 +20,22 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LobbyConfig = require(ReplicatedStorage.Shared.Modules.LobbyConfig)
+local ArenaModeConfig = require(ReplicatedStorage.Shared.Modules.ArenaModeConfig)
 local TeamDisplayUtils = require(ReplicatedStorage.Shared.Modules.TeamDisplayUtils)
 
 local PadQueueServiceServer = {}
+
+-- ── Arena pad constants ──
+
+local BLUE_TEAM_PAD_NAME = "BlueTeamPad"
+local RED_TEAM_PAD_NAME = "RedTeamPad"
+local BLUE_TEAM_SCREEN_NAME = "BlueTeamScreen"
+local RED_TEAM_SCREEN_NAME = "RedTeamScreen"
+local SCREEN_FRAME_SEGMENTS = { "Part", "SurfaceGui", "Frame" }
+local PLAYER_NAMES_SEGMENTS = { "PlayerNames", "List" }
+local PLAYER_NAME_SLOT_PREFIX = "Player"
+local PLAYER_COUNT_LABEL = "PlayerCount"
+local ALERT_LABEL = "Alert"
 
 -- ── Remotes (created once in Init) ──
 
@@ -51,36 +69,36 @@ end
 
 -- ── Types ──
 
-local function newFolderState(folderName)
+local function newFolderState(folderName, teamSize, modeName)
 	return {
 		folderName = folderName,
+		teamSize = teamSize,
+		modeName = modeName,
 		waitingQueueBlue = {},
 		waitingQueueRed = {},
-		playerPhase = {},           -- userId -> LobbyConfig.PHASE.*
+		playerPhase = {},
 		lastLeftWaitingAt = {},
 		joinQueueBlockedUntil = {},
 		teamQueueBalanceToastCooldown = {},
 		matchStartingAt = nil,
 		countdownEndTime = nil,
 		countdownThread = nil,
-		cachedPads = {},            -- { { model, team } }
+		cachedPads = {},
 	}
 end
 
 -- ── Module state ──
 
-local folderStates = {}        -- folderName -> folderState
-local playerFolderMap = {}     -- userId -> folderName (prevents multi-queue)
+local folderStates = {}
+local playerFolderMap = {}
 local onMatchReadyCallback = nil
 local POLL_INTERVAL = LobbyConfig.LOBBY_PAD_POLL_INTERVAL or 0.2
-local SHARED_PADS = LobbyConfig.LOBBY_SHARED_TEAM_PADS == true
-local OCC_ATTR = LobbyConfig.LOBBY_PAD_OCCUPANT_USER_ID_ATTRIBUTE or "LobbyPadOccupantUserId"
 
 -- ── Helpers ──
 
 local function teamForPadName(name)
-	if name == LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME then return "Blue" end
-	if name == LobbyConfig.LOBBY_RED_PAD_MODEL_NAME then return "Red" end
+	if name == BLUE_TEAM_PAD_NAME then return "Blue" end
+	if name == RED_TEAM_PAD_NAME then return "Red" end
 	return nil
 end
 
@@ -113,6 +131,14 @@ local function hrpOverlapsModelBounds(hrp, model)
 	local half = size * 0.5
 	local padExtra = 0.6
 	return math.abs(localPos.X) <= half.X + padExtra and math.abs(localPos.Z) <= half.Z + padExtra
+end
+
+local function parseModeName(folderName)
+	local a, b = folderName:match("^(%d+)v(%d+)ArenaPad$")
+	if a and b and a == b then
+		return tonumber(a), a .. "v" .. b
+	end
+	return nil, nil
 end
 
 -- ── Queue logic (per folder) ──
@@ -149,7 +175,8 @@ local function buildStateForPlayer(fState, player)
 		queuedTeam = playerQueuedTeam(fState, player),
 		minPlayers = LobbyConfig.MIN_PLAYERS,
 		minPlayersPerTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM,
-		maxPlayers = LobbyConfig.MAX_PLAYERS,
+		maxPlayers = fState.teamSize * 2,
+		maxPlayersPerTeam = fState.teamSize,
 		matchStarting = fState.matchStartingAt ~= nil,
 		countdownEndTime = fState.countdownEndTime,
 		secondsRemaining = nil,
@@ -178,7 +205,6 @@ local function broadcastStateToFolder(fState)
 			end
 		end
 	end
-	-- Also notify lobby players who aren't in this folder's state but need updated counts
 	for _, p in ipairs(Players:GetPlayers()) do
 		if not seen[p] then
 			local fn = playerFolderMap[p.UserId]
@@ -199,8 +225,6 @@ end
 
 -- ── Per-folder pad screen sync ──
 
-local T = LobbyConfig.TEXT
-
 local function resolvePath(parent, segments)
 	local p = parent
 	for _, name in ipairs(segments) do
@@ -209,15 +233,19 @@ local function resolvePath(parent, segments)
 	return p
 end
 
-local function findFrameUnderScreen(spawnPadsFolder, screenName)
-	if not spawnPadsFolder then
+local function findFrameUnderScreen(arenaPadFolder, screenName)
+	if not arenaPadFolder then
 		return nil
 	end
-	local root = spawnPadsFolder:FindFirstChild(screenName)
-	if not root then
+	local screenModel = arenaPadFolder:FindFirstChild(screenName)
+	if not screenModel then
 		return nil
 	end
-	local frame = resolvePath(root, LobbyConfig.LOBBY_PAD_SCREEN_FRAME_SEGMENTS)
+	local surfaceGui = screenModel:FindFirstChildWhichIsA("SurfaceGui", true)
+	if not surfaceGui then
+		return nil
+	end
+	local frame = surfaceGui:FindFirstChild("Frame")
 	if frame and frame:IsA("GuiObject") then
 		return frame
 	end
@@ -270,81 +298,74 @@ local function displayNameForPlayer(player)
 	return player.Name
 end
 
-local function syncPadScreensForFolder(fState)
+local function getArenaPadFolder(folderName)
 	local lobby = Workspace:FindFirstChild("Lobby")
-	local spawnPads = lobby and lobby:FindFirstChild(fState.folderName)
-	if not spawnPads then
+	local arenaZone = lobby and lobby:FindFirstChild("ArenaZone")
+	local arenaPads = arenaZone and arenaZone:FindFirstChild("ArenaPads")
+	return arenaPads and arenaPads:FindFirstChild(folderName)
+end
+
+local function syncPadScreensForFolder(fState)
+	local padFolder = getArenaPadFolder(fState.folderName)
+	if not padFolder then
 		return
 	end
 
-	local blueFrame = findFrameUnderScreen(spawnPads, LobbyConfig.LOBBY_BLUE_PAD_SCREEN_NAME)
-	local redFrame = findFrameUnderScreen(spawnPads, LobbyConfig.LOBBY_RED_PAD_SCREEN_NAME)
+	local blueFrame = findFrameUnderScreen(padFolder, BLUE_TEAM_SCREEN_NAME)
+	local redFrame = findFrameUnderScreen(padFolder, RED_TEAM_SCREEN_NAME)
 
 	local b = #fState.waitingQueueBlue
 	local r = #fState.waitingQueueRed
-	local minTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM or 2
+	local teamSize = fState.teamSize
 
-	local function playerCountLine(count, screenTeam)
-		local key = screenTeam == "Blue" and "blue" or "red"
-		if count == 1 then
-			return string.format(T.PAD_SCREEN_PLAYER_COUNT_ONE, count, key)
-		end
-		return string.format(T.PAD_SCREEN_PLAYER_COUNT_MANY, count, key)
-	end
+	local blueCountText = string.format("<b>%d</b>/%d", b, teamSize)
+	local redCountText = string.format("<b>%d</b>/%d", r, teamSize)
 
 	local function alertTextForTeam(screenTeam)
 		local c = screenTeam == "Blue" and b or r
-		local o = screenTeam == "Blue" and r or b
 		local name = TeamDisplayUtils.displayName(screenTeam)
-		if c < minTeam then
-			local need = minTeam - c
-			if need == 1 then
-				return string.format(T.PAD_SCREEN_TEAM_NEED_MORE_ONE, name)
-			end
-			return string.format(T.PAD_SCREEN_TEAM_NEED_MORE_MANY, need, name)
+		if c >= teamSize then
+			return string.format("%s team is full", name)
 		end
-		if o > c then
-			local need = o - c
-			if need == 1 then
-				return string.format(T.PAD_SCREEN_TEAM_NEED_MORE_ONE, name)
-			end
-			return string.format(T.PAD_SCREEN_TEAM_NEED_MORE_MANY, need, name)
+		local need = teamSize - c
+		if need == 1 then
+			return string.format("Need <u>1</u> more player on %s", name)
 		end
-		return string.format(T.PAD_SCREEN_TEAM_HAS_ENOUGH, name)
+		return string.format("Need <u>%d</u> more players on %s", need, name)
 	end
 
-	local function findPlayerNameListFrame(screenFrame)
-		if not screenFrame then
-			return nil
-		end
-		return resolvePath(screenFrame, LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_NAMES_SEGMENTS)
-	end
-
-	local function syncPlayerNameSlots(listFrame, queue)
-		local prefix = LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_NAME_SLOT_PREFIX or "Player"
-		local maxSlots = LobbyConfig.MAX_PLAYERS_PER_TEAM or 6
+	local function syncPlayerNameSlots(screenFrame, queue)
+		local listFrame = resolvePath(screenFrame, PLAYER_NAMES_SEGMENTS)
 		if not listFrame then
 			return
 		end
-		for i = 1, maxSlots do
-			local label = listFrame:FindFirstChild(prefix .. tostring(i))
+		for i = 1, teamSize do
+			local label = listFrame:FindFirstChild(PLAYER_NAME_SLOT_PREFIX .. tostring(i))
 			if label then
 				setPlainTextIfChanged(label, displayNameForPlayer(queue[i]))
+			end
+		end
+		for i = teamSize + 1, 6 do
+			local label = listFrame:FindFirstChild(PLAYER_NAME_SLOT_PREFIX .. tostring(i))
+			if label then
+				setPlainTextIfChanged(label, "")
 			end
 		end
 	end
 
 	if blueFrame then
-		setTextIfChanged(findTextChild(blueFrame, LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_COUNT_NAME), playerCountLine(b, "Blue"))
-		setTextIfChanged(findTextChild(blueFrame, LobbyConfig.LOBBY_PAD_SCREEN_ALERT_NAME), alertTextForTeam("Blue"))
-		syncPlayerNameSlots(findPlayerNameListFrame(blueFrame), fState.waitingQueueBlue)
+		setTextIfChanged(findTextChild(blueFrame, PLAYER_COUNT_LABEL), blueCountText)
+		setTextIfChanged(findTextChild(blueFrame, ALERT_LABEL), alertTextForTeam("Blue"))
+		syncPlayerNameSlots(blueFrame, fState.waitingQueueBlue)
 	end
 	if redFrame then
-		setTextIfChanged(findTextChild(redFrame, LobbyConfig.LOBBY_PAD_SCREEN_PLAYER_COUNT_NAME), playerCountLine(r, "Red"))
-		setTextIfChanged(findTextChild(redFrame, LobbyConfig.LOBBY_PAD_SCREEN_ALERT_NAME), alertTextForTeam("Red"))
-		syncPlayerNameSlots(findPlayerNameListFrame(redFrame), fState.waitingQueueRed)
+		setTextIfChanged(findTextChild(redFrame, PLAYER_COUNT_LABEL), redCountText)
+		setTextIfChanged(findTextChild(redFrame, ALERT_LABEL), alertTextForTeam("Red"))
+		syncPlayerNameSlots(redFrame, fState.waitingQueueRed)
 	end
 end
+
+-- ── Queue mutation ──
 
 local function removeFromQueue(fState, player)
 	for i = #fState.waitingQueueBlue, 1, -1 do
@@ -367,19 +388,18 @@ end
 
 local function canStartCountdown(fState)
 	local b, r = #fState.waitingQueueBlue, #fState.waitingQueueRed
-	local minTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM or 1
 	local minTotal = LobbyConfig.MIN_PLAYERS or 2
 
 	if b == 0 and r == 0 then return false end
 
 	if minTotal <= 1 then
-		if b >= minTeam and r == 0 then return true end
-		if r >= minTeam and b == 0 then return true end
-		if b >= minTeam and r >= minTeam and b == r then return true end
+		if b >= 1 and r == 0 then return true end
+		if r >= 1 and b == 0 then return true end
+		if b >= 1 and r >= 1 and b == r then return true end
 		return false
 	end
 
-	if b < minTeam or r < minTeam then return false end
+	if b < 1 or r < 1 then return false end
 	if b ~= r then return false end
 	return true
 end
@@ -401,7 +421,7 @@ local function takePlayersForArena(fState)
 	local players = {}
 	local teamByUserId = {}
 	local preferBlue = true
-	local maxP = LobbyConfig.MAX_PLAYERS or 8
+	local maxP = fState.teamSize * 2
 
 	local function popNext()
 		if preferBlue and #fState.waitingQueueBlue > 0 then
@@ -461,7 +481,8 @@ local function sendToArena(fState)
 				queuedTeam = nil,
 				minPlayers = LobbyConfig.MIN_PLAYERS,
 				minPlayersPerTeam = LobbyConfig.MIN_PLAYERS_PER_TEAM,
-				maxPlayers = LobbyConfig.MAX_PLAYERS,
+				maxPlayers = fState.teamSize * 2,
+				maxPlayersPerTeam = fState.teamSize,
 				matchStarting = false,
 				countdownEndTime = nil,
 			})
@@ -473,7 +494,8 @@ local function sendToArena(fState)
 	broadcastStateToFolder(fState)
 
 	if onMatchReadyCallback then
-		onMatchReadyCallback(fState.folderName, players, teamByUserId)
+		local modeConfig = ArenaModeConfig.getMode(fState.modeName) or {}
+		onMatchReadyCallback(fState.folderName, players, teamByUserId, modeConfig)
 	end
 end
 
@@ -546,7 +568,6 @@ local function addPlayerToTeamQueue(fState, player, team)
 
 	if team ~= "Blue" and team ~= "Red" then return false end
 
-	-- Prevent joining a different folder's queue
 	local existing = playerFolderMap[userId]
 	if existing and existing ~= fState.folderName then return false end
 
@@ -560,7 +581,7 @@ local function addPlayerToTeamQueue(fState, player, team)
 		removeFromQueue(fState, player)
 	end
 
-	local cap = LobbyConfig.MAX_PLAYERS_PER_TEAM or 6
+	local cap = fState.teamSize
 	local q = team == "Blue" and fState.waitingQueueBlue or fState.waitingQueueRed
 	if #q >= cap then return false end
 
@@ -584,14 +605,7 @@ local function getValidPadAndTeam(fState, player, character)
 	local candidates = {}
 	for _, entry in ipairs(fState.cachedPads) do
 		if hrpOverlapsModelBounds(hrp, entry.model) then
-			if SHARED_PADS then
-				table.insert(candidates, entry)
-			else
-				local occ = entry.model:GetAttribute(OCC_ATTR)
-				if not occ or occ == player.UserId then
-					table.insert(candidates, entry)
-				end
-			end
+			table.insert(candidates, entry)
 		end
 	end
 	if #candidates == 0 then return nil, nil end
@@ -624,7 +638,6 @@ local function pollFolder(fState, folder)
 					local _, padTeam = getValidPadAndTeam(fState, player, char)
 					local queued = playerQueuedTeam(fState, player)
 					if padTeam then
-						-- Only process if player isn't already in a different folder's queue
 						local existingFolder = playerFolderMap[player.UserId]
 						if not existingFolder or existingFolder == fState.folderName then
 							if phase ~= LobbyConfig.PHASE.WAITING_LOBBY or queued ~= padTeam then
@@ -708,22 +721,80 @@ local function tryFireTeamBalanceToasts(fState)
 	end
 end
 
+-- ── Light beam occupancy sync ──
+
+local LIGHT_BEAM_FOLDER_NAME = "LightBeam"
+local BLUE_LIGHT_BEAM_NAME = "BlueLightBeam"
+local RED_LIGHT_BEAM_NAME = "RedLightBeam"
+local BEAM_ACTIVE_ATTR = "Active"
+
+local function syncLightBeamsForFolder(fState)
+	local padFolder = getArenaPadFolder(fState.folderName)
+	if not padFolder then
+		return
+	end
+	local lightBeamFolder = padFolder:FindFirstChild(LIGHT_BEAM_FOLDER_NAME)
+	if not lightBeamFolder then
+		return
+	end
+
+	local blueOccupied = false
+	local redOccupied = false
+
+	for _, entry in ipairs(fState.cachedPads) do
+		local occupied = false
+		for _, player in ipairs(Players:GetPlayers()) do
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp and hrp:IsA("BasePart") and hrpOverlapsModelBounds(hrp, entry.model) then
+				occupied = true
+				break
+			end
+		end
+		if entry.team == "Blue" then
+			blueOccupied = blueOccupied or occupied
+		else
+			redOccupied = redOccupied or occupied
+		end
+	end
+
+	local blueBeam = lightBeamFolder:FindFirstChild(BLUE_LIGHT_BEAM_NAME)
+	local redBeam = lightBeamFolder:FindFirstChild(RED_LIGHT_BEAM_NAME)
+	if blueBeam then
+		blueBeam:SetAttribute(BEAM_ACTIVE_ATTR, blueOccupied)
+	end
+	if redBeam then
+		redBeam:SetAttribute(BEAM_ACTIVE_ATTR, redOccupied)
+	end
+end
+
 -- ── Discovery ──
 
-local function discoverPadFolders()
+local function discoverArenaPadFolders()
 	local lobby = Workspace:FindFirstChild("Lobby")
 	if not lobby then
 		warn("[PadQueueService] Workspace.Lobby not found")
 		return {}
 	end
+	local arenaZone = lobby:FindFirstChild("ArenaZone")
+	if not arenaZone then
+		warn("[PadQueueService] Workspace.Lobby.ArenaZone not found")
+		return {}
+	end
+	local arenaPads = arenaZone:FindFirstChild("ArenaPads")
+	if not arenaPads then
+		warn("[PadQueueService] Workspace.Lobby.ArenaZone.ArenaPads not found")
+		return {}
+	end
 	local folders = {}
-	for _, child in ipairs(lobby:GetChildren()) do
-		if child:IsA("Folder") and child.Name:match("^SpawnPads%d+$") then
-			table.insert(folders, child)
+	for _, child in ipairs(arenaPads:GetChildren()) do
+		local teamSize, modeName = parseModeName(child.Name)
+		if teamSize and modeName then
+			table.insert(folders, { instance = child, teamSize = teamSize, modeName = modeName })
 		end
 	end
-	table.sort(folders, function(fa, fb)
-		return fa.Name < fb.Name
+	table.sort(folders, function(a, b2)
+		return a.teamSize < b2.teamSize
 	end)
 	return folders
 end
@@ -742,9 +813,6 @@ function PadQueueServiceServer.GetPlayerFolder(player)
 	return playerFolderMap[player.UserId]
 end
 
---[[
-	Manually remove a player from whatever queue they're in.
-]]
 function PadQueueServiceServer.RemovePlayer(player)
 	local fn = playerFolderMap[player.UserId]
 	if not fn then return end
@@ -757,10 +825,6 @@ function PadQueueServiceServer.RemovePlayer(player)
 	end
 end
 
---[[
-	Clear arena-phase for a list of players returning from a match.
-	Called by the match system after EndMatch so players can re-queue.
-]]
 function PadQueueServiceServer.ClearMatchPlayers(players)
 	for _, p in ipairs(players) do
 		local userId = p.UserId
@@ -775,10 +839,6 @@ function PadQueueServiceServer.ClearMatchPlayers(players)
 	end
 end
 
---[[
-	Clear a single player's arena phase so they can re-queue on pads.
-	Used when a player voluntarily leaves a match mid-game.
-]]
 function PadQueueServiceServer.ClearPlayerArenaPhase(player)
 	local userId = player.UserId
 	local folderName = playerFolderMap[userId]
@@ -795,9 +855,10 @@ function PadQueueServiceServer.Init(matchReadyCallback)
 	onMatchReadyCallback = matchReadyCallback
 	remotes = ensureRemotes()
 
-	local padFolders = discoverPadFolders()
-	for _, folder in ipairs(padFolders) do
-		local fState = newFolderState(folder.Name)
+	local padFolders = discoverArenaPadFolders()
+	for _, entry in ipairs(padFolders) do
+		local folder = entry.instance
+		local fState = newFolderState(folder.Name, entry.teamSize, entry.modeName)
 		rebuildPadList(fState, folder)
 		folderStates[folder.Name] = fState
 
@@ -813,7 +874,6 @@ function PadQueueServiceServer.Init(matchReadyCallback)
 		end)
 	end
 
-	-- Heartbeat polling — one loop covers all folders
 	local acc = 0
 	RunService.Heartbeat:Connect(function(dt)
 		acc = acc + dt
@@ -822,15 +882,14 @@ function PadQueueServiceServer.Init(matchReadyCallback)
 		end
 		acc = 0
 		for folderName, fState in pairs(folderStates) do
-			local lobby = Workspace:FindFirstChild("Lobby")
-			local folder = lobby and lobby:FindFirstChild(folderName)
+			local folder = getArenaPadFolder(folderName)
 			pollFolder(fState, folder)
 			syncPadScreensForFolder(fState)
+			syncLightBeamsForFolder(fState)
 			tryFireTeamBalanceToasts(fState)
 		end
 	end)
 
-	-- Clean up players that leave the game
 	Players.PlayerRemoving:Connect(function(player)
 		PadQueueServiceServer.RemovePlayer(player)
 	end)

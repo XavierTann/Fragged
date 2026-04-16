@@ -69,13 +69,13 @@ local function getCapForDropType(dropCfg)
 	return dropCfg.maxActive ~= nil and dropCfg.maxActive or DropConfig.MAX_ACTIVE_PER_TYPE
 end
 
-local function getRandomDropType(activeDrops)
+local function getRandomDropType(activeDrops, dropWeightOverrides)
 	local candidates = {}
 	local totalWeight = 0
 	for dropId, drop in pairs(DropConfig.DROPS) do
 		local cap = getCapForDropType(drop)
 		if not cap or countActiveOfType(activeDrops, dropId) < cap then
-			local w = drop.weight or 1
+			local w = (dropWeightOverrides and dropWeightOverrides[dropId]) or drop.weight or 1
 			totalWeight += w
 			table.insert(candidates, { id = dropId, weight = w })
 		end
@@ -272,7 +272,7 @@ local function spawnDrop(matchId)
 
 	cleanupDestroyedDrops(activeDrops)
 
-	local dropType = getRandomDropType(activeDrops)
+	local dropType = getRandomDropType(activeDrops, data.dropWeightOverrides)
 	if not dropType then
 		return nil
 	end
@@ -416,7 +416,7 @@ return {
 		end)
 	end,
 
-	Start = function(matchId, arenaModel)
+	Start = function(matchId, arenaModel, modeConfig)
 		if matchDropData[matchId] then
 			return
 		end
@@ -427,6 +427,7 @@ return {
 			thread = nil,
 			spawnSlots = buildShuffledSpawnSlots(arenaModel),
 			spawnSlotIndex = 1,
+			dropWeightOverrides = modeConfig and modeConfig.dropWeights or nil,
 		}
 		matchDropData[matchId] = data
 

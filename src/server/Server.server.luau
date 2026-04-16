@@ -109,20 +109,20 @@ MatchServiceModule.Init({
 		for _, p in ipairs(match.players) do
 			LobbyServiceModule.SetPlayerPhase(p.UserId, LobbyConfig.PHASE.ARENA)
 		end
-		DropServiceModule.Start(match.matchId, match.arenaModel)
+		DropServiceModule.Start(match.matchId, match.arenaModel, match.modeConfig)
 		CombatServiceModule.StartRound(match.players, function()
 			DropServiceModule.Stop(match.matchId)
 			CombatServiceModule.CleanupMatchState(match.matchId)
 			PadQueueServiceModule.ClearMatchPlayers(match.players)
 			MatchServiceModule.EndMatch(match.matchId)
-		end, match.playerTeamsMap, match.matchId, match.arenaModel)
+		end, match.playerTeamsMap, match.matchId, match.arenaModel, match.modeConfig)
 	end,
 	onRoundEnd = function(_match)
 	end,
 })
 
-PadQueueServiceModule.Init(function(padFolderName, players, playerTeamsMap)
-	local match = MatchServiceModule.CreateMatch(padFolderName, players, playerTeamsMap)
+PadQueueServiceModule.Init(function(padFolderName, players, playerTeamsMap, modeConfig)
+	local match = MatchServiceModule.CreateMatch(padFolderName, players, playerTeamsMap, modeConfig)
 	if match then
 		MatchServiceModule.StartMatch(match.matchId)
 	end

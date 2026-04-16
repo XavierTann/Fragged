@@ -93,9 +93,13 @@ local function resolveAllPadsFolders()
 		return {}
 	end
 	local results = {}
-	for _, child in ipairs(lobby:GetChildren()) do
-		if child:IsA("Folder") and child.Name:match("^SpawnPads%d+$") then
-			table.insert(results, child)
+	local arenaZone = lobby:FindFirstChild("ArenaZone")
+	local arenaPads = arenaZone and arenaZone:FindFirstChild("ArenaPads")
+	if arenaPads then
+		for _, child in ipairs(arenaPads:GetChildren()) do
+			if child.Name:match("^%d+v%d+ArenaPad$") then
+				table.insert(results, child)
+			end
 		end
 	end
 	return results
@@ -120,7 +124,7 @@ end
 
 local function getTargetPad()
 	local team = choosePadTeam()
-	local padName = team == "Blue" and LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME or LobbyConfig.LOBBY_RED_PAD_MODEL_NAME
+	local padName = team == "Blue" and "BlueTeamPad" or "RedTeamPad"
 	local folders = resolveAllPadsFolders()
 	local bestPad = nil
 	local bestDist = math.huge

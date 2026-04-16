@@ -19,6 +19,12 @@ return {
 	-- Default world Y when a drop type has no fixedWorldY.
 	FIXED_DROP_WORLD_Y = 2.183,
 
+	-- Client-only: play predicted pickup SFX when HRP is within this distance of drop pivot (studs).
+	-- Server pickup still uses Touched on drop parts.
+	CLIENT_DROP_PROXIMITY_RADIUS = 9,
+	-- Min seconds between predicted SFX attempts per drop while in range (avoids audio spam).
+	CLIENT_DROP_SFX_COOLDOWN = 0.35,
+
 	-- Neon-style pickup outline (Highlight). Set false to disable.
 	DROP_PICKUP_HIGHLIGHT = true,
 	-- Fallback when a drop type has no highlightOutlineColor.
@@ -49,7 +55,7 @@ return {
 			material = Enum.Material.Neon,
 			anchored = true,
 			highlightOutlineColor = Color3.fromRGB(55, 255, 140),
-			-- Server: one-shot on HRP when the pack is consumed (not when already full health).
+			-- Client predicted SFX when near pack (server Touched still applies heal).
 			dropPickupSoundId = "rbxassetid://140272163846580",
 		},
 	},

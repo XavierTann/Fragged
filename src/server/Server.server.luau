@@ -23,8 +23,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedModules = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Modules")
 local CombatConfig = require(SharedModules:WaitForChild("CombatConfig"))
 local LobbyConfig = require(SharedModules:WaitForChild("LobbyConfig"))
-local RocketLauncherConfig = require(SharedModules:WaitForChild("RocketLauncherConfig"))
-local DropConfig = require(SharedModules:WaitForChild("DropConfig"))
 
 local LobbyServiceModule = require(LobbyService)
 local CombatServiceModule = require(CombatService)
@@ -44,33 +42,12 @@ EconomyServiceModule.Init()
 GachaServiceModule.Init()
 LoadoutServiceModule.Init()
 
-local function playOneShot3DOnCharacter(character, soundId)
-	if typeof(soundId) ~= "string" or soundId == "" or not character then
-		return
-	end
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then
-		return
-	end
-	local sound = Instance.new("Sound")
-	sound.SoundId = soundId
-	sound.Volume = 1
-	sound.RollOffMode = Enum.RollOffMode.InverseTapered
-	sound.RollOffMaxDistance = 90
-	sound.Parent = root
-	sound:Play()
-	sound.Ended:Connect(function()
-		sound:Destroy()
-	end)
-end
-
 DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 	if dropType == "RocketLauncher" then
 		local added = WeaponInventoryServer.addWeapon(player, "RocketLauncher")
 		if added then
 			CombatServiceModule.InitRocketsForPlayer(player)
 			CombatServiceModule.GiveRocketLauncherTool(player)
-			playOneShot3DOnCharacter(player.Character, RocketLauncherConfig.dropPickupSoundId)
 			return true
 		end
 		return false
@@ -84,8 +61,6 @@ DropServiceModule.SetPickupCallback(function(player, dropType, _drop)
 			return false
 		end
 		humanoid.Health = humanoid.MaxHealth
-		local hpCfg = DropConfig.DROPS.HealthPack
-		playOneShot3DOnCharacter(character, hpCfg and hpCfg.dropPickupSoundId)
 		return true
 	end
 	return false

@@ -3,6 +3,7 @@
 	Per-match timed pickups: X/Z from Arena SpawnLocations.ItemSpawnLocations (shuffled, then cycled),
 	or random top-face points on tagged FactoryFloor if item folder is missing.
 	World Y from DropConfig. No raycasts; PivotTo / CFrame at config Y.
+	Pickup: server Touched on drop parts runs SetPickupCallback. Client may play predicted SFX only (DropPickupClient).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -384,6 +385,7 @@ local function spawnDrop(matchId)
 		end
 	end
 	connectTouched(drop)
+
 	table.insert(activeDrops, drop)
 	return drop
 end

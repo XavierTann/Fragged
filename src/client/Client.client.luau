@@ -61,6 +61,9 @@ ShopKeeperPromptClient.Init()
 local CombatServiceClient = require(Shared.Services.CombatServiceClient)
 CombatServiceClient.Init()
 
+local DropPickupClient = require(Shared.Services.DropPickupClient)
+DropPickupClient.Init()
+
 local HeliosLaserEffectsClient = require(Shared.Services.HeliosLaserEffectsClient)
 HeliosLaserEffectsClient.Init()
 

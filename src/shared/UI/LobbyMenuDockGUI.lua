@@ -1,5 +1,5 @@
 --[[
-	Lobby-only vertical dock (left): open Shop, Gacha, Loadout.
+	Lobby-only vertical dock (right, compact): open Shop, Gacha, Loadout.
 	Hidden in arena. Dock icons use rbxassetid images (see ICON_* below).
 ]]
 
@@ -7,17 +7,19 @@ local ICON_SHOP = 5436912533
 local ICON_LOADOUT = 14749776450
 local ICON_GACHA = 87223429981926
 
--- Panel + circular hit targets
+-- Panel + circular hit targets (compact dock)
 local PANEL_BG = Color3.fromRGB(198, 228, 255)
-local PANEL_CORNER = 12
-local PANEL_PADDING = 5
-local ICON_DIAMETER = 52
-local ICON_GAP = 8
-local ICON_LABEL_GAP = 2
-local LABEL_HEIGHT = 16
+local PANEL_CORNER = 8
+local PANEL_PADDING = 4
+local ICON_DIAMETER = 38
+local ICON_GAP = 5
+local ICON_LABEL_GAP = 1
+local LABEL_HEIGHT = 13
 local LABEL_TEXT_COLOR = Color3.new(0, 0, 0)
+local LABEL_TEXT_SIZE = 10
 -- Slightly wider than icon + padding so short labels (e.g. "Loadout") do not over-truncate.
-local PANEL_WIDTH = math.max(ICON_DIAMETER + PANEL_PADDING * 2, 66)
+local PANEL_WIDTH = math.max(ICON_DIAMETER + PANEL_PADDING * 2, 52)
+local DOCK_EDGE_INSET = 10
 
 local Players = game:GetService("Players")
 
@@ -110,7 +112,7 @@ local function makeDockEntry(name, labelText, layoutOrder, imageAssetId: number,
 	label.Text = labelText
 	label.TextColor3 = LABEL_TEXT_COLOR
 	label.Font = Theme.FontBody
-	label.TextSize = 12
+	label.TextSize = LABEL_TEXT_SIZE
 	label.TextXAlignment = Enum.TextXAlignment.Center
 	label.TextYAlignment = Enum.TextYAlignment.Top
 	label.TextTruncate = Enum.TextTruncate.AtEnd
@@ -158,8 +160,8 @@ function LobbyMenuDockGUI.Init()
 
 	dockFrame = Instance.new("Frame")
 	dockFrame.Name = "DockPanel"
-	dockFrame.AnchorPoint = Vector2.new(0, 0.5)
-	dockFrame.Position = UDim2.new(0, 14, 0.5, 0)
+	dockFrame.AnchorPoint = Vector2.new(1, 0.5)
+	dockFrame.Position = UDim2.new(1, -DOCK_EDGE_INSET, 0.5, 0)
 	dockFrame.Size = UDim2.fromOffset(PANEL_WIDTH, 0)
 	dockFrame.AutomaticSize = Enum.AutomaticSize.Y
 	dockFrame.BackgroundColor3 = PANEL_BG

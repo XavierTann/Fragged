@@ -1270,6 +1270,10 @@ return {
 
 	SetShootingEnabled = setShootingEnabled,
 
+	IsShootingEnabled = function()
+		return shootingEnabled
+	end,
+
 	FireNow = fireInDirection,
 	ThrowGrenade = throwGrenade,
 	RequestReload = requestReload,

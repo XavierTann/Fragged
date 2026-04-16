@@ -24,4 +24,6 @@ return {
 	aimIndicatorWidthStuds = 0.6,
 	throwSoundId = "rbxassetid://140444375264585",
 	explosionSoundId = "rbxassetid://134825578212679",
+	-- Played on the picking player when they collect the arena drop (server → HRP sound).
+	dropPickupSoundId = "rbxassetid://123769166924129",
 }

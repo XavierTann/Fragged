@@ -30,6 +30,7 @@ local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local LoadoutConfig = require(ReplicatedStorage.Shared.Modules.LoadoutConfig)
 local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationConfig)
 local HeliosLaserConfig = require(ReplicatedStorage.Shared.Modules.HeliosLaserConfig)
+local DropConfig = require(ReplicatedStorage.Shared.Modules.DropConfig)
 local HeliosBeamColumns = require(ReplicatedStorage.Shared.Modules.HeliosBeamColumns)
 
 local FireGunRE = nil
@@ -275,6 +276,13 @@ local function preloadCombatSounds()
 	end
 	if RocketLauncherConfig.explosionSoundId then
 		table.insert(ids, RocketLauncherConfig.explosionSoundId)
+	end
+	if RocketLauncherConfig.dropPickupSoundId then
+		table.insert(ids, RocketLauncherConfig.dropPickupSoundId)
+	end
+	local healthPackCfg = DropConfig.DROPS and DropConfig.DROPS.HealthPack
+	if healthPackCfg and healthPackCfg.dropPickupSoundId then
+		table.insert(ids, healthPackCfg.dropPickupSoundId)
 	end
 	if #ids > 0 then
 		ContentProvider:PreloadAsync(ids)

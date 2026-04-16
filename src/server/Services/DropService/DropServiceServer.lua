@@ -205,20 +205,30 @@ local function configurePickupPart(part)
 	part.CanTouch = true
 end
 
-local function applyDropPickupHighlight(root)
+local function applyDropPickupHighlight(root, dropType)
 	if DropConfig.DROP_PICKUP_HIGHLIGHT == false then
 		return
 	end
+	local dc = dropType and DropConfig.DROPS[dropType]
 	local hl = Instance.new("Highlight")
 	hl.Name = "DropPickupHighlight"
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.OutlineTransparency = 0
-	local fillT = DropConfig.DROP_HIGHLIGHT_FILL_TRANSPARENCY
+	local fillT = dc and dc.highlightFillTransparency
+	if typeof(fillT) ~= "number" then
+		fillT = DropConfig.DROP_HIGHLIGHT_FILL_TRANSPARENCY
+	end
 	hl.FillTransparency = typeof(fillT) == "number" and fillT or 1
-	local outline = DropConfig.DROP_HIGHLIGHT_OUTLINE_COLOR
+	local outline = dc and dc.highlightOutlineColor
+	if typeof(outline) ~= "Color3" then
+		outline = DropConfig.DROP_HIGHLIGHT_OUTLINE_COLOR
+	end
 	hl.OutlineColor = typeof(outline) == "Color3" and outline or Color3.fromRGB(255, 250, 90)
 	if hl.FillTransparency < 1 then
-		local fillC = DropConfig.DROP_HIGHLIGHT_FILL_COLOR
+		local fillC = dc and dc.highlightFillColor
+		if typeof(fillC) ~= "Color3" then
+			fillC = DropConfig.DROP_HIGHLIGHT_FILL_COLOR
+		end
 		hl.FillColor = typeof(fillC) == "Color3" and fillC or Color3.fromRGB(255, 240, 100)
 	end
 	if root:IsA("Model") then
@@ -330,7 +340,7 @@ local function spawnDrop(matchId)
 		drop.Parent = getDropsFolder()
 	end
 
-	applyDropPickupHighlight(drop)
+	applyDropPickupHighlight(drop, dropType)
 	drop:SetAttribute("DropType", dropType)
 
 	local pickupLocked = false

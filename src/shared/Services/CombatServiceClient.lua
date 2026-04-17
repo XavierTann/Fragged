@@ -437,6 +437,10 @@ local function playLocalGrenadeExplosionVFX(worldPosition, radius, explosionSoun
 end
 
 -- Cosmetic only; does not deal damage. Stops at geometry (local raycast).
+local function reflectVector(incoming, normal)
+	return incoming - 2 * incoming:Dot(normal) * normal
+end
+
 local function spawnPredictedTracer(startPos, direction, gunId)
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local dir = direction.Unit
@@ -475,6 +479,9 @@ local function spawnPredictedTracer(startPos, direction, gunId)
 
 	local speed = gun.bulletSpeed
 	local lastPos = startPos
+	local maxRicochets = gun.maxRicochets or 0
+	local bounceCount = 0
+
 	local params = RaycastParams.new()
 	local filter = { bullet, getPredictedShotsFolder() }
 	local character = Players.LocalPlayer.Character
@@ -484,6 +491,7 @@ local function spawnPredictedTracer(startPos, direction, gunId)
 	params.FilterDescendantsInstances = filter
 	params.FilterType = Enum.RaycastFilterType.Exclude
 
+	local maxTime = maxRicochets > 0 and 2.0 or PREDICTED_TRACER_MAX_TIME
 	local conn
 	local t0 = os.clock()
 	conn = RunService.RenderStepped:Connect(function(dt)
@@ -491,7 +499,7 @@ local function spawnPredictedTracer(startPos, direction, gunId)
 			conn:Disconnect()
 			return
 		end
-		if os.clock() - t0 > PREDICTED_TRACER_MAX_TIME then
+		if os.clock() - t0 > maxTime then
 			conn:Disconnect()
 			bullet:Destroy()
 			return
@@ -500,6 +508,17 @@ local function spawnPredictedTracer(startPos, direction, gunId)
 		local newPos = lastPos + move
 		local result = Workspace:Raycast(lastPos, move, params)
 		if result then
+			if bounceCount < maxRicochets then
+				bounceCount = bounceCount + 1
+				dir = reflectVector(dir, result.Normal).Unit
+				speed = speed * 0.6
+				lastPos = result.Position + result.Normal * 0.1
+				bullet.Size = bullet.Size * 1.4
+				beam.Width0 = bullet.Size.X * 1.5
+				beam.Width1 = bullet.Size.X * 0.5
+				bullet.CFrame = CFrame.lookAt(lastPos, lastPos + dir)
+				return
+			end
 			conn:Disconnect()
 			bullet:Destroy()
 			return

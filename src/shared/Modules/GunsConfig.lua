@@ -62,12 +62,14 @@ local GunsConfig = {
 	PrismRipper = {
 		name = "Prism Ripper",
 		bulletSpeed = 240,
-		damage = 26,
+		damage = 15,
 		fireRate = 0.16,
 		bulletSize = Vector3.new(0.4, 0.4, 1.1),
-		bulletColor = Color3.fromRGB(200, 255, 120),
-		magazineSize = 20,
+		bulletColor = Color3.fromRGB(0, 255, 60),
+		magazineSize = 15,
 		reloadTime = 1.9,
+		maxRicochets = 1,
+		-- Sound asset TBD — swap this ID once the final firing sound is provided.
 		gunshotSoundId = "rbxassetid://139083804782836",
 		reloadSoundId = "rbxassetid://140301163976554",
 	},

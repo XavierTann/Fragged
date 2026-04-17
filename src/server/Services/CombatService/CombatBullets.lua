@@ -25,6 +25,10 @@ end
 
 local TRACER_TRAIL_LENGTH = 4 -- studs behind bullet
 
+local function reflectVector(incoming, normal)
+	return incoming - 2 * incoming:Dot(normal) * normal
+end
+
 local function spawnBullet(state, shooter, startPos, direction, gunId)
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
 	local dir = direction.Unit
@@ -37,11 +41,9 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	bullet.Anchored = true
 	bullet.CanCollide = false
 	bullet.CFrame = CFrame.lookAt(startPos, startPos + dir)
-	-- Shooter's client hides this replica (they already see predicted tracers); others still see it.
 	bullet:SetAttribute("ShooterUserId", shooterUserId)
 	bullet.Parent = getBulletsFolder()
 
-	-- Beam tracer trail behind bullet (hidden locally for shooter — see CombatServiceClient)
 	local att0 = Instance.new("Attachment")
 	att0.Position = Vector3.new(0, 0, -TRACER_TRAIL_LENGTH)
 	att0.Parent = bullet
@@ -61,8 +63,12 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	beam.Parent = bullet
+
 	local speed = gun.bulletSpeed
 	local lastPos = startPos
+	local maxRicochets = gun.maxRicochets or 0
+	local bounceCount = 0
+
 	local params = RaycastParams.new()
 	local filter = { bullet, getBulletsFolder() }
 	if shooter.Character then
@@ -70,6 +76,7 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	end
 	params.FilterDescendantsInstances = filter
 	params.FilterType = Enum.RaycastFilterType.Exclude
+
 	local conn
 	conn = RunService.Heartbeat:Connect(function(dt)
 		if not bullet.Parent then
@@ -97,6 +104,19 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 					end
 				end
 			end
+
+			if bounceCount < maxRicochets then
+				bounceCount = bounceCount + 1
+				dir = reflectVector(dir, result.Normal).Unit
+				speed = speed * 0.6
+				lastPos = result.Position + result.Normal * 0.1
+				bullet.Size = bullet.Size * 1.4
+				beam.Width0 = bullet.Size.X * 1.5
+				beam.Width1 = bullet.Size.X * 0.5
+				bullet.CFrame = CFrame.lookAt(lastPos, lastPos + dir)
+				return
+			end
+
 			conn:Disconnect()
 			bullet:Destroy()
 			return

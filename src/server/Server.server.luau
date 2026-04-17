@@ -83,21 +83,85 @@ do
 		leaveRE.Parent = folder
 	end
 	local leaveCooldowns = {}
+
+	local function forfeitMatchIfNeeded(matchId, snapshotPlayers, excludeUserId)
+		local counts = CombatServiceModule.GetMatchTeamCounts(matchId)
+		if not counts or (counts.blue > 0 and counts.red > 0) then
+			return
+		end
+
+		local remaining = {}
+		for _, p in ipairs(snapshotPlayers) do
+			if p and p.Parent and p.UserId ~= excludeUserId then
+				table.insert(remaining, p)
+			end
+		end
+
+		CombatServiceModule.ForfeitMatch(matchId)
+		DropServiceModule.Stop(matchId)
+		CombatServiceModule.CleanupMatchState(matchId)
+
+		for _, p in ipairs(remaining) do
+			PadQueueServiceModule.ClearPlayerArenaPhase(p)
+			LobbyServiceModule.ReturnPlayerToLobby(p)
+		end
+
+		local forfeitRE = ReplicatedStorage:FindFirstChild(CombatConfig.REMOTE_FOLDER_NAME)
+			and ReplicatedStorage[CombatConfig.REMOTE_FOLDER_NAME]:FindFirstChild(CombatConfig.REMOTES.MATCH_FORFEIT)
+		if forfeitRE then
+			for _, p in ipairs(remaining) do
+				forfeitRE:FireClient(p)
+			end
+		end
+
+		MatchServiceModule.CleanupMatch(matchId)
+	end
+
 	leaveRE.OnServerEvent:Connect(function(player)
 		local now = os.clock()
 		if leaveCooldowns[player.UserId] and now - leaveCooldowns[player.UserId] < 2 then
 			return
 		end
 		leaveCooldowns[player.UserId] = now
-		local removed = CombatServiceModule.RemovePlayerFromRound(player)
-		if removed then
-			MatchServiceModule.RemovePlayerFromMatch(player)
-			PadQueueServiceModule.ClearPlayerArenaPhase(player)
-			LobbyServiceModule.ReturnPlayerToLobby(player)
+
+		local matchId = MatchServiceModule.GetPlayerMatchId(player)
+		if not matchId then
+			return
 		end
+
+		local match = MatchServiceModule.GetMatch(matchId)
+		local snapshotPlayers = match and table.clone(match.players) or {}
+
+		local removed = CombatServiceModule.RemovePlayerFromRound(player)
+		if not removed then
+			return
+		end
+
+		MatchServiceModule.RemovePlayerFromMatch(player)
+		PadQueueServiceModule.ClearPlayerArenaPhase(player)
+		LobbyServiceModule.ReturnPlayerToLobby(player)
+
+		forfeitMatchIfNeeded(matchId, snapshotPlayers, player.UserId)
 	end)
+
 	game:GetService("Players").PlayerRemoving:Connect(function(player)
 		leaveCooldowns[player.UserId] = nil
+
+		local matchId = MatchServiceModule.GetPlayerMatchId(player)
+		if not matchId then
+			return
+		end
+
+		local match = MatchServiceModule.GetMatch(matchId)
+		local snapshotPlayers = match and table.clone(match.players) or {}
+
+		local removed = CombatServiceModule.RemovePlayerFromRound(player)
+		MatchServiceModule.RemovePlayerFromMatch(player)
+		PadQueueServiceModule.ClearPlayerArenaPhase(player)
+
+		if removed then
+			forfeitMatchIfNeeded(matchId, snapshotPlayers, player.UserId)
+		end
 	end)
 end
 

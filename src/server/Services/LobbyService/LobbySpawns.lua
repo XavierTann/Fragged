@@ -34,9 +34,17 @@ end
 local function teleportPlayerTo(player, spawnName)
 	local cf = getSpawnCFrame(spawnName)
 	local char = player.Character
-	if char and char:FindFirstChild("HumanoidRootPart") then
-		char.HumanoidRootPart.CFrame = cf
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		return
 	end
+	hrp.Anchored = true
+	hrp.CFrame = cf
+	task.delay(0.2, function()
+		if hrp and hrp.Parent then
+			hrp.Anchored = false
+		end
+	end)
 end
 
 local function configureSpawnLocations()

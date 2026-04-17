@@ -49,6 +49,9 @@ LobbyMatchStartToastClient.Init()
 local LobbyTeamBalanceToastClient = require(Shared.Services.LobbyTeamBalanceToastClient)
 LobbyTeamBalanceToastClient.Init()
 
+local MatchForfeitToastClient = require(Shared.Services.MatchForfeitToastClient)
+MatchForfeitToastClient.Init()
+
 local LobbyPadLightBeamPulse = require(Shared.Services.LobbyPadLightBeamPulse)
 LobbyPadLightBeamPulse.Init()
 

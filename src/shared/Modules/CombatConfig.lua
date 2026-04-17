@@ -49,6 +49,7 @@ return {
 		-- Server -> clients in round: beam VFX (origin, direction unit, length studs)
 		HELIOS_LASER_VFX = "HeliosLaserVFX",
 		LEAVE_MATCH = "LeaveMatch", -- Client -> Server: voluntary forfeit, return to lobby
+		MATCH_FORFEIT = "MatchForfeit", -- Server -> Client: match ended due to insufficient players
 		-- Gacha system
 		GACHA_RESULT = "GachaResult", -- Server -> Client: { weaponId, rarity, permanent, rounds, isFree }
 		GACHA_FREE_SPIN = "GachaFreeSpin", -- Client -> Server: request free first roll

@@ -42,13 +42,7 @@ local stageShowing = false
 local initialized = false
 
 -- ── Visual constants ──
-local COLOR_BLUE = Color3.fromRGB(100, 170, 255)
-local COLOR_RED = Color3.fromRGB(255, 80, 90)
 local COLOR_GOLD = Color3.fromRGB(255, 255, 0)
-local ARROW_HEIGHT_ABOVE_PAD = 12
-local BOB_AMPLITUDE = 1.5
-local BOB_SPEED = 2.2
-local ROTATE_SPEED = 1.4
 local GROUND_ARROW_COUNT = 5
 local GROUND_ARROW_SPACING = 8
 
@@ -130,48 +124,6 @@ local function getTargetPad()
 end
 
 
--- ── 3D pad arrows (floating wedges above pads) ──
-local function createPadArrow(padModel, color)
-	local basePos = getPadCenter(padModel) + Vector3.new(0, ARROW_HEIGHT_ABOVE_PAD, 0)
-
-	local arrow = Instance.new("Part")
-	arrow.Name = "FTUEArrow"
-	arrow.Anchored = true
-	arrow.CanCollide = false
-	arrow.CanTouch = false
-	arrow.CanQuery = false
-	arrow.Size = Vector3.new(3, 4, 3)
-	arrow.CFrame = CFrame.new(basePos)
-	arrow.Color = color
-	arrow.Material = Enum.Material.Neon
-	arrow.Transparency = 0.15
-	arrow.Parent = getFTUEFolder()
-
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Wedge
-	mesh.Scale = Vector3.new(1, 1, 1)
-	mesh.Parent = arrow
-
-	table.insert(padArrowParts, { part = arrow, basePos = basePos })
-end
-
-local function startPadAnimation()
-	if padHeartbeatConn then
-		return
-	end
-	local t = 0
-	padHeartbeatConn = RunService.Heartbeat:Connect(function(dt)
-		t = t + dt
-		for _, data in ipairs(padArrowParts) do
-			local yOff = math.sin(t * BOB_SPEED) * BOB_AMPLITUDE
-			local angle = t * ROTATE_SPEED
-			data.part.CFrame = CFrame.new(data.basePos + Vector3.new(0, yOff, 0))
-				* CFrame.Angles(0, angle, 0)
-				* CFrame.Angles(math.rad(180), 0, 0)
-		end
-	end)
-end
-
 local function destroyPadArrows()
 	if padHeartbeatConn then
 		padHeartbeatConn:Disconnect()
@@ -187,21 +139,7 @@ local function destroyPadArrows()
 end
 
 local function showPadArrows()
-	if #padArrowParts > 0 then
-		return
-	end
-	local folder = resolve1v1PadFolder()
-	if folder then
-		local bluePad = folder:FindFirstChild(BLUE_TEAM_PAD_NAME)
-		local redPad = folder:FindFirstChild(RED_TEAM_PAD_NAME)
-		if bluePad then
-			createPadArrow(bluePad, COLOR_BLUE)
-		end
-		if redPad then
-			createPadArrow(redPad, COLOR_RED)
-		end
-	end
-	startPadAnimation()
+	-- Floating wedge arrows removed; ground trail arrows still guide the player.
 end
 
 -- ── PLAY button ──

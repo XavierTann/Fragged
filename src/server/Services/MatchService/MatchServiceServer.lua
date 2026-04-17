@@ -7,7 +7,6 @@
 	start combat) -> EndMatch (teleport out, destroy arena, clean up).
 ]]
 
-local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -145,6 +144,8 @@ function MatchServiceServer.StartMatch(matchId)
 	match.arenaModel = arenaModel
 	match.state = MATCH_STATE.ACTIVE
 
+	task.wait(1)
+
 	local spawnCFrames = getArenaSpawnCFrames(arenaModel)
 
 	for i, p in ipairs(match.players) do
@@ -269,10 +270,6 @@ function MatchServiceServer.Init(config)
 	config = config or {}
 	onRoundStartCallback = config.onRoundStart
 	onRoundEndCallback = config.onRoundEnd
-
-	Players.PlayerRemoving:Connect(function(player)
-		MatchServiceServer.RemovePlayerFromMatch(player)
-	end)
 end
 
 return MatchServiceServer

@@ -57,6 +57,7 @@ local function ensureRemotes()
 	remotes.grenadeExplosionFXRE = getOrCreate(CombatConfig.REMOTES.GRENADE_EXPLOSION_FX)
 	remotes.heliosCommitChargedBeamRE = getOrCreate(CombatConfig.REMOTES.HELIOS_COMMIT_CHARGED_BEAM)
 	remotes.heliosLaserVfxRE = getOrCreate(CombatConfig.REMOTES.HELIOS_LASER_VFX)
+	remotes.matchForfeitRE = getOrCreate(CombatConfig.REMOTES.MATCH_FORFEIT)
 	return remotes
 end
 

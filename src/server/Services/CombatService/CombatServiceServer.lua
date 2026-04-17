@@ -738,6 +738,51 @@ return {
 
 	GiveRocketLauncherTool = giveRocketLauncherTool,
 
+	GetMatchTeamCounts = function(matchId)
+		local state = matchStates[matchId]
+		if not state or state.matchEnded then
+			return nil
+		end
+		local blue, red = 0, 0
+		for _, p in ipairs(state.currentRoundPlayers) do
+			if p and p.Parent then
+				local team = state.playerTeams[p.UserId]
+				if team == "Blue" then
+					blue = blue + 1
+				elseif team == "Red" then
+					red = red + 1
+				end
+			end
+		end
+		return { blue = blue, red = red }
+	end,
+
+	ForfeitMatch = function(matchId)
+		local state = matchStates[matchId]
+		if not state or state.matchEnded then
+			return
+		end
+		state.matchEnded = true
+		for _, p in ipairs(state.currentRoundPlayers) do
+			if p and p.Parent then
+				CombatHeliosLaser.cancelActiveCommitForPlayer(state, p)
+			end
+		end
+		for _, conn in pairs(state.diedConnections) do
+			if conn and conn.Disconnect then
+				conn:Disconnect()
+			end
+		end
+		state.diedConnections = {}
+		for _, conn in pairs(state.characterAddedConnections or {}) do
+			if conn and conn.Disconnect then
+				conn:Disconnect()
+			end
+		end
+		state.characterAddedConnections = {}
+		state.onRoundEndCallback = nil
+	end,
+
 	RemovePlayerFromRound = function(player)
 		local state = getPlayerState(player)
 		if not state or state.matchEnded then

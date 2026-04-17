@@ -65,8 +65,6 @@ local groundBillboard = nil
 local groundHeartbeatConn = nil
 local groundTargetPos = nil
 
--- ── Permanent pad billboards (always visible in lobby) ──
-local padBillboards = {}
 
 -- ── FTUE Folder management ──
 local function getFTUEFolder()
@@ -87,22 +85,21 @@ local function cleanupFolderIfEmpty()
 end
 
 -- ── Pad resolution helpers ──
-local function resolveAllPadsFolders()
+local FTUE_PAD_FOLDER_NAME = "1v1ArenaPad"
+local BLUE_TEAM_PAD_NAME = "BlueTeamPad"
+local RED_TEAM_PAD_NAME = "RedTeamPad"
+
+local function resolve1v1PadFolder()
 	local lobby = Workspace:FindFirstChild("Lobby")
 	if not lobby then
-		return {}
+		return nil
 	end
-	local results = {}
 	local arenaZone = lobby:FindFirstChild("ArenaZone")
 	local arenaPads = arenaZone and arenaZone:FindFirstChild("ArenaPads")
-	if arenaPads then
-		for _, child in ipairs(arenaPads:GetChildren()) do
-			if child.Name:match("^%d+v%d+ArenaPad$") then
-				table.insert(results, child)
-			end
-		end
+	if not arenaPads then
+		return nil
 	end
-	return results
+	return arenaPads:FindFirstChild(FTUE_PAD_FOLDER_NAME)
 end
 
 local function getPadCenter(model)
@@ -124,77 +121,14 @@ end
 
 local function getTargetPad()
 	local team = choosePadTeam()
-	local padName = team == "Blue" and "BlueTeamPad" or "RedTeamPad"
-	local folders = resolveAllPadsFolders()
-	local bestPad = nil
-	local bestDist = math.huge
-	local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-	for _, folder in ipairs(folders) do
-		local pad = folder:FindFirstChild(padName)
-		if pad then
-			if not hrp then
-				return pad
-			end
-			local dist = (pad:GetPivot().Position - hrp.Position).Magnitude
-			if dist < bestDist then
-				bestDist = dist
-				bestPad = pad
-			end
-		end
+	local padName = team == "Blue" and BLUE_TEAM_PAD_NAME or RED_TEAM_PAD_NAME
+	local folder = resolve1v1PadFolder()
+	if folder then
+		return folder:FindFirstChild(padName)
 	end
-	return bestPad
+	return nil
 end
 
--- ── Permanent pad billboards ──
-local function createPadBillboards()
-	if #padBillboards > 0 then
-		return
-	end
-	local folders = resolveAllPadsFolders()
-	for _, padsFolder in ipairs(folders) do
-		for _, padName in ipairs({ LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME, LobbyConfig.LOBBY_RED_PAD_MODEL_NAME }) do
-			local pad = padsFolder:FindFirstChild(padName)
-			if pad then
-				local part = pad.PrimaryPart or pad:FindFirstChildWhichIsA("BasePart", true)
-				if part then
-					local bbg = Instance.new("BillboardGui")
-					bbg.Name = "PadJoinLabel"
-					bbg.Size = UDim2.fromOffset(180, 36)
-					bbg.StudsOffset = Vector3.new(0, 14, 0)
-					bbg.AlwaysOnTop = true
-					bbg.Adornee = part
-					bbg.Parent = part
-
-					local label = Instance.new("TextLabel")
-					label.Size = UDim2.fromScale(1, 1)
-					label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
-					label.BackgroundTransparency = 0.35
-					label.BorderSizePixel = 0
-					label.Text = "Join a game here!"
-					label.TextColor3 = Color3.fromRGB(255, 255, 255)
-					label.TextSize = 16
-					label.Font = Enum.Font.GothamBold
-					label.Parent = bbg
-
-					local corner = Instance.new("UICorner")
-					corner.CornerRadius = UDim.new(0, 8)
-					corner.Parent = label
-
-					table.insert(padBillboards, bbg)
-				end
-			end
-		end
-	end
-end
-
-local function destroyPadBillboards()
-	for _, bbg in ipairs(padBillboards) do
-		if bbg and bbg.Parent then
-			bbg:Destroy()
-		end
-	end
-	padBillboards = {}
-end
 
 -- ── 3D pad arrows (floating wedges above pads) ──
 local function createPadArrow(padModel, color)
@@ -217,28 +151,6 @@ local function createPadArrow(padModel, color)
 	mesh.MeshType = Enum.MeshType.Wedge
 	mesh.Scale = Vector3.new(1, 1, 1)
 	mesh.Parent = arrow
-
-	local bbg = Instance.new("BillboardGui")
-	bbg.Name = "ArrowLabel"
-	bbg.Size = UDim2.fromOffset(160, 36)
-	bbg.StudsOffset = Vector3.new(0, 4, 0)
-	bbg.AlwaysOnTop = true
-	bbg.Parent = arrow
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
-	label.BackgroundTransparency = 0.35
-	label.BorderSizePixel = 0
-	label.Text = "Step here to play!"
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.TextSize = 16
-	label.Font = Enum.Font.GothamBold
-	label.Parent = bbg
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = label
 
 	table.insert(padArrowParts, { part = arrow, basePos = basePos })
 end
@@ -278,10 +190,10 @@ local function showPadArrows()
 	if #padArrowParts > 0 then
 		return
 	end
-	local folders = resolveAllPadsFolders()
-	for _, padsFolder in ipairs(folders) do
-		local bluePad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_BLUE_PAD_MODEL_NAME)
-		local redPad = padsFolder:FindFirstChild(LobbyConfig.LOBBY_RED_PAD_MODEL_NAME)
+	local folder = resolve1v1PadFolder()
+	if folder then
+		local bluePad = folder:FindFirstChild(BLUE_TEAM_PAD_NAME)
+		local redPad = folder:FindFirstChild(RED_TEAM_PAD_NAME)
 		if bluePad then
 			createPadArrow(bluePad, COLOR_BLUE)
 		end
@@ -765,7 +677,6 @@ end
 local function hideEverything()
 	hideFTUE()
 	destroyPlayButton()
-	destroyPadBillboards()
 end
 
 local advanceToStage
@@ -806,17 +717,6 @@ local function showStage(stage)
 	elseif stage == STAGE.RETURN_PAD then
 		showPadArrows()
 		task.spawn(showPreMatchGroundArrows)
-		for _, data in ipairs(padArrowParts) do
-			local bbg = data.part:FindFirstChild("ArrowLabel")
-			if bbg then
-				local lbl = bbg:FindFirstChildWhichIsA("TextLabel")
-				if lbl then
-					lbl.Text = "Try your new weapon or skin in another match!"
-					lbl.TextSize = 12
-				end
-				bbg.Size = UDim2.fromOffset(260, 36)
-			end
-		end
 
 	end
 end
@@ -882,7 +782,6 @@ function FTUEPadArrowsGUI.Init()
 					advanceToStage(next)
 				end
 				createPlayButton()
-				createPadBillboards()
 				if currentStage ~= STAGE.DONE and not stageShowing then
 					showStage(currentStage)
 				end
@@ -899,7 +798,6 @@ function FTUEPadArrowsGUI.Init()
 	end)
 
 	createPlayButton()
-	createPadBillboards()
 	if currentStage == STAGE.PRE_MATCH then
 		showStage(STAGE.PRE_MATCH)
 	end
@@ -907,7 +805,6 @@ end
 
 function FTUEPadArrowsGUI.Show()
 	createPlayButton()
-	createPadBillboards()
 	if currentStage ~= STAGE.DONE then
 		showStage(currentStage)
 	end

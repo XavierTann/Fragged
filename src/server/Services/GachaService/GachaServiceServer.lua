@@ -1,7 +1,7 @@
 --[[
 	Server-side gacha roll service.
-	Handles free first spin (guaranteed Plasma Carbine for 5 rounds) and
-	paid Robux rolls via Developer Products with weighted rarity RNG.
+	Rolls award weapon skins (permanent unlocks). Duplicate rolls grant consolation credits.
+	Handles free first spin and paid Robux rolls via Developer Products with weighted rarity RNG.
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CombatConfig = require(Shared.Modules.CombatConfig)
 local GachaConfig = require(Shared.Modules.GachaConfig)
+local SkinsConfig = require(Shared.Modules.SkinsConfig)
 
 local EconomyServiceServer = require(script.Parent.Parent.EconomyService.EconomyServiceServer)
 
@@ -72,20 +73,7 @@ local function getPoolByRarity(rarity: string)
 	return entries
 end
 
-local function playerOwnsGunPermanently(player, gunId): boolean
-	local data = EconomyServiceServer.GetPlayerData(player)
-	if not data then
-		return false
-	end
-	for _, g in ipairs(data.ownedShopGuns) do
-		if g == gunId then
-			return true
-		end
-	end
-	return false
-end
-
-local function executeRoll(player: Player): { weaponId: string, rarity: string, permanent: boolean, rounds: number? }
+local function executeRoll(player: Player)
 	local rarity = pickRarity()
 	local pool = getPoolByRarity(rarity)
 
@@ -94,40 +82,49 @@ local function executeRoll(player: Player): { weaponId: string, rarity: string, 
 		pool = getPoolByRarity(rarity)
 	end
 
+	if #pool == 0 then
+		local allPool = GachaConfig.POOL
+		if #allPool > 0 then
+			local pick = allPool[math.random(1, #allPool)]
+			rarity = pick.rarity
+			pool = { pick }
+		end
+	end
+
 	local pick = pool[math.random(1, #pool)]
 
-	if pick.permanent and playerOwnsGunPermanently(player, pick.weaponId) then
+	if EconomyServiceServer.OwnsSkin(player, pick.skinId) then
 		local altPool = {}
 		for _, e in ipairs(pool) do
-			if not e.permanent or not playerOwnsGunPermanently(player, e.weaponId) then
+			if not EconomyServiceServer.OwnsSkin(player, e.skinId) then
 				table.insert(altPool, e)
 			end
 		end
 		if #altPool > 0 then
 			pick = altPool[math.random(1, #altPool)]
 		else
+			local consolation = GachaConfig.DUPE_CONSOLATION_CREDITS or 300
 			return {
-				weaponId = pick.weaponId,
+				skinId = pick.skinId,
 				rarity = rarity,
-				permanent = false,
-				rounds = GachaConfig.DUPE_PERM_CONSOLATION_ROUNDS,
+				duplicate = true,
+				consolationCredits = consolation,
 			}
 		end
 	end
 
 	return {
-		weaponId = pick.weaponId,
+		skinId = pick.skinId,
 		rarity = rarity,
-		permanent = pick.permanent == true,
-		rounds = pick.rounds,
+		duplicate = false,
 	}
 end
 
 local function grantRollResult(player: Player, result)
-	if result.permanent then
-		EconomyServiceServer.AddPermanentGun(player, result.weaponId)
+	if result.duplicate then
+		EconomyServiceServer.AddCredits(player, result.consolationCredits)
 	else
-		EconomyServiceServer.AddTempWeapon(player, result.weaponId, result.rounds or 3)
+		EconomyServiceServer.AddSkin(player, result.skinId)
 	end
 end
 
@@ -135,11 +132,14 @@ local function fireResult(player: Player, result, isFree: boolean?)
 	if not gachaResultRE or not player.Parent then
 		return
 	end
+	local skin = SkinsConfig.getSkin(result.skinId)
 	gachaResultRE:FireClient(player, {
-		weaponId = result.weaponId,
+		skinId = result.skinId,
+		skinName = skin and skin.name or result.skinId,
+		iconAssetId = skin and skin.iconAssetId or 0,
 		rarity = result.rarity,
-		permanent = result.permanent,
-		rounds = result.rounds,
+		duplicate = result.duplicate == true,
+		consolationCredits = result.consolationCredits,
 		isFree = isFree == true,
 	})
 end
@@ -169,11 +169,13 @@ function GachaServiceServer.Init()
 
 			local firstRoll = GachaConfig.FIRST_ROLL
 			local result = {
-				weaponId = firstRoll.weaponId,
+				skinId = firstRoll.skinId,
 				rarity = "Legendary",
-				permanent = false,
-				rounds = firstRoll.rounds,
+				duplicate = EconomyServiceServer.OwnsSkin(player, firstRoll.skinId),
 			}
+			if result.duplicate then
+				result.consolationCredits = GachaConfig.DUPE_CONSOLATION_CREDITS or 300
+			end
 
 			EconomyServiceServer.SetHasUsedFirstRoll(player)
 			grantRollResult(player, result)

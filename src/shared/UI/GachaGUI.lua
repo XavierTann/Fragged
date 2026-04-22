@@ -13,8 +13,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.UI.Shop.ShopTheme)
 local GachaConfig = require(Shared.Modules.GachaConfig)
 local ShopEconomyClient = require(Shared.Services.ShopEconomyClient)
-local GunsConfig = require(Shared.Modules.GunsConfig)
-local WeaponIconsConfig = require(Shared.Modules.WeaponIconsConfig)
+local SkinsConfig = require(Shared.Modules.SkinsConfig)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -32,7 +31,6 @@ local resultName = nil
 local resultRarity = nil
 local resultRounds = nil
 local resultFlash = nil
-local tempListFrame = nil
 local closeBtn = nil
 
 local savedWalkSpeed = nil
@@ -60,31 +58,45 @@ local REEL_HEIGHT = 100
 local RESULT_PANEL_HEIGHT = 150
 local SPIN_DURATION = 6.0
 
-local ALL_WEAPON_IDS = {}
+local ALL_SKIN_IDS = {}
 do
 	local seen = {}
 	for _, entry in ipairs(GachaConfig.POOL) do
-		if not seen[entry.weaponId] then
-			seen[entry.weaponId] = true
-			table.insert(ALL_WEAPON_IDS, entry.weaponId)
+		if not seen[entry.skinId] then
+			seen[entry.skinId] = true
+			table.insert(ALL_SKIN_IDS, entry.skinId)
 		end
 	end
 end
 
-local function getIconImage(weaponId)
-	local assetId = WeaponIconsConfig[weaponId]
-	if not assetId or assetId == 0 then
+local function getSkinIconImage(skinId)
+	local skin = SkinsConfig.getSkin(skinId)
+	if not skin then
 		return ""
 	end
-	return "rbxassetid://" .. tostring(assetId)
+	if skin.iconDecalName then
+		local imports = ReplicatedStorage:FindFirstChild("Imports")
+		local decals = imports and imports:FindFirstChild("Decals")
+		local decal = decals and decals:FindFirstChild(skin.iconDecalName)
+		if decal and decal:IsA("Decal") then
+			local tex = decal.Texture
+			if tex and tex ~= "" then
+				return tex
+			end
+		end
+	end
+	if skin.iconAssetId and skin.iconAssetId ~= 0 then
+		return "rbxassetid://" .. tostring(skin.iconAssetId)
+	end
+	return ""
 end
 
-local function getWeaponDisplayName(weaponId)
-	local cfg = GunsConfig[weaponId]
-	if cfg then
-		return cfg.name or weaponId
+local function getSkinDisplayName(skinId)
+	local skin = SkinsConfig.getSkin(skinId)
+	if skin then
+		return skin.name or skinId
 	end
-	return weaponId
+	return skinId
 end
 
 local function randomPoolEntry()
@@ -133,63 +145,6 @@ local function restoreMovement()
 	end
 end
 
-local function refreshTempWeapons()
-	if not tempListFrame then
-		return
-	end
-	for _, child in ipairs(tempListFrame:GetChildren()) do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
-	local snap = ShopEconomyClient.GetSnapshot()
-	local tw = snap.tempWeapons or {}
-	if #tw == 0 then
-		return
-	end
-	for i, entry in ipairs(tw) do
-		local row = Instance.new("Frame")
-		row.Name = "Temp_" .. entry.id
-		row.Size = UDim2.new(1, 0, 0, 32)
-		row.Position = UDim2.fromOffset(0, (i - 1) * 36)
-		row.BackgroundColor3 = Theme.Card
-		row.BackgroundTransparency = 0.3
-		row.BorderSizePixel = 0
-		row.Parent = tempListFrame
-		corner(row, 6)
-
-		local icon = Instance.new("ImageLabel")
-		icon.Size = UDim2.fromOffset(24, 24)
-		icon.Position = UDim2.fromOffset(4, 4)
-		icon.BackgroundTransparency = 1
-		icon.Image = getIconImage(entry.id)
-		icon.ScaleType = Enum.ScaleType.Fit
-		icon.Parent = row
-
-		local nameL = Instance.new("TextLabel")
-		nameL.Size = UDim2.new(1, -80, 1, 0)
-		nameL.Position = UDim2.fromOffset(32, 0)
-		nameL.BackgroundTransparency = 1
-		nameL.Text = getWeaponDisplayName(entry.id)
-		nameL.TextSize = 11
-		nameL.Font = Theme.FontBody
-		nameL.TextColor3 = Theme.TextBright
-		nameL.TextXAlignment = Enum.TextXAlignment.Left
-		nameL.Parent = row
-
-		local roundsL = Instance.new("TextLabel")
-		roundsL.Size = UDim2.fromOffset(44, 32)
-		roundsL.Position = UDim2.new(1, -48, 0, 0)
-		roundsL.BackgroundTransparency = 1
-		roundsL.Text = entry.roundsLeft .. "R"
-		roundsL.TextSize = 12
-		roundsL.Font = Enum.Font.GothamBold
-		roundsL.TextColor3 = Theme.NeonAmber
-		roundsL.TextXAlignment = Enum.TextXAlignment.Right
-		roundsL.Parent = row
-	end
-end
-
 local function updateRollButton()
 	if not rollBtn then
 		return
@@ -224,7 +179,7 @@ local function hideResult()
 	end
 end
 
-local function buildReelCell(parent, weaponId, index, rarity)
+local function buildReelCell(parent, skinId, index, rarity)
 	local rarityColor = RARITY_COLORS[rarity or "Common"] or RARITY_COLORS["Common"]
 
 	local cell = Instance.new("Frame")
@@ -251,7 +206,7 @@ local function buildReelCell(parent, weaponId, index, rarity)
 	img.Size = UDim2.new(1, -12, 1, -12)
 	img.Position = UDim2.fromOffset(6, 6)
 	img.BackgroundTransparency = 1
-	img.Image = getIconImage(weaponId)
+	img.Image = getSkinIconImage(skinId)
 	img.ScaleType = Enum.ScaleType.Fit
 	img.Parent = cell
 
@@ -260,7 +215,7 @@ local function buildReelCell(parent, weaponId, index, rarity)
 	nameTag.Size = UDim2.new(1, 0, 0, 14)
 	nameTag.Position = UDim2.new(0, 0, 1, 2)
 	nameTag.BackgroundTransparency = 1
-	nameTag.Text = getWeaponDisplayName(weaponId)
+	nameTag.Text = getSkinDisplayName(skinId)
 	nameTag.TextSize = 9
 	nameTag.Font = Theme.FontBody
 	nameTag.TextColor3 = rarityColor
@@ -270,7 +225,7 @@ local function buildReelCell(parent, weaponId, index, rarity)
 	return cell
 end
 
-local function populateReel(winWeaponId, winRarity)
+local function populateReel(winSkinId, winRarity)
 	if reelStrip then
 		for _, child in ipairs(reelStrip:GetChildren()) do
 			child:Destroy()
@@ -282,10 +237,10 @@ local function populateReel(winWeaponId, winRarity)
 
 	for i = 1, REEL_TOTAL_CELLS do
 		if i == winIndex then
-			buildReelCell(reelStrip, winWeaponId, i, winRarity)
+			buildReelCell(reelStrip, winSkinId, i, winRarity)
 		else
 			local entry = randomPoolEntry()
-			buildReelCell(reelStrip, entry.weaponId, i, entry.rarity)
+			buildReelCell(reelStrip, entry.skinId, i, entry.rarity)
 		end
 	end
 
@@ -303,10 +258,10 @@ local function stopReelConnection()
 	end
 end
 
-local function animateReel(winWeaponId, winRarity, onFinished)
+local function animateReel(winSkinId, winRarity, onFinished)
 	stopReelConnection()
 
-	local winIndex = populateReel(winWeaponId, winRarity)
+	local winIndex = populateReel(winSkinId, winRarity)
 
 	local viewportWidth = reelViewport and reelViewport.AbsoluteSize.X or (340 - 40)
 	local winCellCenter = (winIndex - 1) * REEL_CELL_STRIDE + REEL_CELL_SIZE / 2
@@ -356,21 +311,22 @@ local function showResultPanel(payload)
 	end
 
 	local rarityColor = RARITY_COLORS[payload.rarity] or Theme.TextBright
-	local weaponName = getWeaponDisplayName(payload.weaponId)
+	local skinName = payload.skinName or getSkinDisplayName(payload.skinId)
+	local iconId = payload.iconAssetId
+	local iconImage = (iconId and iconId ~= 0) and ("rbxassetid://" .. tostring(iconId)) or getSkinIconImage(payload.skinId)
 
-	resultIcon.Image = getIconImage(payload.weaponId)
+	resultIcon.Image = iconImage
 	resultRarity.Text = string.upper(payload.rarity)
 	resultRarity.TextColor3 = rarityColor
-	resultName.Text = string.upper(weaponName)
+	resultName.Text = string.upper(skinName)
 
-	if payload.permanent then
-		resultRounds.Text = "PERMANENT UNLOCK!"
-		resultRounds.TextColor3 = Theme.NeonLime
-	elseif payload.rounds then
-		resultRounds.Text = payload.rounds .. " rounds"
+	if payload.duplicate then
+		local credits = payload.consolationCredits or 300
+		resultRounds.Text = "ALREADY OWNED  +" .. credits .. " CREDITS"
 		resultRounds.TextColor3 = Theme.NeonAmber
 	else
-		resultRounds.Text = ""
+		resultRounds.Text = "SKIN UNLOCKED!"
+		resultRounds.TextColor3 = Theme.NeonLime
 	end
 
 	if payload.isFree then
@@ -431,7 +387,6 @@ local function showResultPanel(payload)
 
 	rolling = false
 	updateRollButton()
-	refreshTempWeapons()
 end
 
 local function buildGUI()
@@ -600,10 +555,9 @@ local function buildGUI()
 	reelStrip.BackgroundTransparency = 1
 	reelStrip.Parent = reelViewport
 
-	-- Populate idle state with a few random icons, centered in viewport
 	for i = 1, REEL_VISIBLE_CELLS do
 		local entry = randomPoolEntry()
-		buildReelCell(reelStrip, entry.weaponId, i, entry.rarity)
+		buildReelCell(reelStrip, entry.skinId, i, entry.rarity)
 	end
 	local idleStripW = REEL_VISIBLE_CELLS * REEL_CELL_STRIDE
 	reelStrip.Size = UDim2.fromOffset(idleStripW, REEL_HEIGHT)
@@ -718,17 +672,14 @@ local function buildGUI()
 	resultRounds.TextXAlignment = Enum.TextXAlignment.Center
 	resultRounds.Parent = resultFrame
 
-	tempListFrame = nil
 end
 
 function GachaGUI.Init()
 	buildGUI()
 	ShopEconomyClient.Subscribe(function()
 		updateRollButton()
-		refreshTempWeapons()
 	end)
 	updateRollButton()
-	refreshTempWeapons()
 end
 
 function GachaGUI.Show()
@@ -741,7 +692,6 @@ function GachaGUI.Show()
 	freezeMovement()
 	hideResult()
 	updateRollButton()
-	refreshTempWeapons()
 
 	if rollBtn then
 		rollBtn.Position = UDim2.fromOffset(20, REEL_HEIGHT + 60)
@@ -754,7 +704,7 @@ function GachaGUI.Show()
 		end
 		for i = 1, REEL_VISIBLE_CELLS do
 			local entry = randomPoolEntry()
-			buildReelCell(reelStrip, entry.weaponId, i, entry.rarity)
+			buildReelCell(reelStrip, entry.skinId, i, entry.rarity)
 		end
 		local idleW = REEL_VISIBLE_CELLS * REEL_CELL_STRIDE
 		reelStrip.Size = UDim2.fromOffset(idleW, REEL_HEIGHT)
@@ -805,7 +755,7 @@ function GachaGUI.ShowResult(payload)
 		return
 	end
 
-	animateReel(payload.weaponId, payload.rarity, function()
+	animateReel(payload.skinId, payload.rarity, function()
 		showResultPanel(payload)
 	end)
 end
@@ -897,9 +847,9 @@ function GachaGUI.BuildPreview(parent)
 	prevStrip.Parent = prevReel
 	local previewRarities = {"Common", "Epic", "Legendary"}
 	for i = 1, REEL_VISIBLE_CELLS do
-		local wid = ALL_WEAPON_IDS[(i - 1) % #ALL_WEAPON_IDS + 1]
+		local sid = ALL_SKIN_IDS[(i - 1) % math.max(#ALL_SKIN_IDS, 1) + 1]
 		local rar = previewRarities[(i - 1) % #previewRarities + 1]
-		buildReelCell(prevStrip, wid, i, rar)
+		buildReelCell(prevStrip, sid, i, rar)
 	end
 	prevStrip.Size = UDim2.fromOffset(REEL_VISIBLE_CELLS * REEL_CELL_STRIDE, REEL_HEIGHT)
 

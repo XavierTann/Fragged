@@ -14,6 +14,7 @@ local LoadoutConfig = require(Shared.Modules.LoadoutConfig)
 local WeaponIconsConfig = require(Shared.Modules.WeaponIconsConfig)
 local ShopCatalog = require(Shared.Modules.ShopCatalog)
 local CombatConfig = require(Shared.Modules.CombatConfig)
+local SkinsConfig = require(Shared.Modules.SkinsConfig)
 
 local LocalPlayer = Players.LocalPlayer
 local ShopEconomyClient = nil
@@ -23,6 +24,7 @@ local visible = false
 local selectedWeaponId = nil
 local equippedPrimary = LoadoutConfig.DEFAULT.primary
 local equippedSecondary = LoadoutConfig.DEFAULT.secondary
+local equippedSkins: { [string]: string? } = {}
 
 local detailFrame = nil
 local equippedPrimaryIcon = nil
@@ -163,7 +165,7 @@ local function sendLoadoutToServer()
 		end
 	end
 	if loadoutRE then
-		loadoutRE:FireServer({ primary = equippedPrimary, secondary = equippedSecondary })
+		loadoutRE:FireServer({ primary = equippedPrimary, secondary = equippedSecondary, skins = equippedSkins })
 	end
 end
 
@@ -197,6 +199,168 @@ local function updateButtonHighlights()
 	end
 end
 
+local function getSkinIconImage(skinDef)
+	if not skinDef then
+		return ""
+	end
+	local decalName = skinDef.iconDecalName
+	if decalName then
+		local imports = ReplicatedStorage:FindFirstChild("Imports")
+		local decals = imports and imports:FindFirstChild("Decals")
+		local decal = decals and decals:FindFirstChild(decalName)
+		if decal and decal:IsA("Decal") then
+			local tex = decal.Texture
+			if tex and tex ~= "" then
+				return tex
+			end
+		end
+	end
+	if skinDef.iconAssetId and skinDef.iconAssetId ~= 0 then
+		return "rbxassetid://" .. tostring(skinDef.iconAssetId)
+	end
+	return ""
+end
+
+local SKIN_ICON_SIZE = 38
+local SKIN_ICON_GAP = 6
+
+local function updateDetailWeaponIcon(weaponId)
+	local iconImg = detailFrame and detailFrame:FindFirstChild("WeaponIcon")
+	if not iconImg then
+		return
+	end
+	local equippedSkinId = equippedSkins[weaponId]
+	if equippedSkinId then
+		local skinDef = SkinsConfig.getSkin(equippedSkinId)
+		local skinIcon = getSkinIconImage(skinDef)
+		if skinIcon ~= "" then
+			iconImg.Image = skinIcon
+			return
+		end
+	end
+	iconImg.Image = getIconImage(weaponId)
+end
+
+local function refreshSkinsSection(weaponId)
+	local skinsLabel = detailFrame and detailFrame:FindFirstChild("SkinsLabel")
+	local skinsFrame = detailFrame and detailFrame:FindFirstChild("SkinsFrame")
+	if not skinsFrame or not skinsLabel then
+		return
+	end
+
+	for _, child in ipairs(skinsFrame:GetChildren()) do
+		child:Destroy()
+	end
+
+	local skinIds = SkinsConfig.getSkinsForWeapon(weaponId)
+	if #skinIds == 0 then
+		skinsLabel.Visible = false
+		skinsFrame.Visible = false
+		return
+	end
+
+	local snap = ShopEconomyClient and ShopEconomyClient.GetSnapshot() or nil
+	local ownedSkinIds = (snap and snap.ownedSkinIds) or {}
+
+	local lockLabel = detailFrame:FindFirstChild("LockLabel")
+	local lockVisible = lockLabel and lockLabel.Visible
+	local skinStartY = lockVisible and 212 or 192
+	skinsLabel.Position = UDim2.fromOffset(8, skinStartY)
+
+	local frameY = skinStartY + 16
+	local isDefault = equippedSkins[weaponId] == nil
+	local col = 0
+
+	local function makeSkinBtn(parent, image, selected, owned, onClick)
+		local btn = Instance.new("ImageButton")
+		btn.Size = UDim2.fromOffset(SKIN_ICON_SIZE, SKIN_ICON_SIZE)
+		btn.Position = UDim2.fromOffset(col * (SKIN_ICON_SIZE + SKIN_ICON_GAP), 0)
+		btn.BackgroundColor3 = Theme.Card
+		btn.BackgroundTransparency = 0.15
+		btn.Image = image
+		btn.ScaleType = Enum.ScaleType.Fit
+		btn.ImageColor3 = owned and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
+		btn.ImageTransparency = owned and 0 or 0.55
+		btn.BorderSizePixel = 0
+		btn.AutoButtonColor = owned
+		btn.Parent = parent
+
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 8)
+		c.Parent = btn
+
+		local s = Instance.new("UIStroke")
+		s.Parent = btn
+		if selected then
+			s.Color = Theme.NeonMagenta
+			s.Thickness = 2.5
+			s.Transparency = 0
+		else
+			s.Color = Theme.TextMuted
+			s.Thickness = 1
+			s.Transparency = 0.6
+		end
+
+		if not owned then
+			local lock = Instance.new("TextLabel")
+			lock.Name = "LockOverlay"
+			lock.Size = UDim2.fromScale(1, 1)
+			lock.BackgroundTransparency = 0.7
+			lock.BackgroundColor3 = Theme.BgVoid
+			lock.Text = "\xF0\x9F\x94\x92"
+			lock.TextSize = 16
+			lock.Font = Enum.Font.GothamBold
+			lock.TextColor3 = Theme.TextMuted
+			lock.Parent = btn
+			local lc = Instance.new("UICorner")
+			lc.CornerRadius = UDim.new(0, 8)
+			lc.Parent = lock
+		end
+
+		if owned and onClick then
+			btn.MouseButton1Click:Connect(onClick)
+		end
+
+		col += 1
+		return btn
+	end
+
+	makeSkinBtn(skinsFrame, getIconImage(weaponId), isDefault, true, function()
+		equippedSkins[weaponId] = nil
+		sendLoadoutToServer()
+		updateDetailWeaponIcon(weaponId)
+		refreshSkinsSection(weaponId)
+	end)
+
+	for _, skinId in ipairs(skinIds) do
+		local skinDef = SkinsConfig.getSkin(skinId)
+		if not skinDef then
+			continue
+		end
+		local owned = ownedSkinIds[skinId] == true
+		local selected = equippedSkins[weaponId] == skinId
+
+		makeSkinBtn(skinsFrame, getSkinIconImage(skinDef), selected, owned, function()
+			equippedSkins[weaponId] = skinId
+			sendLoadoutToServer()
+			updateDetailWeaponIcon(weaponId)
+			refreshSkinsSection(weaponId)
+		end)
+	end
+
+	local totalW = col * (SKIN_ICON_SIZE + SKIN_ICON_GAP) - SKIN_ICON_GAP
+	skinsFrame.Position = UDim2.fromOffset(8, frameY)
+	skinsFrame.Size = UDim2.new(1, -16, 0, SKIN_ICON_SIZE)
+	if skinsFrame:IsA("ScrollingFrame") then
+		skinsFrame.CanvasSize = UDim2.fromOffset(totalW, SKIN_ICON_SIZE)
+		skinsFrame.ScrollingDirection = Enum.ScrollingDirection.X
+	end
+	skinsLabel.Visible = true
+	skinsFrame.Visible = true
+
+	updateDetailWeaponIcon(weaponId)
+end
+
 local function showDetailPanel(weaponId)
 	selectedWeaponId = weaponId
 	if not detailFrame then
@@ -221,7 +385,18 @@ local function showDetailPanel(weaponId)
 		descLabel.Text = w.desc
 	end
 	if iconImg then
-		iconImg.Image = getIconImage(weaponId)
+		local equippedSkinId = equippedSkins[weaponId]
+		if equippedSkinId then
+			local skinDef = SkinsConfig.getSkin(equippedSkinId)
+			local skinIcon = getSkinIconImage(skinDef)
+			if skinIcon ~= "" then
+				iconImg.Image = skinIcon
+			else
+				iconImg.Image = getIconImage(weaponId)
+			end
+		else
+			iconImg.Image = getIconImage(weaponId)
+		end
 	end
 
 	local owned = isWeaponOwned(weaponId)
@@ -257,6 +432,7 @@ local function showDetailPanel(weaponId)
 		end
 	end
 
+	refreshSkinsSection(weaponId)
 	detailFrame.Visible = true
 end
 
@@ -388,7 +564,7 @@ local function buildModal(parent)
 	local headerH = 44
 	local equippedH = EQUIPPED_SLOT_SIZE + 40
 	local modalH = headerH + twoRowsH + equippedH + CONTENT_PAD * 2
-	modalH = math.max(modalH, 320)
+	modalH = math.max(modalH, 420)
 
 	local screenH = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 600
 	modalH = math.min(modalH, math.floor(screenH * 0.85))
@@ -548,7 +724,7 @@ local function buildModal(parent)
 
 	local dDesc = Instance.new("TextLabel")
 	dDesc.Name = "WeaponDesc"
-	dDesc.Size = UDim2.new(1, -16, 0, 80)
+	dDesc.Size = UDim2.new(1, -16, 0, 60)
 	dDesc.Position = UDim2.fromOffset(8, 126)
 	dDesc.BackgroundTransparency = 1
 	dDesc.Text = ""
@@ -562,7 +738,7 @@ local function buildModal(parent)
 	local dLock = Instance.new("TextLabel")
 	dLock.Name = "LockLabel"
 	dLock.Size = UDim2.new(1, -16, 0, 18)
-	dLock.Position = UDim2.fromOffset(8, 212)
+	dLock.Position = UDim2.fromOffset(8, 190)
 	dLock.BackgroundTransparency = 1
 	dLock.Text = "Purchase from shop to unlock"
 	dLock.TextSize = 11
@@ -585,6 +761,29 @@ local function buildModal(parent)
 	dEquip.Parent = detailFrame
 	corner(dEquip, 8)
 	dEquip.MouseButton1Click:Connect(equipSelected)
+
+	local skinsLabel = Instance.new("TextLabel")
+	skinsLabel.Name = "SkinsLabel"
+	skinsLabel.Size = UDim2.new(1, -16, 0, 14)
+	skinsLabel.BackgroundTransparency = 1
+	skinsLabel.Text = "SKINS"
+	skinsLabel.TextSize = 10
+	skinsLabel.Font = Enum.Font.GothamBold
+	skinsLabel.TextColor3 = Theme.NeonMagenta
+	skinsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	skinsLabel.Visible = false
+	skinsLabel.Parent = detailFrame
+
+	local skinsScroll = Instance.new("ScrollingFrame")
+	skinsScroll.Name = "SkinsFrame"
+	skinsScroll.Size = UDim2.new(1, -16, 0, 0)
+	skinsScroll.BackgroundTransparency = 1
+	skinsScroll.BorderSizePixel = 0
+	skinsScroll.ScrollBarThickness = 3
+	skinsScroll.ScrollBarImageColor3 = Theme.NeonMagenta
+	skinsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	skinsScroll.Visible = false
+	skinsScroll.Parent = detailFrame
 
 	local equippedBar = Instance.new("Frame")
 	equippedBar.Name = "EquippedBar"

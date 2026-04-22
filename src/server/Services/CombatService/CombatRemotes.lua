@@ -169,7 +169,7 @@ local function broadcastGunshotSpatial(state, shooterUserId, gunId)
 	end
 end
 
-local function broadcastHeliosLaserVFX(state, shooterUserId, origin, directionUnit, columnOffsets, columnLengths)
+local function broadcastHeliosLaserVFX(state, shooterUserId, origin, directionUnit, columnOffsets, columnLengths, beamColor)
 	if not remotes.heliosLaserVfxRE then
 		return
 	end
@@ -187,7 +187,7 @@ local function broadcastHeliosLaserVFX(state, shooterUserId, origin, directionUn
 	end
 	for _, p in ipairs(state.currentRoundPlayers) do
 		if p and p.Parent then
-			remotes.heliosLaserVfxRE:FireClient(p, shooterUserId, origin, directionUnit, columnOffsets, columnLengths)
+			remotes.heliosLaserVfxRE:FireClient(p, shooterUserId, origin, directionUnit, columnOffsets, columnLengths, beamColor)
 		end
 	end
 end

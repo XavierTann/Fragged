@@ -32,6 +32,8 @@ local LagCompConfig = require(ReplicatedStorage.Shared.Modules.LagCompensationCo
 local HeliosLaserConfig = require(ReplicatedStorage.Shared.Modules.HeliosLaserConfig)
 local DropConfig = require(ReplicatedStorage.Shared.Modules.DropConfig)
 local HeliosBeamColumns = require(ReplicatedStorage.Shared.Modules.HeliosBeamColumns)
+local SkinsConfig = require(ReplicatedStorage.Shared.Modules.SkinsConfig)
+local ShopEconomyClient = require(ReplicatedStorage.Shared.Services.ShopEconomyClient)
 
 local FireGunRE = nil
 local RequestReloadRE = nil
@@ -441,13 +443,31 @@ local function reflectVector(incoming, normal)
 	return incoming - 2 * incoming:Dot(normal) * normal
 end
 
+local function getLocalSkinBulletColor(gunId)
+	local snap = ShopEconomyClient.GetSnapshot()
+	if not snap or not snap.ownedSkinIds then
+		return nil
+	end
+	local skinIds = SkinsConfig.getSkinsForWeapon(gunId)
+	for _, skinId in ipairs(skinIds) do
+		if snap.ownedSkinIds[skinId] then
+			local skinDef = SkinsConfig.getSkin(skinId)
+			if skinDef and skinDef.bulletColor then
+				return skinDef.bulletColor
+			end
+		end
+	end
+	return nil
+end
+
 local function spawnPredictedTracer(startPos, direction, gunId)
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
+	local effectiveBulletColor = getLocalSkinBulletColor(gunId) or gun.bulletColor
 	local dir = direction.Unit
 	local bullet = Instance.new("Part")
 	bullet.Name = "PredictedTracer"
 	bullet.Size = gun.bulletSize
-	bullet.Color = gun.bulletColor
+	bullet.Color = effectiveBulletColor
 	bullet.Material = Enum.Material.Neon
 	bullet.Transparency = 0.35
 	bullet.Anchored = true
@@ -466,7 +486,7 @@ local function spawnPredictedTracer(startPos, direction, gunId)
 	local beam = Instance.new("Beam")
 	beam.Attachment0 = att0
 	beam.Attachment1 = att1
-	beam.Color = ColorSequence.new(gun.bulletColor)
+	beam.Color = ColorSequence.new(effectiveBulletColor)
 	beam.LightEmission = 1
 	beam.LightInfluence = 0
 	beam.Width0 = gun.bulletSize.X * 1.5
@@ -736,11 +756,12 @@ local function scheduleHeliosBeamFadeDestroy(part, pointLight)
 	end)
 end
 
-local function spawnHeliosBeamVisual(origin, dirUnit, length)
+local function spawnHeliosBeamVisual(origin, dirUnit, length, colorOverride)
 	if typeof(length) ~= "number" or length < 0.5 then
 		return
 	end
 	local cfg = HeliosLaserConfig
+	local beamColor = colorOverride or cfg.BEAM_COLOR
 	local thick = cfg.BEAM_THICKNESS_STUDS
 	local mid = origin + dirUnit * (length * 0.5)
 	local p = Instance.new("Part")
@@ -750,7 +771,7 @@ local function spawnHeliosBeamVisual(origin, dirUnit, length)
 	p.CanQuery = false
 	p.CastShadow = false
 	p.Material = Enum.Material.Neon
-	p.Color = cfg.BEAM_COLOR
+	p.Color = beamColor
 	p.Size = Vector3.new(thick, thick, length)
 	p.CFrame = CFrame.lookAt(mid, mid + dirUnit)
 	p.Transparency = 0.2
@@ -758,18 +779,19 @@ local function spawnHeliosBeamVisual(origin, dirUnit, length)
 	local light = Instance.new("PointLight")
 	light.Brightness = 2
 	light.Range = thick * 4
-	light.Color = cfg.BEAM_COLOR
+	light.Color = beamColor
 	light.Parent = p
 	scheduleHeliosBeamFadeDestroy(p, light)
 end
 
 -- One strip per lateral column; each length clips at that column's first wall (server-matched layout).
-local function spawnHeliosBeamRibbon(origin, dirUnit, columnOffsets, columnLengths)
+local function spawnHeliosBeamRibbon(origin, dirUnit, columnOffsets, columnLengths, colorOverride)
 	local n = #columnOffsets
 	if n ~= #columnLengths or n < 1 then
 		return
 	end
 	local cfg = HeliosLaserConfig
+	local beamColor = colorOverride or cfg.BEAM_COLOR
 	local right = HeliosBeamColumns.getRightUnitXZ(dirUnit)
 	local u = dirUnit.Unit
 	local stripSize = math.max(0.22, cfg.BEAM_THICKNESS_STUDS / n * 1.06)
@@ -786,7 +808,7 @@ local function spawnHeliosBeamRibbon(origin, dirUnit, columnOffsets, columnLengt
 			p.CanQuery = false
 			p.CastShadow = false
 			p.Material = Enum.Material.Neon
-			p.Color = cfg.BEAM_COLOR
+			p.Color = beamColor
 			p.Size = Vector3.new(stripSize, stripSize, len)
 			p.CFrame = CFrame.lookAt(mid, mid + u)
 			p.Transparency = 0.2
@@ -794,7 +816,7 @@ local function spawnHeliosBeamRibbon(origin, dirUnit, columnOffsets, columnLengt
 			local light = Instance.new("PointLight")
 			light.Brightness = 1.4
 			light.Range = stripSize * 5
-			light.Color = cfg.BEAM_COLOR
+			light.Color = beamColor
 			light.Parent = p
 			scheduleHeliosBeamFadeDestroy(p, light)
 		end
@@ -1106,7 +1128,7 @@ return {
 			playLocalGrenadeExplosionVFX(serverCenter, radius, explosionSoundId)
 		end)
 
-		heliosLaserVfxRE.OnClientEvent:Connect(function(_shooterUserId, origin, directionUnit, columnOffsets, columnLengths)
+		heliosLaserVfxRE.OnClientEvent:Connect(function(_shooterUserId, origin, directionUnit, columnOffsets, columnLengths, beamColor)
 			if typeof(origin) ~= "Vector3" or typeof(directionUnit) ~= "Vector3" then
 				return
 			end
@@ -1114,13 +1136,14 @@ return {
 			if u.Magnitude < 0.99 then
 				return
 			end
+			local colorOverride = (typeof(beamColor) == "Color3") and beamColor or nil
 			playLaserBeamFireSoundAtPosition(origin)
 			if typeof(columnOffsets) == "table" and typeof(columnLengths) == "table" then
-				spawnHeliosBeamRibbon(origin, u, columnOffsets, columnLengths)
+				spawnHeliosBeamRibbon(origin, u, columnOffsets, columnLengths, colorOverride)
 				return
 			end
 			if typeof(columnOffsets) == "number" then
-				spawnHeliosBeamVisual(origin, u, columnOffsets)
+				spawnHeliosBeamVisual(origin, u, columnOffsets, colorOverride)
 			end
 		end)
 

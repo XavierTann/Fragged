@@ -29,14 +29,15 @@ local function reflectVector(incoming, normal)
 	return incoming - 2 * incoming:Dot(normal) * normal
 end
 
-local function spawnBullet(state, shooter, startPos, direction, gunId)
+local function spawnBullet(state, shooter, startPos, direction, gunId, bulletColorOverride)
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
+	local effectiveColor = bulletColorOverride or gun.bulletColor
 	local dir = direction.Unit
 	local shooterUserId = shooter.UserId
 	local bullet = Instance.new("Part")
 	bullet.Name = "Bullet"
 	bullet.Size = gun.bulletSize
-	bullet.Color = gun.bulletColor
+	bullet.Color = effectiveColor
 	bullet.Material = Enum.Material.Neon
 	bullet.Anchored = true
 	bullet.CanCollide = false
@@ -53,7 +54,7 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	local beam = Instance.new("Beam")
 	beam.Attachment0 = att0
 	beam.Attachment1 = att1
-	beam.Color = ColorSequence.new(gun.bulletColor)
+	beam.Color = ColorSequence.new(effectiveColor)
 	beam.LightEmission = 1
 	beam.LightInfluence = 0
 	beam.Width0 = gun.bulletSize.X * 1.5
@@ -132,13 +133,14 @@ local function spawnBullet(state, shooter, startPos, direction, gunId)
 	end)
 end
 
-local function spawnVisualTracer(shooterUserId, startPos, direction, gunId, roundPlayers)
+local function spawnVisualTracer(shooterUserId, startPos, direction, gunId, roundPlayers, bulletColorOverride)
 	local gun = GunsConfig[gunId] or GunsConfig.Rifle
+	local effectiveColor = bulletColorOverride or gun.bulletColor
 	local dir = direction.Unit
 	local bullet = Instance.new("Part")
 	bullet.Name = "Bullet"
 	bullet.Size = gun.bulletSize
-	bullet.Color = gun.bulletColor
+	bullet.Color = effectiveColor
 	bullet.Material = Enum.Material.Neon
 	bullet.Anchored = true
 	bullet.CanCollide = false
@@ -155,7 +157,7 @@ local function spawnVisualTracer(shooterUserId, startPos, direction, gunId, roun
 	local beam = Instance.new("Beam")
 	beam.Attachment0 = att0
 	beam.Attachment1 = att1
-	beam.Color = ColorSequence.new(gun.bulletColor)
+	beam.Color = ColorSequence.new(effectiveColor)
 	beam.LightEmission = 1
 	beam.LightInfluence = 0
 	beam.Width0 = gun.bulletSize.X * 1.5

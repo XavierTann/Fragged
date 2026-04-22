@@ -14,6 +14,8 @@ local RocketLauncherConfig = require(Shared.Modules.RocketLauncherConfig)
 local GrenadeTrajectoryUtils = require(Shared.Modules.GrenadeTrajectoryUtils)
 local HeliosLaserConfig = require(Shared.Modules.HeliosLaserConfig)
 local HeliosBeamColumns = require(Shared.Modules.HeliosBeamColumns)
+local SkinsConfig = require(Shared.Modules.SkinsConfig)
+local ShopEconomyClient = require(Shared.Services.ShopEconomyClient)
 
 local Config = require(script.Parent.Config)
 
@@ -275,6 +277,22 @@ local function ensureAimRocketRect(character)
 	return p
 end
 
+local function getHeliosAimColor()
+	local snap = ShopEconomyClient.GetSnapshot()
+	if snap and snap.ownedSkinIds then
+		local skinIds = SkinsConfig.getSkinsForWeapon("HeliosThread")
+		for _, skinId in ipairs(skinIds) do
+			if snap.ownedSkinIds[skinId] then
+				local skinDef = SkinsConfig.getSkin(skinId)
+				if skinDef and skinDef.beamColor then
+					return skinDef.beamColor
+				end
+			end
+		end
+	end
+	return HeliosLaserConfig.BEAM_COLOR
+end
+
 local function ensureHeliosAimRibbon(character, stripCount)
 	if aimHeliosRibbonHost and aimHeliosRibbonHost.Parent == character and #aimHeliosStrips == stripCount then
 		return
@@ -284,6 +302,7 @@ local function ensureHeliosAimRibbon(character, stripCount)
 		aimHeliosRibbonHost = nil
 	end
 	aimHeliosStrips = {}
+	local beamColor = getHeliosAimColor()
 	local model = Instance.new("Model")
 	model.Name = "DirectionIndicator_HeliosBeamRibbon"
 	model.Parent = character
@@ -295,7 +314,7 @@ local function ensureHeliosAimRibbon(character, stripCount)
 		s.CanQuery = false
 		s.CastShadow = false
 		s.Material = Enum.Material.Neon
-		s.Color = HeliosLaserConfig.BEAM_COLOR
+		s.Color = beamColor
 		s.Transparency = 1
 		s.Parent = model
 		aimHeliosStrips[i] = s
@@ -601,7 +620,7 @@ local function updateHelios(ctx)
 				local colOrigin = ctx.startPos + right * off
 				local mid = colOrigin + dir * (len * 0.5)
 				strip.CFrame = CFrame.lookAt(mid, mid + dir)
-				strip.Color = HeliosLaserConfig.BEAM_COLOR
+				strip.Color = getHeliosAimColor()
 			end
 		end
 	end

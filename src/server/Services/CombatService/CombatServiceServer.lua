@@ -32,6 +32,7 @@ local RewindHitDetection = require(script.Parent.RewindHitDetection)
 
 local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 local ShopCatalog = require(ReplicatedStorage.Shared.Modules.ShopCatalog)
+local SkinsConfig = require(ReplicatedStorage.Shared.Modules.SkinsConfig)
 local LoadoutServiceServer = require(script.Parent.Parent.LoadoutService.LoadoutServiceServer)
 
 local historyBuffer = HistoryBuffer.new(LagCompConfig.HISTORY_DURATION_SECONDS)
@@ -136,9 +137,11 @@ local function characterHasGunEquipped(character, gunId)
 end
 
 local function giveShopGunTools(player)
+	local loadout = LoadoutServiceServer.GetLoadout(player)
+	local skins = loadout.skins or {}
 	for _, w in ipairs(WeaponInventoryServer.getWeapons(player)) do
 		if ShopCatalog.isShopGun(w) then
-			WeaponToolServer.giveGunToolIfMissing(player, w)
+			WeaponToolServer.giveGunToolIfMissing(player, w, skins[w])
 		end
 	end
 end
@@ -306,6 +309,15 @@ local function bindHandlers()
 			))
 		end
 
+		local bulletColorOverride = nil
+		local skinIdForGun = LoadoutServiceServer.GetEquippedSkin(player, gunId)
+		if skinIdForGun then
+			local skinDef = SkinsConfig.getSkin(skinIdForGun)
+			if skinDef and skinDef.bulletColor then
+				bulletColorOverride = skinDef.bulletColor
+			end
+		end
+
 		for _ = 1, pelletCount do
 			local dir = aimUnit
 			if spreadDeg > 0 and pelletCount > 1 then
@@ -338,12 +350,12 @@ local function bindHandlers()
 						hHumanoid:TakeDamage(gun.damage)
 						CombatRemotes.notifyAttackerDamage(state, uid, hChar, gun.damage)
 					end
-					CombatBullets.spawnVisualTracer(uid, startPos, dir, gunId, state.currentRoundPlayers)
+					CombatBullets.spawnVisualTracer(uid, startPos, dir, gunId, state.currentRoundPlayers, bulletColorOverride)
 				else
-					CombatBullets.spawnBullet(state, player, startPos, dir, gunId)
+					CombatBullets.spawnBullet(state, player, startPos, dir, gunId, bulletColorOverride)
 				end
 			else
-				CombatBullets.spawnBullet(state, player, startPos, dir, gunId)
+				CombatBullets.spawnBullet(state, player, startPos, dir, gunId, bulletColorOverride)
 			end
 		end
 
@@ -377,14 +389,24 @@ local function bindHandlers()
 				rejectFire(state, player, "BadDirection", gunId, true, false)
 				return
 			end
-			local ok, err = CombatHeliosLaser.commitChargedBeamAfterRelease(
+			local beamColorOverride = nil
+		local heliosSkinId = LoadoutServiceServer.GetEquippedSkin(player, "HeliosThread")
+		if heliosSkinId then
+			local skinDef = SkinsConfig.getSkin(heliosSkinId)
+			if skinDef and skinDef.beamColor then
+				beamColorOverride = skinDef.beamColor
+			end
+		end
+
+		local ok, err = CombatHeliosLaser.commitChargedBeamAfterRelease(
 				state,
 				player,
 				gunId,
 				shotOrigin,
 				aimUnit,
 				validateClientShotOrigin,
-				playerOwnsGun
+				playerOwnsGun,
+				beamColorOverride
 			)
 			if not ok and err then
 				local resetRate = err == "BadOrigin" or err == "BadDirection" or err == "InvalidArgs"

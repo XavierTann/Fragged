@@ -18,6 +18,7 @@ export type EconomySnapshot = {
 	ownedShopGunIds: { [string]: boolean },
 	tempWeapons: { TempWeaponInfo },
 	freeSpinAvailable: boolean,
+	ownedSkinIds: { [string]: boolean },
 }
 
 local snapshot: EconomySnapshot = {
@@ -26,6 +27,7 @@ local snapshot: EconomySnapshot = {
 	ownedShopGunIds = {},
 	tempWeapons = {},
 	freeSpinAvailable = false,
+	ownedSkinIds = {},
 }
 
 local subscribers: { (EconomySnapshot) -> () } = {}
@@ -63,6 +65,7 @@ local function applyPayload(payload: any)
 	snapshot.ownedShopGunIds = fillOwnedFromList(payload.ownedShopGunIds)
 	snapshot.tempWeapons = parseTempWeapons(payload.tempWeapons)
 	snapshot.freeSpinAvailable = payload.freeSpinAvailable == true
+	snapshot.ownedSkinIds = fillOwnedFromList(payload.ownedSkinIds)
 	for _, cb in ipairs(subscribers) do
 		cb(snapshot)
 	end

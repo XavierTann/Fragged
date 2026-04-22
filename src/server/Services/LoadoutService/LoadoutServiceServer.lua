@@ -1,7 +1,7 @@
 --[[
 	LoadoutServiceServer
-	Stores per-player weapon loadout in memory (session-scoped, not persisted).
-	Validates selections against LoadoutConfig categories and weapon ownership.
+	Stores per-player weapon loadout and equipped skins in memory (session-scoped, not persisted).
+	Validates selections against LoadoutConfig categories, weapon ownership, and skin ownership.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local CombatConfig = require(ReplicatedStorage.Shared.Modules.CombatConfig)
 local LoadoutConfig = require(ReplicatedStorage.Shared.Modules.LoadoutConfig)
 local ShopCatalog = require(ReplicatedStorage.Shared.Modules.ShopCatalog)
+local SkinsConfig = require(ReplicatedStorage.Shared.Modules.SkinsConfig)
 
 local playerLoadouts = {}
 local loadoutRE = nil
@@ -55,6 +56,23 @@ local function validateLoadout(player, primary, secondary)
 	return true
 end
 
+local function validateSkins(player, skins)
+	if typeof(skins) ~= "table" then
+		return {}
+	end
+	local EconomyServiceServer = require(script.Parent.Parent.EconomyService.EconomyServiceServer)
+	local validated = {}
+	for weaponId, skinId in pairs(skins) do
+		if typeof(weaponId) == "string" and typeof(skinId) == "string" then
+			local skinDef = SkinsConfig.getSkin(skinId)
+			if skinDef and skinDef.weaponId == weaponId and EconomyServiceServer.OwnsSkin(player, skinId) then
+				validated[weaponId] = skinId
+			end
+		end
+	end
+	return validated
+end
+
 local LoadoutServiceServer = {}
 
 function LoadoutServiceServer.GetLoadout(player)
@@ -65,16 +83,27 @@ function LoadoutServiceServer.GetLoadout(player)
 	return {
 		primary = LoadoutConfig.DEFAULT.primary,
 		secondary = LoadoutConfig.DEFAULT.secondary,
+		skins = {},
 	}
+end
+
+function LoadoutServiceServer.GetEquippedSkin(player, weaponId: string): string?
+	local lo = playerLoadouts[player.UserId]
+	if lo and lo.skins then
+		return lo.skins[weaponId]
+	end
+	return nil
 end
 
 function LoadoutServiceServer.SetLoadout(player, primary, secondary)
 	if not validateLoadout(player, primary, secondary) then
 		return false
 	end
+	local existing = playerLoadouts[player.UserId]
 	playerLoadouts[player.UserId] = {
 		primary = primary,
 		secondary = secondary,
+		skins = (existing and existing.skins) or {},
 	}
 	return true
 end
@@ -102,9 +131,11 @@ function LoadoutServiceServer.Init()
 		if not validateLoadout(player, primary, secondary) then
 			return
 		end
+		local validatedSkins = validateSkins(player, payload.skins)
 		playerLoadouts[player.UserId] = {
 			primary = primary,
 			secondary = secondary,
+			skins = validatedSkins,
 		}
 	end)
 

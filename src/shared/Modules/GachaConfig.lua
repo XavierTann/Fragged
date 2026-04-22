@@ -1,5 +1,5 @@
 --[[
-	Gacha roll configuration: rarity tiers, weighted pool, first-roll guarantee.
+	Gacha roll configuration: rarity tiers, weighted skin pool, first-roll guarantee.
 	DEVELOPER_PRODUCT_ID must be set after creating the product in Creator Dashboard.
 ]]
 
@@ -9,10 +9,11 @@ return {
 	ROLL_ROBUX_PRICE = 75,
 
 	FIRST_ROLL = {
-		weaponId = "PlasmaCarbine",
-		rounds = 5,
+		skinId = "HeliosThreadSkin",
 		isFree = true,
 	},
+
+	DUPE_CONSOLATION_CREDITS = 300,
 
 	RARITIES = {
 		{ name = "Common",    weight = 60, color = Color3.fromRGB(180, 180, 180) },
@@ -22,16 +23,7 @@ return {
 	},
 
 	POOL = {
-		{ weaponId = "PlasmaCarbine", rarity = "Common",  permanent = false, rounds = 3  },
-		{ weaponId = "PrismRipper",   rarity = "Common",  permanent = false, rounds = 3  },
-		{ weaponId = "HeliosThread",  rarity = "Common",  permanent = false, rounds = 3  },
-		{ weaponId = "PlasmaCarbine", rarity = "Rare",    permanent = false, rounds = 10 },
-		{ weaponId = "PrismRipper",   rarity = "Rare",    permanent = false, rounds = 10 },
-		{ weaponId = "HeliosThread",  rarity = "Rare",    permanent = false, rounds = 10 },
-		{ weaponId = "PlasmaCarbine", rarity = "Epic",    permanent = true  },
-		{ weaponId = "PrismRipper",   rarity = "Epic",    permanent = true  },
-		{ weaponId = "HeliosThread",  rarity = "Epic",    permanent = true  },
+		{ skinId = "HeliosThreadSkin", rarity = "Rare" },
+		{ skinId = "PrismRipperSkin", rarity = "Rare" },
 	},
-
-	DUPE_PERM_CONSOLATION_ROUNDS = 15,
 }

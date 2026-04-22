@@ -4,6 +4,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SkinsConfig = require(ReplicatedStorage:WaitForChild("Shared").Modules.SkinsConfig)
 
 -- First match wins; keep names aligned with Instances under Imports.3DModels.
 local IMPORTED_GUN_TOOL_TEMPLATE_NAMES: { [string]: { string } } = {
@@ -75,9 +76,37 @@ local function createMinimalGunTool(gunId: string): Tool
 	return t
 end
 
+local function findSkinToolTemplate(skinId: string): Tool?
+	local skinDef = SkinsConfig.getSkin(skinId)
+	if not skinDef then
+		return nil
+	end
+	local imports = ReplicatedStorage:FindFirstChild("Imports")
+	local models3D = imports and imports:FindFirstChild("3DModels")
+	if not models3D then
+		return nil
+	end
+	local skinsFolder = models3D:FindFirstChild("Skins")
+	if not skinsFolder then
+		return nil
+	end
+	local templateName = skinDef.toolTemplateName
+	local inst = skinsFolder:FindFirstChild(templateName)
+	if inst and inst:IsA("Tool") then
+		return inst
+	end
+	if inst and inst:IsA("Model") then
+		local inner = inst:FindFirstChildWhichIsA("Tool", true)
+		if inner then
+			return inner
+		end
+	end
+	return nil
+end
+
 local WeaponToolServer = {}
 
-function WeaponToolServer.giveGunToolIfMissing(player, gunId: string)
+function WeaponToolServer.giveGunToolIfMissing(player, gunId: string, skinId: string?)
 	if not player or not player.Parent then
 		return
 	end
@@ -88,6 +117,18 @@ function WeaponToolServer.giveGunToolIfMissing(player, gunId: string)
 	if playerHasToolNamed(player, gunId) then
 		return
 	end
+
+	if skinId then
+		local skinTemplate = findSkinToolTemplate(skinId)
+		if skinTemplate then
+			local tool = skinTemplate:Clone()
+			tool.Name = gunId
+			tool.CanBeDropped = false
+			tool.Parent = backpack
+			return
+		end
+	end
+
 	local template = findImportedGunToolTemplate(gunId)
 	if template then
 		local tool = template:Clone()

@@ -11,6 +11,7 @@ local CreditsConfig = require(Shared.Modules.CreditsConfig)
 local ShopCatalog = require(Shared.Modules.ShopCatalog)
 local CombatConfig = require(Shared.Modules.CombatConfig)
 local LoadoutConfig = require(Shared.Modules.LoadoutConfig)
+local SkinsConfig = require(Shared.Modules.SkinsConfig)
 
 local WeaponInventoryServer = require(script.Parent.Parent.CombatService.WeaponInventoryServer)
 local WeaponToolServer = require(script.Parent.Parent.CombatService.WeaponToolServer)
@@ -26,6 +27,7 @@ export type EconomyData = {
 	ownedShopGuns: { string },
 	tempWeapons: { TempWeapon },
 	hasUsedFirstRoll: boolean,
+	ownedSkins: { string },
 }
 
 local store: DataStore? = nil
@@ -45,6 +47,7 @@ local function defaultData(): EconomyData
 		ownedShopGuns = {},
 		tempWeapons = {},
 		hasUsedFirstRoll = false,
+		ownedSkins = {},
 	}
 end
 
@@ -97,6 +100,7 @@ local function savePlayer(userId: number, data: EconomyData)
 		g = data.ownedShopGuns,
 		t = serializedTemp,
 		f = data.hasUsedFirstRoll,
+		s = data.ownedSkins,
 	}
 	local ok, err = pcall(function()
 		store:SetAsync(key, payload)
@@ -140,6 +144,13 @@ local function loadPlayer(userId: number): EconomyData
 	end
 	if result.f == true then
 		data.hasUsedFirstRoll = true
+	end
+	if typeof(result.s) == "table" then
+		for _, sid in ipairs(result.s) do
+			if typeof(sid) == "string" and SkinsConfig.isValidSkin(sid) then
+				table.insert(data.ownedSkins, sid)
+			end
+		end
 	end
 	return data
 end
@@ -188,12 +199,17 @@ local function buildSyncPayload(data: EconomyData)
 			table.insert(tempList, { id = tw.id, roundsLeft = tw.roundsLeft })
 		end
 	end
+	local skinList = {}
+	for _, sid in ipairs(data.ownedSkins) do
+		table.insert(skinList, sid)
+	end
 	return {
 		credits = data.credits,
 		matchesPlayed = data.matchesPlayed,
 		ownedShopGunIds = owned,
 		tempWeapons = tempList,
 		freeSpinAvailable = not data.hasUsedFirstRoll,
+		ownedSkinIds = skinList,
 	}
 end
 
@@ -390,6 +406,37 @@ end
 function EconomyServiceServer.SetHasUsedFirstRoll(player: Player)
 	local data = getOrLoad(player)
 	data.hasUsedFirstRoll = true
+	cache[player.UserId] = data
+	savePlayer(player.UserId, data)
+	fireSync(player)
+end
+
+function EconomyServiceServer.AddSkin(player: Player, skinId: string)
+	local data = getOrLoad(player)
+	for _, s in ipairs(data.ownedSkins) do
+		if s == skinId then
+			return
+		end
+	end
+	table.insert(data.ownedSkins, skinId)
+	cache[player.UserId] = data
+	savePlayer(player.UserId, data)
+	fireSync(player)
+end
+
+function EconomyServiceServer.OwnsSkin(player: Player, skinId: string): boolean
+	local data = getOrLoad(player)
+	for _, s in ipairs(data.ownedSkins) do
+		if s == skinId then
+			return true
+		end
+	end
+	return false
+end
+
+function EconomyServiceServer.AddCredits(player: Player, amount: number)
+	local data = getOrLoad(player)
+	data.credits += amount
 	cache[player.UserId] = data
 	savePlayer(player.UserId, data)
 	fireSync(player)

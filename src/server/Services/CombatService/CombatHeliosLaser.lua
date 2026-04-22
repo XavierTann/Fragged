@@ -214,7 +214,7 @@ function CombatHeliosLaser.cancelActiveCommitForPlayer(state, player)
 end
 
 -- Commit on release: validate, lock movement, after charge delay fire beam (Helios Thread charged laser).
-function CombatHeliosLaser.commitChargedBeamAfterRelease(state, player, laserGunId, shotOrigin, aimUnit, validateOriginFn, playerOwnsGunFn)
+function CombatHeliosLaser.commitChargedBeamAfterRelease(state, player, laserGunId, shotOrigin, aimUnit, validateOriginFn, playerOwnsGunFn, beamColorOverride)
 	if not state or state.matchEnded or not player or not player.Parent then
 		return false, "NoState"
 	end
@@ -355,7 +355,7 @@ function CombatHeliosLaser.commitChargedBeamAfterRelease(state, player, laserGun
 		local newAmmo = state.ammoInMagazine[uid][laserGunId]
 
 		local colOffsets, colLengths = castLaserAndDamage(state, player, startPos, lockedAimUnit, gun.damage)
-		CombatRemotes.broadcastHeliosLaserVFX(state, uid, startPos, lockedAimUnit, colOffsets, colLengths)
+		CombatRemotes.broadcastHeliosLaserVFX(state, uid, startPos, lockedAimUnit, colOffsets, colLengths, beamColorOverride)
 		CombatRemotes.broadcastGunshotSpatial(state, uid, laserGunId)
 
 		if newAmmo <= 0 then

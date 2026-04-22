@@ -86,7 +86,7 @@ local function findSkinToolTemplate(skinId: string): Tool?
 	if not models3D then
 		return nil
 	end
-	local skinsFolder = models3D:FindFirstChild("Skins")
+	local skinsFolder = models3D:FindFirstChild("SkinTools")
 	if not skinsFolder then
 		return nil
 	end
@@ -119,10 +119,8 @@ function WeaponToolServer.giveGunToolIfMissing(player, gunId: string, skinId: st
 	end
 
 	if skinId then
-		print(skinId)
 		local skinTemplate = findSkinToolTemplate(skinId)
 		if skinTemplate then
-			print("Found skin template")
 			local tool = skinTemplate:Clone()
 			tool.Name = gunId
 			tool.CanBeDropped = false

@@ -25,5 +25,6 @@ return {
 	POOL = {
 		{ skinId = "HeliosThreadSkin", rarity = "Rare" },
 		{ skinId = "PrismRipperSkin", rarity = "Rare" },
+		{ skinId = "PlasmaCarbineSkin", rarity = "Rare" },
 	},
 }

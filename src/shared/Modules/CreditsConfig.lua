@@ -13,4 +13,8 @@ return {
 
 	-- TESTING: grant Helios Thread ownership (no credit cost) and set it as secondary loadout on join. Set true for local playtest; false before shipping.
 	AUTO_OWN_HELIOS_AND_EQUIP_SECONDARY = true,
+
+	-- TESTING: grant ownership of all shop weapons and all skins on join. Set false before shipping.
+	GRANT_ALL_WEAPONS = true,
+	GRANT_ALL_SKINS = true,
 }

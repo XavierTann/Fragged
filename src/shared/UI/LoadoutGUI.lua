@@ -38,6 +38,7 @@ local loadoutRE = nil
 
 local LoadoutGUI = {}
 local onCloseCallbacks = {}
+local skinChangeCallbacks = {}
 
 local ICON_SIZE = 56
 local ICON_GAP = 8
@@ -167,16 +168,12 @@ local function sendLoadoutToServer()
 	if loadoutRE then
 		loadoutRE:FireServer({ primary = equippedPrimary, secondary = equippedSecondary, skins = equippedSkins })
 	end
+	for _, cb in ipairs(skinChangeCallbacks) do
+		task.spawn(cb, equippedSkins)
+	end
 end
 
-local function updateEquippedSlots()
-	if equippedPrimaryIcon then
-		equippedPrimaryIcon.Image = getIconImage(equippedPrimary)
-	end
-	if equippedSecondaryIcon then
-		equippedSecondaryIcon.Image = getIconImage(equippedSecondary)
-	end
-end
+
 
 local function updateButtonHighlights()
 	for id, btn in pairs(primaryButtons) do
@@ -219,6 +216,34 @@ local function getSkinIconImage(skinDef)
 		return "rbxassetid://" .. tostring(skinDef.iconAssetId)
 	end
 	return ""
+end
+
+local function getEquippedWeaponIcon(weaponId)
+	local skinId = equippedSkins[weaponId]
+	if skinId then
+		local skinDef = SkinsConfig.getSkin(skinId)
+		local skinIcon = getSkinIconImage(skinDef)
+		if skinIcon ~= "" then
+			return skinIcon
+		end
+	end
+	return getIconImage(weaponId)
+end
+
+local function updateWeaponButtonIcon(weaponId)
+	local btn = primaryButtons[weaponId] or secondaryButtons[weaponId]
+	if btn then
+		btn.Image = getEquippedWeaponIcon(weaponId)
+	end
+end
+
+local function updateEquippedSlots()
+	if equippedPrimaryIcon then
+		equippedPrimaryIcon.Image = getEquippedWeaponIcon(equippedPrimary)
+	end
+	if equippedSecondaryIcon then
+		equippedSecondaryIcon.Image = getEquippedWeaponIcon(equippedSecondary)
+	end
 end
 
 local SKIN_ICON_SIZE = 38
@@ -329,6 +354,8 @@ local function refreshSkinsSection(weaponId)
 		equippedSkins[weaponId] = nil
 		sendLoadoutToServer()
 		updateDetailWeaponIcon(weaponId)
+		updateWeaponButtonIcon(weaponId)
+		updateEquippedSlots()
 		refreshSkinsSection(weaponId)
 	end)
 
@@ -344,6 +371,8 @@ local function refreshSkinsSection(weaponId)
 			equippedSkins[weaponId] = skinId
 			sendLoadoutToServer()
 			updateDetailWeaponIcon(weaponId)
+			updateWeaponButtonIcon(weaponId)
+			updateEquippedSlots()
 			refreshSkinsSection(weaponId)
 		end)
 	end
@@ -533,7 +562,7 @@ local function createWeaponButton(parent, weaponId, index)
 	btn.Position = UDim2.fromOffset((index - 1) * (ICON_SIZE + ICON_GAP), 0)
 	btn.BackgroundColor3 = Theme.Card
 	btn.BackgroundTransparency = 0.15
-	btn.Image = getIconImage(weaponId)
+	btn.Image = getEquippedWeaponIcon(weaponId)
 	btn.ScaleType = Enum.ScaleType.Fit
 	btn.BorderSizePixel = 0
 	btn.Parent = parent
@@ -830,7 +859,7 @@ local function buildModal(parent)
 	equippedPrimaryIcon.Position = UDim2.fromOffset(4, 4)
 	equippedPrimaryIcon.BackgroundTransparency = 1
 	equippedPrimaryIcon.ScaleType = Enum.ScaleType.Fit
-	equippedPrimaryIcon.Image = getIconImage(equippedPrimary)
+	equippedPrimaryIcon.Image = getEquippedWeaponIcon(equippedPrimary)
 	equippedPrimaryIcon.Parent = pSlot
 
 	local sSlotLabel = Instance.new("TextLabel")
@@ -858,7 +887,7 @@ local function buildModal(parent)
 	equippedSecondaryIcon.Position = UDim2.fromOffset(4, 4)
 	equippedSecondaryIcon.BackgroundTransparency = 1
 	equippedSecondaryIcon.ScaleType = Enum.ScaleType.Fit
-	equippedSecondaryIcon.Image = getIconImage(equippedSecondary)
+	equippedSecondaryIcon.Image = getEquippedWeaponIcon(equippedSecondary)
 	equippedSecondaryIcon.Parent = sSlot
 
 	updateButtonHighlights()
@@ -932,6 +961,14 @@ function LoadoutGUI.Hide()
 			task.spawn(cb)
 		end
 	end
+end
+
+function LoadoutGUI.GetEquippedSkins(): { [string]: string? }
+	return equippedSkins
+end
+
+function LoadoutGUI.SubscribeSkinsChanged(cb: ({ [string]: string? }) -> ())
+	table.insert(skinChangeCallbacks, cb)
 end
 
 function LoadoutGUI.SubscribeOnClose(cb)

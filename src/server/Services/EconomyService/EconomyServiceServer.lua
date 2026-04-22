@@ -249,6 +249,26 @@ local function preparePlayerEconomy(player: Player)
 		data.credits = math.max(0, math.floor(tonumber(CreditsConfig.TEST_CREDITS_BALANCE) or 2000))
 		cache[player.UserId] = data
 	end
+	if CreditsConfig.GRANT_ALL_WEAPONS == true then
+		for _, entry in ipairs(ShopCatalog.getItems()) do
+			if not ownsGun(data, entry.id) then
+				table.insert(data.ownedShopGuns, entry.id)
+			end
+		end
+		cache[player.UserId] = data
+	end
+	if CreditsConfig.GRANT_ALL_SKINS == true then
+		local owned: { [string]: boolean } = {}
+		for _, sid in ipairs(data.ownedSkins) do
+			owned[sid] = true
+		end
+		for _, skinId in ipairs(SkinsConfig.getAllSkinIds()) do
+			if not owned[skinId] then
+				table.insert(data.ownedSkins, skinId)
+			end
+		end
+		cache[player.UserId] = data
+	end
 	applyOwnedGunsToInventory(player, data)
 	fireSync(player)
 	if CreditsConfig.AUTO_OWN_HELIOS_AND_EQUIP_SECONDARY == true then

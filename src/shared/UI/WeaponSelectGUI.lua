@@ -13,8 +13,10 @@ local GunsConfig = require(ReplicatedStorage.Shared.Modules.GunsConfig)
 local GrenadeConfig = require(ReplicatedStorage.Shared.Modules.GrenadeConfig)
 local RocketLauncherConfig = require(ReplicatedStorage.Shared.Modules.RocketLauncherConfig)
 local WeaponIconsConfig = require(ReplicatedStorage.Shared.Modules.WeaponIconsConfig)
+local SkinsConfig = require(ReplicatedStorage.Shared.Modules.SkinsConfig)
 local CombatServiceClient = require(ReplicatedStorage.Shared.Services.CombatServiceClient)
 local CenterScreenToast = require(ReplicatedStorage.Shared.UI.CenterScreenToast)
+local LoadoutGUI = require(ReplicatedStorage.Shared.UI.LoadoutGUI)
 
 local gui = nil
 local weaponBar = nil
@@ -135,6 +137,44 @@ local function getIconImage(weaponId)
 	return "rbxassetid://" .. tostring(assetId)
 end
 
+local function getSkinIcon(skinDef)
+	if not skinDef then
+		return ""
+	end
+	local decalName = skinDef.iconDecalName
+	if decalName then
+		local imports = ReplicatedStorage:FindFirstChild("Imports")
+		local decals = imports and imports:FindFirstChild("Decals")
+		local decal = decals and decals:FindFirstChild(decalName)
+		if decal and decal:IsA("Decal") and decal.Texture ~= "" then
+			return decal.Texture
+		end
+	end
+	if skinDef.iconAssetId and skinDef.iconAssetId ~= 0 then
+		return "rbxassetid://" .. tostring(skinDef.iconAssetId)
+	end
+	return ""
+end
+
+local function getWeaponIcon(weaponId)
+	local skins = LoadoutGUI.GetEquippedSkins()
+	local skinId = skins[weaponId]
+	if skinId then
+		local skinDef = SkinsConfig.getSkin(skinId)
+		local icon = getSkinIcon(skinDef)
+		if icon ~= "" then
+			return icon
+		end
+	end
+	return getIconImage(weaponId)
+end
+
+local function refreshButtonIcons()
+	for weaponId, btn in pairs(buttonMap) do
+		btn.Image = getWeaponIcon(weaponId)
+	end
+end
+
 local function createGui()
 	if gui then
 		return gui
@@ -228,7 +268,7 @@ local function createWeaponBar(parent)
 			accentColor = RocketLauncherConfig.color
 		end
 
-		local iconImage = getIconImage(itemId)
+		local iconImage = getWeaponIcon(itemId)
 
 		local btn = Instance.new("ImageButton")
 		btn.Name = itemId
@@ -348,6 +388,7 @@ local function init()
 		showFireModeToast(currentWeapon)
 	end)
 	CombatServiceClient.SubscribeWeaponInventory(refreshWeaponBar)
+	LoadoutGUI.SubscribeSkinsChanged(refreshButtonIcons)
 	gui.Enabled = true
 end
 

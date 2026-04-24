@@ -271,6 +271,7 @@ Follow the current naming style consistently.
 
 4. UI files:
    - <Feature>GUI.lua
+   - <Feature>GUIConfig.lua (layout config, lives in src/shared/Modules)
    - <Feature>UIStore.lua
    - RootUI.lua
    - MountUI.lua
@@ -368,6 +369,60 @@ When assisting in this repository, assume the following unless told otherwise:
 - New code should mirror the style and organization of adjacent files
 - If a feature does not naturally belong to an existing service, create a new appropriately named module or service following the same conventions
 
+UI SIZING AND POSITIONING RULES
+
+All UI code must use Scale-based UDim2 values (UDim2.fromScale) for Size and Position. Do not use Offset-based UDim2 values (UDim2.fromOffset or pixel offsets in UDim2.new) for layout. This ensures the UI scales correctly across different screen sizes and devices (desktop, tablet, mobile).
+
+Allowed uses of pixel/offset values:
+- UICorner.CornerRadius (UDim with offset is acceptable for corner rounding)
+- UIStroke.Thickness (inherently pixel-based)
+- TextSize (inherently pixel-based)
+- ScrollBarThickness (inherently pixel-based)
+
+For arranging repeating elements (weapon grids, icon rows, skin lists), prefer UIListLayout or UIGridLayout with Scale-based padding, combined with UIAspectRatioConstraint on children that need to maintain a fixed aspect ratio (e.g. square icons).
+
+When converting a pixel value to scale, compute the fraction relative to the parent container's reference dimensions. For example, 16px padding in a 480px-wide parent becomes 0.033 scale.
+
+UI LAYOUT CONFIG FILES
+
+Every GUI script must have a companion layout config file that contains all hardcoded positioning and sizing constants. This makes it easy to tweak the UI without reading through the full GUI implementation.
+
+Naming convention:
+- GUI script: <Feature>GUI.lua (lives in src/shared/UI)
+- Config file: <Feature>GUIConfig.lua (lives in src/shared/Modules)
+
+Examples:
+- GachaGUI.lua → GachaGUIConfig.lua
+- LoadoutGUI.lua → LoadoutGUIConfig.lua
+- ShopGUI.lua → ShopGUIConfig.lua
+
+What goes in the config file:
+- Modal size (width, height)
+- All element sizes (width, height as scale fractions)
+- All element positions (posX, posY as scale fractions)
+- Corner radii
+- Layout padding values
+- Row heights, column widths, gaps
+- Pixel-based constants that drive animation (e.g. reel cell size)
+- Any other numeric layout value that would otherwise be a magic number in the GUI script
+
+How to structure the config:
+- Return a single table with nested sub-tables grouped by UI area (e.g. Config.Modal, Config.Title, Config.CloseBtn, Config.DetailPanel)
+- Use clear, descriptive field names (Width, Height, PosX, PosY, CornerRadius, etc.)
+- Computed/derived values (e.g. a Y position that depends on another element's bottom edge) should be calculated in the config file itself
+- The GUI script requires the config and reads values from it instead of using inline numbers
+
+What stays in the GUI script:
+- Instance creation and parenting
+- Theme colors and fonts (from ShopTheme)
+- Event wiring and callbacks
+- Runtime state and logic
+
+When creating a new GUI:
+1. Create the config file first with all layout constants
+2. Build the GUI script referencing config values from the start
+3. Never hardcode layout numbers directly in the GUI script
+
 WHAT NOT TO DO
 
 Do not:
@@ -382,6 +437,7 @@ Do not:
 - assume existing services must be imported or referenced in generated code
 - force unrelated features into AbilityService, CombatService, ShopService, or any other current service just because those services already exist
 - put startup side effects directly at module top level when they belong in `Init`
+- use Offset-based UDim2 values for UI Size or Position (use Scale instead so UI scales across devices)
 
 PREFERRED RESPONSE STYLE FOR CODE CHANGES
 

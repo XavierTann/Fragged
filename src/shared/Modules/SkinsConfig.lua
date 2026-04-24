@@ -25,7 +25,7 @@ local SKINS = {
 	},
 	PlasmaCarbineSkin = {
 		weaponId = "PlasmaCarbine",
-		name = "Plasma Carbine - Skin",
+		name = "Plasma Carbine - Frostbite",
 		iconDecalName = "PlasmaCarbineSkinIcon",
 		toolTemplateName = "PlasmaCarbineSkin Tool",
 		rarity = "Rare",

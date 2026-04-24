@@ -3,6 +3,7 @@
 	Full-screen loadout configuration overlay. Two weapon slots (Primary + Secondary).
 	Top: available weapons split by category. Right: detail panel. Bottom: equipped slots.
 	Sci-fi neon aesthetic using ShopTheme.
+	All sizing and positioning uses Scale (UDim2.fromScale) for cross-device responsiveness.
 ]]
 
 local Players = game:GetService("Players")
@@ -11,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared.UI.Shop.ShopTheme)
 local LoadoutConfig = require(Shared.Modules.LoadoutConfig)
+local UIConfig = require(Shared.Modules.LoadoutGUIConfig)
 local WeaponIconsConfig = require(Shared.Modules.WeaponIconsConfig)
 local ShopCatalog = require(Shared.Modules.ShopCatalog)
 local CombatConfig = require(Shared.Modules.CombatConfig)
@@ -40,14 +42,19 @@ local LoadoutGUI = {}
 local onCloseCallbacks = {}
 local skinChangeCallbacks = {}
 
-local ICON_SIZE = 56
-local ICON_GAP = 8
-local CORNER_RADIUS = 14
-local EQUIPPED_SLOT_SIZE = 48
-local DETAIL_WIDTH = 170
-local CONTENT_PAD = 16
-local ROW_LABEL_H = 18
-local ROW_GAP = 10
+local CORNER_RADIUS    = UIConfig.CornerRadius
+
+local MODAL_W          = UIConfig.Modal.Width
+local MODAL_H          = UIConfig.Modal.Height
+local PAD_X            = UIConfig.Layout.PadX
+local HEADER_H         = UIConfig.Layout.HeaderH
+local LEFT_COL_W       = UIConfig.Layout.LeftColW
+local DETAIL_PANEL_W   = UIConfig.DetailPanel.Width
+local DETAIL_PANEL_X   = UIConfig.DetailPanel.PosX
+local ROW_LABEL_H      = UIConfig.Layout.RowLabelH
+local ROW_GAP          = UIConfig.Layout.RowGap
+local ICON_ROW_H       = UIConfig.Layout.IconRowH
+local EQUIPPED_BAR_H   = UIConfig.Layout.EquippedBarH
 
 local function getIconImage(weaponId)
 	local assetId = WeaponIconsConfig[weaponId]
@@ -246,9 +253,6 @@ local function updateEquippedSlots()
 	end
 end
 
-local SKIN_ICON_SIZE = 38
-local SKIN_ICON_GAP = 6
-
 local function updateDetailWeaponIcon(weaponId)
 	local iconImg = detailFrame and detailFrame:FindFirstChild("WeaponIcon")
 	if not iconImg then
@@ -274,7 +278,9 @@ local function refreshSkinsSection(weaponId)
 	end
 
 	for _, child in ipairs(skinsFrame:GetChildren()) do
-		child:Destroy()
+		if not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
 	end
 
 	local skinIds = SkinsConfig.getSkinsForWeapon(weaponId)
@@ -289,17 +295,17 @@ local function refreshSkinsSection(weaponId)
 
 	local lockLabel = detailFrame:FindFirstChild("LockLabel")
 	local lockVisible = lockLabel and lockLabel.Visible
-	local skinStartY = lockVisible and 212 or 192
-	skinsLabel.Position = UDim2.fromOffset(8, skinStartY)
+	local skinStartY = lockVisible and UIConfig.SkinsLabel.PosYLocked or UIConfig.SkinsLabel.PosYUnlocked
+	skinsLabel.Position = UDim2.fromScale(UIConfig.SkinsLabel.PosX, skinStartY)
 
-	local frameY = skinStartY + 16
+	local frameY = lockVisible and UIConfig.SkinsFrame.PosYLocked or UIConfig.SkinsFrame.PosYUnlocked
 	local isDefault = equippedSkins[weaponId] == nil
-	local col = 0
+	local layoutOrder = 0
 
 	local function makeSkinBtn(parent, image, selected, owned, onClick)
 		local btn = Instance.new("ImageButton")
-		btn.Size = UDim2.fromOffset(SKIN_ICON_SIZE, SKIN_ICON_SIZE)
-		btn.Position = UDim2.fromOffset(col * (SKIN_ICON_SIZE + SKIN_ICON_GAP), 0)
+		btn.Size = UDim2.fromScale(UIConfig.SkinBtn.Width, 1)
+		btn.LayoutOrder = layoutOrder
 		btn.BackgroundColor3 = Theme.Card
 		btn.BackgroundTransparency = 0.15
 		btn.Image = image
@@ -310,8 +316,13 @@ local function refreshSkinsSection(weaponId)
 		btn.AutoButtonColor = owned
 		btn.Parent = parent
 
+		local aspect = Instance.new("UIAspectRatioConstraint")
+		aspect.AspectRatio = 1
+		aspect.DominantAxis = Enum.DominantAxis.Height
+		aspect.Parent = btn
+
 		local c = Instance.new("UICorner")
-		c.CornerRadius = UDim.new(0, 8)
+		c.CornerRadius = UDim.new(0, UIConfig.SkinBtn.CornerRadius)
 		c.Parent = btn
 
 		local s = Instance.new("UIStroke")
@@ -333,12 +344,13 @@ local function refreshSkinsSection(weaponId)
 			lock.BackgroundTransparency = 0.7
 			lock.BackgroundColor3 = Theme.BgVoid
 			lock.Text = "\xF0\x9F\x94\x92"
-			lock.TextSize = 16
+
 			lock.Font = Enum.Font.GothamBold
 			lock.TextColor3 = Theme.TextMuted
+			lock.TextScaled = true
 			lock.Parent = btn
 			local lc = Instance.new("UICorner")
-			lc.CornerRadius = UDim.new(0, 8)
+			lc.CornerRadius = UDim.new(0, UIConfig.SkinBtn.CornerRadius)
 			lc.Parent = lock
 		end
 
@@ -346,7 +358,7 @@ local function refreshSkinsSection(weaponId)
 			btn.MouseButton1Click:Connect(onClick)
 		end
 
-		col += 1
+		layoutOrder += 1
 		return btn
 	end
 
@@ -377,11 +389,10 @@ local function refreshSkinsSection(weaponId)
 		end)
 	end
 
-	local totalW = col * (SKIN_ICON_SIZE + SKIN_ICON_GAP) - SKIN_ICON_GAP
-	skinsFrame.Position = UDim2.fromOffset(8, frameY)
-	skinsFrame.Size = UDim2.new(1, -16, 0, SKIN_ICON_SIZE)
+	skinsFrame.Position = UDim2.fromScale(UIConfig.SkinsFrame.PosX, frameY)
+	skinsFrame.Size = UDim2.fromScale(UIConfig.SkinsFrame.Width, UIConfig.SkinsFrame.Height)
 	if skinsFrame:IsA("ScrollingFrame") then
-		skinsFrame.CanvasSize = UDim2.fromOffset(totalW, SKIN_ICON_SIZE)
+		skinsFrame.AutomaticCanvasSize = Enum.AutomaticSize.X
 		skinsFrame.ScrollingDirection = Enum.ScrollingDirection.X
 	end
 	skinsLabel.Visible = true
@@ -482,16 +493,16 @@ local function syncWeaponButtonOwnership(btn, weaponId)
 			if not badge then
 				badge = Instance.new("TextLabel")
 				badge.Name = "TempBadge"
-				badge.Size = UDim2.fromOffset(40, 16)
-				badge.Position = UDim2.new(1, -2, 1, -2)
+				badge.Size = UDim2.fromScale(UIConfig.TempBadge.Width, UIConfig.TempBadge.Height)
+				badge.Position = UDim2.fromScale(UIConfig.TempBadge.PosX, UIConfig.TempBadge.PosY)
 				badge.AnchorPoint = Vector2.new(1, 1)
 				badge.BackgroundColor3 = Theme.NeonAmber
 				badge.BackgroundTransparency = 0.1
-				badge.TextSize = 10
 				badge.Font = Enum.Font.GothamBold
 				badge.TextColor3 = Theme.BgVoid
+				badge.TextScaled = true
 				badge.Parent = btn
-				corner(badge, 6)
+				corner(badge, UIConfig.TempBadge.CornerRadius)
 			end
 			badge.Text = tempRounds .. "R"
 			badge.Visible = true
@@ -511,11 +522,11 @@ local function syncWeaponButtonOwnership(btn, weaponId)
 			lockLabel.BackgroundTransparency = 0.7
 			lockLabel.BackgroundColor3 = Theme.BgVoid
 			lockLabel.Text = "\xF0\x9F\x94\x92"
-			lockLabel.TextSize = 22
 			lockLabel.Font = Enum.Font.GothamBold
 			lockLabel.TextColor3 = Theme.TextMuted
+			lockLabel.TextScaled = true
 			lockLabel.Parent = btn
-			corner(lockLabel, 10)
+			corner(lockLabel, UIConfig.WeaponBtn.CornerRadius)
 		end
 	end
 end
@@ -551,15 +562,15 @@ local function equipSelected()
 	sendLoadoutToServer()
 end
 
-local function createWeaponButton(parent, weaponId, index)
+local function createWeaponButton(parent, weaponId, layoutOrder)
 	local w = LoadoutConfig.WEAPONS[weaponId]
 	if not w then
 		return nil
 	end
 	local btn = Instance.new("ImageButton")
 	btn.Name = weaponId
-	btn.Size = UDim2.fromOffset(ICON_SIZE, ICON_SIZE)
-	btn.Position = UDim2.fromOffset((index - 1) * (ICON_SIZE + ICON_GAP), 0)
+	btn.Size = UDim2.fromScale(UIConfig.WeaponBtn.Width, 1)
+	btn.LayoutOrder = layoutOrder
 	btn.BackgroundColor3 = Theme.Card
 	btn.BackgroundTransparency = 0.15
 	btn.Image = getEquippedWeaponIcon(weaponId)
@@ -567,7 +578,12 @@ local function createWeaponButton(parent, weaponId, index)
 	btn.BorderSizePixel = 0
 	btn.Parent = parent
 
-	corner(btn, 10)
+	local aspect = Instance.new("UIAspectRatioConstraint")
+	aspect.AspectRatio = 1
+	aspect.DominantAxis = Enum.DominantAxis.Height
+	aspect.Parent = btn
+
+	corner(btn, UIConfig.WeaponBtn.CornerRadius)
 	stroke(btn, Theme.TextMuted, 1)
 	syncWeaponButtonOwnership(btn, weaponId)
 
@@ -580,27 +596,9 @@ local function createWeaponButton(parent, weaponId, index)
 end
 
 local function buildModal(parent)
-	local primWeapons = LoadoutConfig:getByCategory(LoadoutConfig.CATEGORY.PRIMARY)
-	local secWeapons = LoadoutConfig:getByCategory(LoadoutConfig.CATEGORY.SECONDARY)
-	local primCount = #primWeapons
-	local secCount = #secWeapons
-	local maxIconRow = math.max(primCount, secCount)
-
-	local leftColW = maxIconRow * (ICON_SIZE + ICON_GAP) - ICON_GAP + CONTENT_PAD * 2
-	local modalW = leftColW + DETAIL_WIDTH + CONTENT_PAD * 2 + 16
-	modalW = math.max(modalW, 480)
-	local twoRowsH = (ROW_LABEL_H + ICON_SIZE + ROW_GAP) * 2
-	local headerH = 44
-	local equippedH = EQUIPPED_SLOT_SIZE + 40
-	local modalH = headerH + twoRowsH + equippedH + CONTENT_PAD * 2
-	modalH = math.max(modalH, 420)
-
-	local screenH = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 600
-	modalH = math.min(modalH, math.floor(screenH * 0.85))
-
 	local modal = Instance.new("Frame")
 	modal.Name = "Modal"
-	modal.Size = UDim2.fromOffset(modalW, modalH)
+	modal.Size = UDim2.fromScale(MODAL_W, MODAL_H)
 	modal.Position = UDim2.fromScale(0.5, 0.5)
 	modal.AnchorPoint = Vector2.new(0.5, 0.5)
 	modal.BackgroundColor3 = Theme.Panel
@@ -614,18 +612,22 @@ local function buildModal(parent)
 
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
-	closeBtn.Size = UDim2.fromOffset(34, 34)
-	closeBtn.Position = UDim2.new(1, -10, 0, 10)
+	closeBtn.Size = UDim2.fromScale(UIConfig.CloseBtn.Width, UIConfig.CloseBtn.Height)
+	closeBtn.Position = UDim2.fromScale(UIConfig.CloseBtn.PosX, UIConfig.CloseBtn.PosY)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = Theme.PanelDeep
 	closeBtn.BackgroundTransparency = 0
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.Text = "X"
-	closeBtn.TextSize = 16
+
 	closeBtn.Font = Enum.Font.GothamBold
 	closeBtn.TextColor3 = Theme.TextBright
+	closeBtn.TextScaled = true
 	closeBtn.Parent = modal
+	local closeAspect = Instance.new("UIAspectRatioConstraint")
+	closeAspect.AspectRatio = 1
+	closeAspect.Parent = closeBtn
 	local closeCorner = Instance.new("UICorner")
 	closeCorner.CornerRadius = UDim.new(1, 0)
 	closeCorner.Parent = closeBtn
@@ -640,26 +642,28 @@ local function buildModal(parent)
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, -80, 0, 32)
-	title.Position = UDim2.fromOffset(CONTENT_PAD, 8)
+	title.Size = UDim2.fromScale(UIConfig.Title.Width, UIConfig.Title.Height)
+	title.Position = UDim2.fromScale(UIConfig.Title.PosX, UIConfig.Title.PosY)
 	title.BackgroundTransparency = 1
 	title.Text = "LOADOUT"
-	title.TextSize = 17
+
 	title.Font = Theme.FontDisplay
 	title.TextColor3 = Theme.NeonCyan
+	title.TextScaled = true
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Parent = modal
 
-	local cursorY = headerH
+	local cursorY = HEADER_H
 
 	local primaryLabel = Instance.new("TextLabel")
-	primaryLabel.Size = UDim2.fromOffset(leftColW, ROW_LABEL_H)
-	primaryLabel.Position = UDim2.fromOffset(CONTENT_PAD, cursorY)
+	primaryLabel.Size = UDim2.fromScale(LEFT_COL_W, ROW_LABEL_H)
+	primaryLabel.Position = UDim2.fromScale(PAD_X, cursorY)
 	primaryLabel.BackgroundTransparency = 1
 	primaryLabel.Text = "PRIMARY"
-	primaryLabel.TextSize = 13
+
 	primaryLabel.Font = Theme.FontBody
 	primaryLabel.TextColor3 = Theme.NeonCyan
+	primaryLabel.TextScaled = true
 	primaryLabel.TextXAlignment = Enum.TextXAlignment.Left
 	primaryLabel.Parent = modal
 
@@ -667,21 +671,28 @@ local function buildModal(parent)
 
 	local primaryFrame = Instance.new("Frame")
 	primaryFrame.Name = "PrimaryWeapons"
-	primaryFrame.Size = UDim2.fromOffset(leftColW, ICON_SIZE)
-	primaryFrame.Position = UDim2.fromOffset(CONTENT_PAD, cursorY)
+	primaryFrame.Size = UDim2.fromScale(LEFT_COL_W, ICON_ROW_H)
+	primaryFrame.Position = UDim2.fromScale(PAD_X, cursorY + UIConfig.PrimaryRow.FrameOffsetY)
 	primaryFrame.BackgroundTransparency = 1
 	primaryFrame.Parent = modal
 
-	cursorY = cursorY + ICON_SIZE + ROW_GAP
+	local primaryLayout = Instance.new("UIListLayout")
+	primaryLayout.FillDirection = Enum.FillDirection.Horizontal
+	primaryLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	primaryLayout.Padding = UDim.new(UIConfig.PrimaryRow.ListPadding, 0)
+	primaryLayout.Parent = primaryFrame
+
+	cursorY = cursorY + ICON_ROW_H + ROW_GAP
 
 	local secondaryLabel = Instance.new("TextLabel")
-	secondaryLabel.Size = UDim2.fromOffset(leftColW, ROW_LABEL_H)
-	secondaryLabel.Position = UDim2.fromOffset(CONTENT_PAD, cursorY)
+	secondaryLabel.Size = UDim2.fromScale(LEFT_COL_W, ROW_LABEL_H)
+	secondaryLabel.Position = UDim2.fromScale(PAD_X, cursorY + UIConfig.SecondaryRow.LabelOffsetY)
 	secondaryLabel.BackgroundTransparency = 1
 	secondaryLabel.Text = "SECONDARY"
-	secondaryLabel.TextSize = 13
+
 	secondaryLabel.Font = Theme.FontBody
 	secondaryLabel.TextColor3 = Theme.NeonMagenta
+	secondaryLabel.TextScaled = true
 	secondaryLabel.TextXAlignment = Enum.TextXAlignment.Left
 	secondaryLabel.Parent = modal
 
@@ -689,12 +700,21 @@ local function buildModal(parent)
 
 	local secondaryFrame = Instance.new("Frame")
 	secondaryFrame.Name = "SecondaryWeapons"
-	secondaryFrame.Size = UDim2.fromOffset(leftColW, ICON_SIZE)
-	secondaryFrame.Position = UDim2.fromOffset(CONTENT_PAD, cursorY)
+	secondaryFrame.Size = UDim2.fromScale(LEFT_COL_W, ICON_ROW_H)
+	secondaryFrame.Position = UDim2.fromScale(PAD_X, cursorY + UIConfig.SecondaryRow.FrameOffsetY)
 	secondaryFrame.BackgroundTransparency = 1
 	secondaryFrame.Parent = modal
 
-	cursorY = cursorY + ICON_SIZE + ROW_GAP
+	local secondaryLayout = Instance.new("UIListLayout")
+	secondaryLayout.FillDirection = Enum.FillDirection.Horizontal
+	secondaryLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	secondaryLayout.Padding = UDim.new(UIConfig.SecondaryRow.ListPadding, 0)
+	secondaryLayout.Parent = secondaryFrame
+
+	cursorY = cursorY + ICON_ROW_H + ROW_GAP
+
+	local primWeapons = LoadoutConfig:getByCategory(LoadoutConfig.CATEGORY.PRIMARY)
+	local secWeapons = LoadoutConfig:getByCategory(LoadoutConfig.CATEGORY.SECONDARY)
 
 	primaryButtons = {}
 	for i, entry in ipairs(primWeapons) do
@@ -712,179 +732,202 @@ local function buildModal(parent)
 		end
 	end
 
-	local detailTop = headerH
-	local detailH = modalH - detailTop - CONTENT_PAD
-	local detailX = CONTENT_PAD + leftColW + 16
+	local detailH = 1 - HEADER_H - UIConfig.DetailPanel.BottomPad
 
 	detailFrame = Instance.new("Frame")
 	detailFrame.Name = "DetailPanel"
-	detailFrame.Size = UDim2.fromOffset(DETAIL_WIDTH, detailH)
-	detailFrame.Position = UDim2.fromOffset(detailX, detailTop)
+	detailFrame.Size = UDim2.fromScale(DETAIL_PANEL_W , detailH)
+	detailFrame.Position = UDim2.fromScale(DETAIL_PANEL_X, HEADER_H)
 	detailFrame.BackgroundColor3 = Theme.PanelDeep
 	detailFrame.BackgroundTransparency = 0.15
 	detailFrame.BorderSizePixel = 0
 	detailFrame.Visible = false
 	detailFrame.Parent = modal
 
-	corner(detailFrame, 10)
+	corner(detailFrame, UIConfig.DetailPanel.CornerRadius)
 	stroke(detailFrame, Theme.TextMuted, 1)
 
 	local dIcon = Instance.new("ImageLabel")
 	dIcon.Name = "WeaponIcon"
-	dIcon.Size = UDim2.fromOffset(72, 72)
-	dIcon.Position = UDim2.new(0.5, 0, 0, 12)
+	dIcon.Size = UDim2.fromScale(UIConfig.DetailIcon.Width, UIConfig.DetailIcon.Height)
+	dIcon.Position = UDim2.fromScale(0.5, UIConfig.DetailIcon.PosY)
 	dIcon.AnchorPoint = Vector2.new(0.5, 0)
 	dIcon.BackgroundTransparency = 1
 	dIcon.ScaleType = Enum.ScaleType.Fit
 	dIcon.Parent = detailFrame
 
+	local iconAspect = Instance.new("UIAspectRatioConstraint")
+	iconAspect.AspectRatio = 1
+	iconAspect.DominantAxis = Enum.DominantAxis.Height
+	iconAspect.Parent = dIcon
+
 	local dName = Instance.new("TextLabel")
 	dName.Name = "WeaponName"
-	dName.Size = UDim2.new(1, -16, 0, 30)
-	dName.Position = UDim2.fromOffset(8, 90)
+	dName.Size = UDim2.fromScale(UIConfig.DetailName.Width, UIConfig.DetailName.Height)
+	dName.Position = UDim2.fromScale(UIConfig.DetailName.PosX, UIConfig.DetailName.PosY)
 	dName.BackgroundTransparency = 1
 	dName.Text = ""
-	dName.TextSize = 14
+
 	dName.Font = Theme.FontDisplay
 	dName.TextColor3 = Theme.TextBright
+	dName.TextScaled = true
 	dName.TextXAlignment = Enum.TextXAlignment.Center
 	dName.TextWrapped = true
 	dName.Parent = detailFrame
 
 	local dDesc = Instance.new("TextLabel")
 	dDesc.Name = "WeaponDesc"
-	dDesc.Size = UDim2.new(1, -16, 0, 60)
-	dDesc.Position = UDim2.fromOffset(8, 126)
+	dDesc.Size = UDim2.fromScale(UIConfig.DetailDesc.Width, UIConfig.DetailDesc.Height)
+	dDesc.Position = UDim2.fromScale(UIConfig.DetailDesc.PosX, UIConfig.DetailDesc.PosY)
 	dDesc.BackgroundTransparency = 1
 	dDesc.Text = ""
-	dDesc.TextSize = 12
+
 	dDesc.Font = Theme.FontBody
 	dDesc.TextColor3 = Theme.TextMuted
+	dDesc.TextScaled = true
 	dDesc.TextXAlignment = Enum.TextXAlignment.Center
 	dDesc.TextWrapped = true
 	dDesc.Parent = detailFrame
 
 	local dLock = Instance.new("TextLabel")
 	dLock.Name = "LockLabel"
-	dLock.Size = UDim2.new(1, -16, 0, 18)
-	dLock.Position = UDim2.fromOffset(8, 190)
+	dLock.Size = UDim2.fromScale(UIConfig.DetailLock.Width, UIConfig.DetailLock.Height)
+	dLock.Position = UDim2.fromScale(UIConfig.DetailLock.PosX, UIConfig.DetailLock.PosY)
 	dLock.BackgroundTransparency = 1
 	dLock.Text = "Purchase from shop to unlock"
-	dLock.TextSize = 11
+
 	dLock.Font = Theme.FontBody
 	dLock.TextColor3 = Theme.NeonAmber
+	dLock.TextScaled = true
 	dLock.TextXAlignment = Enum.TextXAlignment.Center
 	dLock.Visible = false
 	dLock.Parent = detailFrame
 
 	local dEquip = Instance.new("TextButton")
 	dEquip.Name = "EquipBtn"
-	dEquip.Size = UDim2.new(1, -24, 0, 34)
-	dEquip.Position = UDim2.new(0, 12, 1, -46)
+	dEquip.Size = UDim2.fromScale(UIConfig.DetailEquipBtn.Width, UIConfig.DetailEquipBtn.Height)
+	dEquip.Position = UDim2.fromScale(UIConfig.DetailEquipBtn.PosX, UIConfig.DetailEquipBtn.PosY)
 	dEquip.BackgroundColor3 = Theme.NeonCyan
 	dEquip.Text = "EQUIP"
-	dEquip.TextSize = 14
+
 	dEquip.Font = Theme.FontDisplay
 	dEquip.TextColor3 = Theme.BgVoid
+	dEquip.TextScaled = true
 	dEquip.BorderSizePixel = 0
 	dEquip.Parent = detailFrame
-	corner(dEquip, 8)
+	corner(dEquip, UIConfig.DetailEquipBtn.CornerRadius)
 	dEquip.MouseButton1Click:Connect(equipSelected)
 
 	local skinsLabel = Instance.new("TextLabel")
 	skinsLabel.Name = "SkinsLabel"
-	skinsLabel.Size = UDim2.new(1, -16, 0, 14)
+	skinsLabel.Size = UDim2.fromScale(UIConfig.SkinsLabel.Width, UIConfig.SkinsLabel.Height)
 	skinsLabel.BackgroundTransparency = 1
 	skinsLabel.Text = "SKINS"
-	skinsLabel.TextSize = 10
+
 	skinsLabel.Font = Enum.Font.GothamBold
 	skinsLabel.TextColor3 = Theme.NeonMagenta
+	skinsLabel.TextScaled = true
 	skinsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	skinsLabel.Visible = false
 	skinsLabel.Parent = detailFrame
 
 	local skinsScroll = Instance.new("ScrollingFrame")
 	skinsScroll.Name = "SkinsFrame"
-	skinsScroll.Size = UDim2.new(1, -16, 0, 0)
+	skinsScroll.Size = UDim2.fromScale(UIConfig.SkinsFrame.Width, UIConfig.SkinsFrame.DisplayH)
 	skinsScroll.BackgroundTransparency = 1
 	skinsScroll.BorderSizePixel = 0
-	skinsScroll.ScrollBarThickness = 3
+	skinsScroll.ScrollBarThickness = UIConfig.SkinsFrame.ScrollBarThickness
 	skinsScroll.ScrollBarImageColor3 = Theme.NeonMagenta
-	skinsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	skinsScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+	skinsScroll.CanvasSize = UDim2.fromScale(0, 0)
 	skinsScroll.Visible = false
 	skinsScroll.Parent = detailFrame
 
+	local skinsListLayout = Instance.new("UIListLayout")
+	skinsListLayout.FillDirection = Enum.FillDirection.Horizontal
+	skinsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	skinsListLayout.Padding = UDim.new(UIConfig.SkinsFrame.ListPadding, 0)
+	skinsListLayout.Parent = skinsScroll
+
 	local equippedBar = Instance.new("Frame")
 	equippedBar.Name = "EquippedBar"
-	equippedBar.Size = UDim2.new(1, -CONTENT_PAD * 2, 0, equippedH)
-	equippedBar.Position = UDim2.fromOffset(CONTENT_PAD, cursorY)
+	equippedBar.Size = UDim2.fromScale(1 - PAD_X * 2, EQUIPPED_BAR_H + UIConfig.EquippedBar.HeightExtra)
+	equippedBar.Position = UDim2.fromScale(PAD_X, cursorY + UIConfig.EquippedBar.PosYOffset)
 	equippedBar.BackgroundTransparency = 1
 	equippedBar.Parent = modal
 
 	local eqTitle = Instance.new("TextLabel")
-	eqTitle.Size = UDim2.new(1, 0, 0, 16)
-	eqTitle.Position = UDim2.fromOffset(0, 0)
+	eqTitle.Size = UDim2.fromScale(1, UIConfig.EquippedTitle.Height)
+	eqTitle.Position = UDim2.fromScale(0, UIConfig.EquippedTitle.PosY)
 	eqTitle.BackgroundTransparency = 1
 	eqTitle.Text = "EQUIPPED"
-	eqTitle.TextSize = 11
 	eqTitle.Font = Theme.FontBody
 	eqTitle.TextColor3 = Theme.TextMuted
+	eqTitle.TextScaled = true
 	eqTitle.TextXAlignment = Enum.TextXAlignment.Left
 	eqTitle.Parent = equippedBar
 
-	local slotY = 22
-
 	local pSlotLabel = Instance.new("TextLabel")
-	pSlotLabel.Size = UDim2.fromOffset(EQUIPPED_SLOT_SIZE, 14)
-	pSlotLabel.Position = UDim2.fromOffset(0, slotY - 16)
+	pSlotLabel.Size = UDim2.fromScale(UIConfig.SlotLabel.Width, UIConfig.SlotLabel.Height)
+	pSlotLabel.Position = UDim2.fromScale(0, UIConfig.SlotLabel.PosY)
 	pSlotLabel.BackgroundTransparency = 1
 	pSlotLabel.Text = "PRI"
-	pSlotLabel.TextSize = 10
+
 	pSlotLabel.Font = Theme.FontBody
 	pSlotLabel.TextColor3 = Theme.NeonCyan
+	pSlotLabel.TextScaled = true
 	pSlotLabel.Parent = equippedBar
 
 	local pSlot = Instance.new("Frame")
-	pSlot.Size = UDim2.fromOffset(EQUIPPED_SLOT_SIZE, EQUIPPED_SLOT_SIZE)
-	pSlot.Position = UDim2.fromOffset(0, slotY)
+	pSlot.Size = UDim2.fromScale(UIConfig.Slot.Width, UIConfig.Slot.Height)
+	pSlot.Position = UDim2.fromScale(0, UIConfig.Slot.PosY)
 	pSlot.BackgroundColor3 = Theme.Card
 	pSlot.BackgroundTransparency = 0.2
 	pSlot.BorderSizePixel = 0
 	pSlot.Parent = equippedBar
-	corner(pSlot, 8)
+	local pSlotAspect = Instance.new("UIAspectRatioConstraint")
+	pSlotAspect.AspectRatio = 1
+	pSlotAspect.Parent = pSlot
+	corner(pSlot, UIConfig.Slot.CornerRadius)
 	stroke(pSlot, Theme.NeonCyan, 2)
 
 	equippedPrimaryIcon = Instance.new("ImageLabel")
-	equippedPrimaryIcon.Size = UDim2.new(1, -8, 1, -8)
-	equippedPrimaryIcon.Position = UDim2.fromOffset(4, 4)
+	equippedPrimaryIcon.Size = UDim2.fromScale(UIConfig.Slot.IconScale, UIConfig.Slot.IconScale)
+	equippedPrimaryIcon.Position = UDim2.fromScale(0.5, 0.5)
+	equippedPrimaryIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	equippedPrimaryIcon.BackgroundTransparency = 1
 	equippedPrimaryIcon.ScaleType = Enum.ScaleType.Fit
 	equippedPrimaryIcon.Image = getEquippedWeaponIcon(equippedPrimary)
 	equippedPrimaryIcon.Parent = pSlot
 
 	local sSlotLabel = Instance.new("TextLabel")
-	sSlotLabel.Size = UDim2.fromOffset(EQUIPPED_SLOT_SIZE, 14)
-	sSlotLabel.Position = UDim2.fromOffset(EQUIPPED_SLOT_SIZE + 16, slotY - 16)
+	sSlotLabel.Size = UDim2.fromScale(UIConfig.SlotLabel.Width, UIConfig.SlotLabel.Height)
+	sSlotLabel.Position = UDim2.fromScale(UIConfig.SecondarySlotX, UIConfig.SlotLabel.PosY)
 	sSlotLabel.BackgroundTransparency = 1
 	sSlotLabel.Text = "SEC"
-	sSlotLabel.TextSize = 10
+
 	sSlotLabel.Font = Theme.FontBody
 	sSlotLabel.TextColor3 = Theme.NeonMagenta
+	sSlotLabel.TextScaled = true
 	sSlotLabel.Parent = equippedBar
 
 	local sSlot = Instance.new("Frame")
-	sSlot.Size = UDim2.fromOffset(EQUIPPED_SLOT_SIZE, EQUIPPED_SLOT_SIZE)
-	sSlot.Position = UDim2.fromOffset(EQUIPPED_SLOT_SIZE + 16, slotY)
+	sSlot.Size = UDim2.fromScale(UIConfig.Slot.Width, UIConfig.Slot.Height)
+	sSlot.Position = UDim2.fromScale(UIConfig.SecondarySlotX, UIConfig.Slot.PosY)
 	sSlot.BackgroundColor3 = Theme.Card
 	sSlot.BackgroundTransparency = 0.2
 	sSlot.BorderSizePixel = 0
 	sSlot.Parent = equippedBar
-	corner(sSlot, 8)
+	local sSlotAspect = Instance.new("UIAspectRatioConstraint")
+	sSlotAspect.AspectRatio = 1
+	sSlotAspect.Parent = sSlot
+	corner(sSlot, UIConfig.Slot.CornerRadius)
 	stroke(sSlot, Theme.NeonMagenta, 2)
 
 	equippedSecondaryIcon = Instance.new("ImageLabel")
-	equippedSecondaryIcon.Size = UDim2.new(1, -8, 1, -8)
-	equippedSecondaryIcon.Position = UDim2.fromOffset(4, 4)
+	equippedSecondaryIcon.Size = UDim2.fromScale(UIConfig.Slot.IconScale, UIConfig.Slot.IconScale)
+	equippedSecondaryIcon.Position = UDim2.fromScale(0.5, 0.5)
+	equippedSecondaryIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	equippedSecondaryIcon.BackgroundTransparency = 1
 	equippedSecondaryIcon.ScaleType = Enum.ScaleType.Fit
 	equippedSecondaryIcon.Image = getEquippedWeaponIcon(equippedSecondary)
@@ -904,6 +947,7 @@ local function buildGUI()
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.DisplayOrder = 11
+	gui.IgnoreGuiInset = true
 	gui.Enabled = false
 	gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 

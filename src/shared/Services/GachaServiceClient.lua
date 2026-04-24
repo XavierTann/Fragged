@@ -29,10 +29,10 @@ local function updatePromptText()
 	local snap = ShopEconomyClient.GetSnapshot()
 	if snap.freeSpinAvailable then
 		prompt.ActionText = "FREE SPIN!"
-		prompt.ObjectText = "Gacha Machine"
+		prompt.ObjectText = "Weapon Fabricator"
 	else
 		prompt.ActionText = "Roll"
-		prompt.ObjectText = "Gacha Machine"
+		prompt.ObjectText = "Weapon Fabricator"
 	end
 end
 
@@ -60,7 +60,7 @@ local function wireProximityPrompt(part: BasePart)
 
 	prompt = Instance.new("ProximityPrompt")
 	prompt.Name = PROMPT_NAME
-	prompt.ObjectText = "Gacha Machine"
+	prompt.ObjectText = "Weapon Fabricator"
 	prompt.ActionText = "Roll"
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.GamepadKeyCode = Enum.KeyCode.ButtonX

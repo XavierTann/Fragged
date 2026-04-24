@@ -340,11 +340,12 @@ local function refreshSkinsSection(weaponId)
 		if not owned then
 			local lock = Instance.new("TextLabel")
 			lock.Name = "LockOverlay"
-			lock.Size = UDim2.fromScale(1, 1)
-			lock.BackgroundTransparency = 0.7
+			lock.Size = UDim2.fromScale(UIConfig.LockOverlay.Width, UIConfig.LockOverlay.Height)
+			lock.Position = UDim2.fromScale(UIConfig.LockOverlay.PosX, UIConfig.LockOverlay.PosY)
+			lock.AnchorPoint = Vector2.new(0.5, 0.5)
+			lock.BackgroundTransparency = UIConfig.LockOverlay.BgTransparency
 			lock.BackgroundColor3 = Theme.BgVoid
-			lock.Text = "\xF0\x9F\x94\x92"
-
+			lock.Text = UIConfig.LockOverlay.IconText
 			lock.Font = Enum.Font.GothamBold
 			lock.TextColor3 = Theme.TextMuted
 			lock.TextScaled = true
@@ -518,10 +519,12 @@ local function syncWeaponButtonOwnership(btn, weaponId)
 		if not lock then
 			local lockLabel = Instance.new("TextLabel")
 			lockLabel.Name = "LockOverlay"
-			lockLabel.Size = UDim2.fromScale(1, 1)
-			lockLabel.BackgroundTransparency = 0.7
+			lockLabel.Size = UDim2.fromScale(UIConfig.LockOverlay.Width, UIConfig.LockOverlay.Height)
+			lockLabel.Position = UDim2.fromScale(UIConfig.LockOverlay.PosX, UIConfig.LockOverlay.PosY)
+			lockLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+			lockLabel.BackgroundTransparency = UIConfig.LockOverlay.BgTransparency
 			lockLabel.BackgroundColor3 = Theme.BgVoid
-			lockLabel.Text = "\xF0\x9F\x94\x92"
+			lockLabel.Text = UIConfig.LockOverlay.IconText
 			lockLabel.Font = Enum.Font.GothamBold
 			lockLabel.TextColor3 = Theme.TextMuted
 			lockLabel.TextScaled = true
@@ -609,6 +612,17 @@ local function buildModal(parent)
 
 	corner(modal, CORNER_RADIUS)
 	stroke(modal, Theme.NeonCyan, 2)
+
+	local modalBg = Instance.new("ImageLabel")
+	modalBg.Name = "Background"
+	modalBg.Size = UDim2.fromScale(1, 1)
+	modalBg.BackgroundTransparency = 1
+	modalBg.Image = "rbxassetid://95341433832521"
+	modalBg.ScaleType = Enum.ScaleType.Crop
+	modalBg.ImageTransparency = 0.3
+	modalBg.ZIndex = 0
+	modalBg.Parent = modal
+	corner(modalBg, CORNER_RADIUS)
 
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"

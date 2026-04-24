@@ -132,6 +132,16 @@ Config.SkinBtn = {
 	CornerRadius   = 8,
 }
 
+-- ─── Lock overlay (on weapon / skin buttons) ──────────
+Config.LockOverlay = {
+	Width          = 0.6,
+	Height         = 0.6,
+	PosX           = 0.5,
+	PosY           = 0.5,
+	BgTransparency = 0.7,
+	IconText       = "\xF0\x9F\x94\x92",
+}
+
 -- ─── Weapon button (primary / secondary grid) ───────────
 Config.WeaponBtn = {
 	Width          = 0.5,

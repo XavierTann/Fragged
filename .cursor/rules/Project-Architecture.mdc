@@ -376,8 +376,9 @@ All UI code must use Scale-based UDim2 values (UDim2.fromScale) for Size and Pos
 Allowed uses of pixel/offset values:
 - UICorner.CornerRadius (UDim with offset is acceptable for corner rounding)
 - UIStroke.Thickness (inherently pixel-based)
-- TextSize (inherently pixel-based)
 - ScrollBarThickness (inherently pixel-based)
+
+All text elements must use TextScaled = true so text scales with its container. Do not set TextSize on any TextLabel or TextButton. Remove UITextSizeConstraint unless explicitly requested.
 
 For arranging repeating elements (weapon grids, icon rows, skin lists), prefer UIListLayout or UIGridLayout with Scale-based padding, combined with UIAspectRatioConstraint on children that need to maintain a fixed aspect ratio (e.g. square icons).
 

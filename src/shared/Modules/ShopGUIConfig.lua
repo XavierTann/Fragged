@@ -111,7 +111,7 @@ Config.CardPrice = {
 -- ─── Card: status note (fraction of card) ───────────────
 Config.CardStatus = {
 	PosX           = 0.2,
-	PosY           = 0.48,
+	PosY           = 0.55,
 	Height         = 0.14,
 	RightInset     = 0.2,
 }

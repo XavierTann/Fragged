@@ -125,6 +125,9 @@ LeaveMatchGUI.Init()
 local GachaGUI = require(Shared.UI.GachaGUI)
 GachaGUI.Init()
 
+local CreditsHudGUI = require(Shared.UI.CreditsHudGUI)
+CreditsHudGUI.Init()
+
 local LobbyMenuDockGUI = require(Shared.UI.LobbyMenuDockGUI)
 LobbyMenuDockGUI.Init()
 
@@ -157,6 +160,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 	end
 	if inArena and not postMatchLeaderboard then
 		LoadoutGUI.Hide()
+		CreditsHudGUI.Hide()
 		WeaponSelectGUI.Show()
 		ReloadBarGUI.Show()
 		ManualReloadGUI.Show()
@@ -167,6 +171,7 @@ local function applyArenaHud(inArena, hideLeaderboardOverlay)
 		LeaveMatchGUI.Show()
 		CombatServiceClient.SetCurrentWeapon(CombatServiceClient.GetCurrentWeapon())
 	elseif not inArena then
+		CreditsHudGUI.Show()
 		WeaponSelectGUI.Hide()
 		ReloadBarGUI.Hide()
 		ManualReloadGUI.Hide()
@@ -188,6 +193,7 @@ CombatServiceClient.SubscribeMatchEnded(function(payload)
 	DirectionIndicatorClient.SetEnabled(false)
 	RotationJoystickGUI.Hide()
 	LoadoutGUI.Hide()
+	CreditsHudGUI.Hide()
 	WeaponSelectGUI.Hide()
 	ReloadBarGUI.Hide()
 	ManualReloadGUI.Hide()

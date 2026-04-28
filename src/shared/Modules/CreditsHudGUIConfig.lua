@@ -9,7 +9,7 @@
 local Config = {}
 
 Config.Pill = {
-	Width          = 0.1,
+	Width          = 0.2,
 	Height         = 0.09,
 	PosX           = 0.99,
 	PosY           = -0.1,

@@ -9,6 +9,23 @@
 
 local Config = {}
 
+-- ─── Theme ───────────────────────────────────────────────
+Config.Theme = {
+	FontDisplay    = Enum.Font.Michroma,
+	FontBody       = Enum.Font.Jura,
+
+	BgVoid         = Color3.fromRGB(6, 8, 22),
+	Panel          = Color3.fromRGB(12, 18, 42),
+	PanelDeep      = Color3.fromRGB(8, 12, 32),
+	Card           = Color3.fromRGB(18, 26, 58),
+	NeonCyan       = Color3.fromRGB(0, 240, 255),
+	NeonMagenta    = Color3.fromRGB(255, 45, 220),
+	NeonLime       = Color3.fromRGB(140, 255, 120),
+	NeonAmber      = Color3.fromRGB(255, 200, 60),
+	TextBright     = Color3.fromRGB(240, 248, 255),
+	TextMuted      = Color3.fromRGB(130, 170, 210),
+}
+
 -- ─── Modal ───────────────────────────────────────────────
 Config.Modal = {
 	Width          = 0.8,

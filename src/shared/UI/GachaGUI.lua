@@ -12,9 +12,9 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Theme = require(Shared.UI.Shop.ShopTheme)
 local GachaConfig = require(Shared.Modules.GachaConfig)
 local UIConfig = require(Shared.Modules.GachaGUIConfig)
+local Theme = UIConfig.Theme
 local ShopEconomyClient = require(Shared.Services.ShopEconomyClient)
 local SkinsConfig = require(Shared.Modules.SkinsConfig)
 

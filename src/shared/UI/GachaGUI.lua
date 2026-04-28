@@ -59,6 +59,11 @@ local REEL_VISIBLE_CELLS = RA.VisibleCells
 local REEL_SPIN_CELLS   = RA.SpinCells
 local REEL_TOTAL_CELLS  = RA.TotalCells
 local SPIN_DURATION     = RA.SpinDuration
+local SETTLE_DURATION   = RA.SettleDuration
+local SPIN_POWER        = RA.SpinPower
+local REEL_OVERSHOOT    = RA.Overshoot
+local LAND_PAUSE        = RA.LandPause
+local RESULT_DELAY      = RA.ResultDelay
 
 local MODAL_W     = UIConfig.Modal.Width
 local MODAL_H     = UIConfig.Modal.Height
@@ -70,7 +75,9 @@ local ROLL_BTN_W  = UIConfig.RollBtn.Width
 local ROLL_BTN_H  = UIConfig.RollBtn.Height
 local ROLL_BTN_X  = UIConfig.RollBtn.PosX
 local ROLL_BTN_Y  = UIConfig.RollBtn.PosY
+local RESULT_W    = UIConfig.Result.Width
 local RESULT_H    = UIConfig.Result.Height
+local RESULT_X    = UIConfig.Result.PosX
 local RESULT_Y    = UIConfig.Result.PosY
 
 local ALL_SKIN_IDS = {}
@@ -172,7 +179,7 @@ local function updateRollButton()
 	local isFree = GachaConfig.DEV_FREE_ROLLS or ShopEconomyClient.GetSnapshot().freeSpinAvailable
 	if isFree then
 		rollBtn.Text = "FREE SPIN!"
-		rollBtn.BackgroundColor3 = Theme.NeonLime
+		rollBtn.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
 		rollBtn.TextColor3 = Theme.BgVoid
 	else
 		rollBtn.Text = "ROLL (R$ " .. GachaConfig.ROLL_ROBUX_PRICE .. ")"
@@ -288,34 +295,46 @@ local function animateReel(winSkinId, winRarity, onFinished)
 		selectorLine.Visible = true
 	end
 
-	local elapsed = 0
+	local overshootX = targetX * (1 + REEL_OVERSHOOT)
+	local spinElapsed = 0
+	local settling = false
+	local settleElapsed = 0
 
 	reelConnection = RunService.RenderStepped:Connect(function(dt)
-		elapsed += dt
-		local t = math.clamp(elapsed / SPIN_DURATION, 0, 1)
+		if not settling then
+			spinElapsed += dt
+			local t = math.clamp(spinElapsed / SPIN_DURATION, 0, 1)
+			local eased = 1 - (1 - t) ^ SPIN_POWER
+			reelStrip.Position = UDim2.fromOffset(eased * overshootX, 0)
 
-		local eased = 1 - (1 - t) ^ 7
-		local currentX = eased * targetX
-		reelStrip.Position = UDim2.fromOffset(currentX, 0)
+			if t >= 1 then
+				settling = true
+			end
+		else
+			settleElapsed += dt
+			local t = math.clamp(settleElapsed / SETTLE_DURATION, 0, 1)
+			local eased = t * t * (3 - 2 * t)
+			reelStrip.Position = UDim2.fromOffset(overshootX + (targetX - overshootX) * eased, 0)
 
-		if t >= 1 then
-			stopReelConnection()
-			reelStrip.Position = UDim2.fromOffset(targetX, 0)
+			if t >= 1 then
+				stopReelConnection()
+				reelStrip.Position = UDim2.fromOffset(targetX, 0)
 
-			task.delay(0.15, function()
-				if selectorLine then
-					local glow = TweenService:Create(selectorLine, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 2, true), {
-						BackgroundTransparency = 0,
-					})
-					glow:Play()
-				end
-
-				task.delay(0.6, function()
-					if onFinished then
-						onFinished()
+				task.delay(LAND_PAUSE, function()
+					if selectorLine then
+						local glow = TweenService:Create(selectorLine, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 2, true), {
+							BackgroundTransparency = 0,
+						})
+						glow:Play()
 					end
+
+					task.delay(RESULT_DELAY, function()
+						if onFinished then
+							onFinished()
+						end
+					end)
 				end)
-			end)
+			end
 		end
 	end)
 end
@@ -344,9 +363,6 @@ local function showResultPanel(payload)
 		resultRounds.TextColor3 = Theme.NeonLime
 	end
 
-	if payload.isFree then
-		resultRounds.Text = "WELCOME GIFT -- " .. (resultRounds.Text or "")
-	end
 
 	if reelViewport then
 		local shrink = TweenService:Create(reelViewport, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -368,12 +384,12 @@ local function showResultPanel(payload)
 		end)
 	end
 
-	resultFrame.Position = UDim2.fromScale(PAD_X, RESULT_Y)
+	resultFrame.Position = UDim2.fromScale(RESULT_X, RESULT_Y)
 	resultFrame.Visible = true
-	resultFrame.Size = UDim2.fromScale(CONTENT_W, 0.026)
+	resultFrame.Size = UDim2.fromScale(RESULT_W, 0.026)
 	resultFrame.BackgroundTransparency = 0
 	local expandTween = TweenService:Create(resultFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.fromScale(CONTENT_W, RESULT_H),
+		Size = UDim2.fromScale(RESULT_W, RESULT_H),
 	})
 	expandTween:Play()
 
@@ -436,17 +452,6 @@ local function buildGUI()
 	modal.ClipsDescendants = true
 	modal.Parent = overlay
 	corner(modal, UIConfig.Modal.CornerRadius)
-
-	local modalBg = Instance.new("ImageLabel")
-	modalBg.Name = "Background"
-	modalBg.Size = UDim2.fromScale(1, 1)
-	modalBg.BackgroundTransparency = 1
-	modalBg.Image = "rbxassetid://15911859597"
-	modalBg.ScaleType = Enum.ScaleType.Crop
-	modalBg.ImageTransparency = 0.3
-	modalBg.ZIndex = 0
-	modalBg.Parent = modal
-	corner(modalBg, UIConfig.Modal.CornerRadius)
 
 	local modalStroke = Instance.new("UIStroke")
 	modalStroke.Color = Theme.NeonCyan
@@ -635,8 +640,8 @@ local function buildGUI()
 
 	resultFrame = Instance.new("Frame")
 	resultFrame.Name = "ResultPanel"
-	resultFrame.Size = UDim2.fromScale(CONTENT_W, RESULT_H)
-	resultFrame.Position = UDim2.fromScale(PAD_X, RESULT_Y)
+	resultFrame.Size = UDim2.fromScale(RESULT_W, RESULT_H)
+	resultFrame.Position = UDim2.fromScale(RESULT_X, RESULT_Y)
 	resultFrame.BackgroundColor3 = Theme.PanelDeep
 	resultFrame.BackgroundTransparency = 0.1
 	resultFrame.BorderSizePixel = 0
@@ -692,6 +697,29 @@ local function buildGUI()
 	resultRounds.TextScaled = true
 	resultRounds.TextXAlignment = Enum.TextXAlignment.Center
 	resultRounds.Parent = resultFrame
+
+	local obtainBtn = Instance.new("TextButton")
+	obtainBtn.Name = "ObtainBtn"
+	obtainBtn.Size = UDim2.fromScale(UIConfig.ObtainBtn.Width, UIConfig.ObtainBtn.Height)
+	obtainBtn.Position = UDim2.fromScale(UIConfig.ObtainBtn.PosX, UIConfig.ObtainBtn.PosY)
+	obtainBtn.AnchorPoint = Vector2.new(0, 0)
+	obtainBtn.BackgroundColor3 = Theme.NeonCyan
+	obtainBtn.BorderSizePixel = 0
+	obtainBtn.Text = "OBTAIN"
+	obtainBtn.Font = Theme.FontDisplay
+	obtainBtn.TextColor3 = Theme.BgVoid
+	obtainBtn.TextScaled = true
+	obtainBtn.AutoButtonColor = true
+	obtainBtn.Parent = resultFrame
+	corner(obtainBtn, UIConfig.ObtainBtn.CornerRadius)
+
+	obtainBtn.MouseButton1Click:Connect(function()
+		hideResult()
+		if rollBtn then
+			rollBtn.Position = UDim2.fromScale(ROLL_BTN_X, ROLL_BTN_Y)
+		end
+		updateRollButton()
+	end)
 
 end
 
@@ -807,17 +835,6 @@ function GachaGUI.BuildPreview(parent)
 	prevModal.ClipsDescendants = true
 	prevModal.Parent = prevOverlay
 	corner(prevModal, UIConfig.Modal.CornerRadius)
-
-	local prevBg = Instance.new("ImageLabel")
-	prevBg.Name = "Background"
-	prevBg.Size = UDim2.fromScale(1, 1)
-	prevBg.BackgroundTransparency = 1
-	prevBg.Image = "rbxassetid://15911859597"
-	prevBg.ScaleType = Enum.ScaleType.Crop
-	prevBg.ImageTransparency = 0.3
-	prevBg.ZIndex = 0
-	prevBg.Parent = prevModal
-	corner(prevBg, UIConfig.Modal.CornerRadius)
 
 	local prevStroke = Instance.new("UIStroke")
 	prevStroke.Color = Theme.NeonCyan
